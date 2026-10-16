@@ -472,3 +472,132 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 | Tip-end height for 10 and 1000 µL tips: Venus and pylabrobot differ by ±2.1 mm, the collar difference (§10c) | Measure a mounted tip's end on the instrument (e.g. a cLLD or capacitive touch-off on a known surface) |
 | Whether Venus accepts the files written under `Labware\PLR` (troughs especially) | Open an exported layout in the Deck Editor |
 | Multiflex carriers | Route through the catalogue instead of matching |
+| Whether the Method Editor accepts a scripted `.med`/`.hsl` step insertion (§12): row numbering, library registration, outlining and flowchart data | Open the edited copy in the Method Editor and check the new steps and their parameters |
+
+## 12. Method files (`.med`, `.hsl`, `.sub`)
+
+This section records how Venus stores a method, which is enough to script an edit later. Nothing here writes method files yet: `methods.hsl` only reads, and the Method Editor stays authoritative. The worked example is the pLLD change in [plld-search-speed.html](plld-search-speed.html) (route 3B). Figures are measured on PyHamilton's `star-oem/VENUS_Method/STAR_OEM_noFan.*`.
+
+**A step lives in two files.**
+- Its position and nesting are in the `.hsl` (or the `.sub`, for the method's own sub-methods), as marker comments around its generated code.
+- Its settings are a record in the `.med`, keyed by the same GUID. The `.med` holds no step order.
+- Change one file without the other and the editor no longer sees a valid step.
+- `.stp` (device-step instances such as Aspirate and Firmware Command) and `.res` (resources) are also written on save. Library and sub-method calls don't need them.
+
+| File | Holds | Form |
+|---|---|---|
+| `.med` | One `HxPars` list section per step, named by its GUID, plus editor bookkeeping (below) | HxCfgFile (§1), binary by default. `files.hxcfg` reads and rewrites it byte for byte (1,906 sections, 1.6 MB) |
+| `.hsl` | Step order, as markers; variable declarations; `#include` lines | Text with a footer (`files.footer`) |
+| `.sub` | The method's sub-methods, with the same markers | Text with a footer (length offset 2) |
+
+### The `.med`
+
+- **Step records:**
+  - Each is `DataDef,HxPars,3,<guid>,` followed by a list of key/value items.
+  - GUIDs are lowercase hex written `8_4_4_16`, e.g. `5f5e5c89_0c1a_497b_80c550dbc4676208`.
+- **Key prefixes:**
+  - `1` a string, `3` a number, `(` opens a nested block, `)` closes it.
+  - Many keys are negative integers (`1-534642685`). Their meaning is known only from context.
+- **A library-call record**, from `HSLJsonLib::GetArrayLength`:
+
+  | Item | Meaning |
+  |---|---|
+  | `1ReturnValue` | Variable the result goes into |
+  | `1FunctionName` | e.g. `HSLJsonLib::GetArrayLength` |
+  | `3FieldCount` | Number of parameters |
+  | `(FunctionPars … )` | Parameter names |
+  | `1-534642685` | Library path, e.g. `HSLJson\HSLJson.hsl` |
+  | `(BlockData … )` | `1-533921782`: the step icon (`SingleLibFunction.bmp`). `1-533921779`: the generated code line, which is stored here as well as in the `.hsl` |
+  | `1Timestamp` | When the step was last edited |
+  | `(ParamValue 1Value.0 … )` | Bound values, in parameter order |
+  | `(Variables … )` | Variables the step uses |
+
+- **Editor bookkeeping** (observed; meanings inferred):
+
+  | Section | Contents |
+  |---|---|
+  | `HxPars HxMetEdData` | Editor version (`6.3.1.1147`) and method options (`SchedCompCmd`, `SampleTracker`, `CustomDialogCompCmd`, …) |
+  | `HxPars HxMetEd_MainDefinition` | The `main` sub-method's definition |
+  | `HxPars HxMetEd_Submethods` | Each sub-method's parameters: name, description, direction and type flags |
+  | `HxPars HxMetEd_Outlining` | `3<guid><n>` → a state, for 157 parts of compound steps. This is the editor's folded or unfolded view |
+  | `ActivityData ActivityData` | `ActivityDocument`: one base64 blob (10 kB) holding the flowchart view |
+  | 8 GUID records of 3 items (`3`, `0`, `)`) | No `.hsl` or `.sub` marker refers to them. Perhaps leftovers of deleted steps |
+
+- **Join check:** all 1,753 step GUIDs in the `.hsl` and all 139 in the `.sub` have a `.med` record.
+
+### Markers in the `.hsl` and `.sub`
+
+```
+// {{{ 5 "main" "Begin"                         a section begins (a sub-method, the include block)
+// {{{ 90 1 0 "<guid>" "{<step type CLSID>}"    a step: editor row, two fixed fields (copy them as-is), GUID, type
+<the step's generated code>
+// }} ""                                        end of the step's code
+// {{ 94 1 0 "<guid>" "{...}"                   one part of a compound step (If / Else / End,
+                                                 loop begin / end); the parts share one GUID
+// {{{ 5 "main" "End"                           the section ends
+```
+
+The `.hsl` also has `LibraryInsertLine` and `VariableInsertLine` markers:
+- New `#include`s go above `LibraryInsertLine`, inside `namespace _Method { … }`.
+- New variables go above `VariableInsertLine`.
+
+| Step type CLSID | Step |
+|---|---|
+| `{C1F3C015-47B3-4514-9407-AC2E65043419}` | Library function call |
+| `{7C4EF7A7-39BE-406A-897F-71F3A35B4093}` | Sub-method call, including toolkit calls such as `STAR_OEM_TOOLKIT::Channels_1ml_Aspirate` |
+| `{B31F3531-5D80-11D4-A5EB-0050DA737D89}` | If / Else |
+| `{B31F3532-5D80-11D4-A5EB-0050DA737D89}` | Loop |
+| `{B31F3533-5D80-11D4-A5EB-0050DA737D89}` | Break (inferred) |
+| `{B31F3543-5D80-11D4-A5EB-0050DA737D89}` | Assignment (inferred) |
+| `{B31F3544-5D80-11D4-A5EB-0050DA737D89}` | Assignment with calculation |
+| `{586C3429-F931-405F-9938-928E22C90BFA}` | Comment or blank line |
+| `{3293659E-F71E-472F-AFB4-6A674E32B114}` | Error handling (inferred: `onerror goto`) |
+| `{9EC997CD-FD3B-4280-811B-49E99DCF062C}` | Return (inferred) |
+
+Venus writes the CLSIDs in mixed case (`{7C4EF7A7-39BE-406a-…}`). Keep the case the file has, and compare case-insensitively. `tools/hsl_steps.py` lists a method's steps.
+
+### Footers
+
+Every text file Venus writes ends with `// $$author=…$$valid=…$$time=…$$checksum=XXXXXXXX$$length=NNN$$`. A text-form HxCfg file uses `*` instead of `//`.
+- **`checksum`:** CRC32 of the file from its first byte up to and including `$$checksum=`. This matched on all 14 Venus files checked.
+- **`length`:** the footer line's length plus an offset. The offset is 0 for `.hsl`, `.hs_` and text HxCfg files, and 2 for `.hsi`, `.sub` and binary HxCfg files. Keep the offset the file already has.
+- **Tools:**
+  - `files.footer.ok` checks a footer, and `files.footer.rewrite` recomputes it.
+  - `files.hxcfg.write` writes the `.med`'s footer.
+
+### Inserting a step: the edit a script would make
+
+Take adding `PLLD_SPEED::SetZSpeed(ML_STAR, channelVariable, plldSearchSpeed)` before `Channels_1ml_Aspirate`:
+
+1. **`.med`:**
+   - Add a record with a new GUID, cloned from a record of the same step type.
+   - For a library call, change `FunctionName`, the library path, `FunctionPars`, `ParamValue`, `Variables` and the code line in `BlockData`.
+   - Write the file back with `files.hxcfg`, never with Hamilton's converter.
+2. **`.hsl`:**
+   - Add the marker block in the right place.
+   - Renumber the rows after it. Do the whole sub-method in one pass, so the rows stay sequential.
+   - Add the `#include` and the variable if they are new.
+3. **Footers:** recompute the `.hsl`'s footer, and the `.sub`'s if it changed.
+
+The pLLD change is four steps:
+
+| Step | Call | Where |
+|---|---|---|
+| a | `JSON_GetFloatValue` of `plldSearchSpeed` | After row 80 |
+| b | `SetZSpeed` | Before the aspirate (row 91) |
+| c | `RestoreZSpeed` | After the aspirate (row 93) |
+| d | `RestoreZSpeed(ML_STAR, "11111111")` | In `initialize`, after `LiquidClassLib::Initialize` |
+
+Route 3A, adding the steps in the Method Editor, is the recommended one. It's guaranteed valid because the editor writes every file itself. With either route, save once from the editor afterwards.
+
+**Still unknown, because route 3B is untested in Venus (also listed in §11):**
+- whether the editor needs contiguous row numbers (renumbering avoids the question);
+- whether a library import is registered anywhere besides the `#include`;
+- whether `HxMetEd_Outlining` or the flowchart blob must list a new step (probably they are only stale until the first save);
+- the exact parameter-binding fields of a cloned record.
+
+**A future `methods.med` module (not built):**
+- It would parse the step records into objects.
+- It would provide `insert`, `delete` and `set_parameter`, keeping the `.med`, `.hsl`, `.sub` and footers in step.
+- It would check consistency: every marker has a record, rows are sequential, and footers hold.
+- It isn't built by choice: the Method Editor covers the need today.

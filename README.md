@@ -30,13 +30,13 @@ again = plr_export.plr_to_lay(deck, store)            # byte-identical to the or
 | PLR resource → Venus definition files | `plr.to_venus` | Equivalent round trips for 197/197 corpus definitions and all PLR labware types but trash and two mixed racks |
 | Venus definition ↔ PLR resource matching | `plr.name_match` | By geometry + tip type, never by geometry alone |
 | Multiflex carriers: Hamilton's catalogue, assembly rule, check, PLR builder | `multiflex` | 31/43 NGS sites exact; differences explained |
-| Method code: step markers, step types | `methods.hsl` | |
+| Method code: step markers, step types | `methods.hsl` | Read-only; the `.med`/`.hsl` format is documented in CONVENTIONS §12 |
 | pLLD search speed library (`PxAA` zv) | `methods/plld/PLLD_Speed.hsl` | See [docs/plld-search-speed.html](docs/plld-search-speed.html) |
 
 Not here:
 - **Driving instruments:** use pylabrobot.
 - **Rendering and motion:** `plr-viz3d`.
-- **Editing `.med` files:** the Method Editor stays authoritative.
+- **Editing `.med` files:** the Method Editor stays authoritative. How a step is stored across `.med`, `.hsl` and `.sub`, and the edit a script would make, are in [CONVENTIONS §12](docs/CONVENTIONS.md#12-method-files-med-hsl-sub).
 - **`HxCfgFilConverter.exe`:** never used. It sends an Enter keystroke to the focused window.
 
 ## Install
