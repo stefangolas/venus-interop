@@ -473,6 +473,9 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 | Whether Venus accepts the files written under `Labware\PLR` (troughs especially) | Open an exported layout in the Deck Editor |
 | Multiflex carriers | Route through the catalogue instead of matching |
 | Whether the Method Editor accepts a scripted `.med`/`.hsl` step insertion (§12): row numbering, library registration, outlining and flowchart data | Open the edited copy in the Method Editor and check the new steps and their parameters |
+| The per-channel key `-534183622` in pipetting and gripper blocks (values 0/5/7/10/18 in the corpus; the rest of the block reads as LLD and touch-off settings) | Compare records against Venus's Aspirate/Dispense step dialogs |
+| The `TipType`, `DispenseMode`, `SequenceCounting`, `TouchOffMode` enum values in HxPars records (e.g. `TipType = 5`) | Enumerate one step of each type in the Method Editor and read the saved `.stp` |
+| The mapping from the `-534118376` command id in HxPars records to command names | Compare records of known commands across corpus `.stp` files |
 
 ## 12. Method files (`.med`, `.hsl`, `.sub`)
 
@@ -555,6 +558,47 @@ The `.hsl` also has `LibraryInsertLine` and `VariableInsertLine` markers:
 | `{9EC997CD-FD3B-4280-811B-49E99DCF062C}` | Return (inferred) |
 
 Venus writes the CLSIDs in mixed case (`{7C4EF7A7-39BE-406a-…}`). Keep the case the file has, and compare case-insensitively. `tools/hsl_steps.py` lists a method's steps.
+
+More step types, classified from the code Venus generates for them (inferred from the 10 NIST methods and their 5 libraries, 2026-10-15):
+
+| Step type CLSID | Step |
+|---|---|
+| `{B31F3534…3F-5D80-11D4-A5EB-0050DA737D89}` | File open / read record / write record / close; input dialog; set / get sequence position; timer start / wait (inferred per suffix: 34 open, 36 read, 37 write, 38 close, 39 input dialog, 3A set position, 3B get position, 3E timer start, 3F timer wait) |
+| `{B31F3540-…}` | Get elapsed time (inferred) |
+| `{21E07B31-8D2E-11d4-A3B8-002035848439}` | User dialog (message) |
+| `{998A7CCC-…}`, `{E09A7A75-…}`, `{2C884145-…}` | Custom dialog, tip-handling-state config, pipetting-state config (inferred) |
+| `{4900C1F7-…}`, `{67A8F1C9-…}`, `{72EACF88-…}`, `{F17B7626-…}` | Array: set size / get element / get size / add last (inferred) |
+| `{930D6C31-8EFB-11d4-A3BA-002035848439}` | Abort (inferred) |
+| `{F07B0071-8EFC-11d4-A3BA-002035848439}` | Trace comments and blank compound parts, not a device step |
+| `{DB5A2B39-…}`, `{B558D25C-…}` | Copy list; inline sequence-array pipetting block (inferred) |
+
+### Device steps and the `.stp`
+
+A device step (Aspirate, Dispense, TipPickUp, iSWAP moves, …) is written in three places that join on the step GUID:
+
+1. **Marker**, with the type carrying the device variable: `"STAR:{541143FA-7FA2-11D3-AD85-0004ACB1DCB2}"`. `STAR` / `ML_STAR` is the device object the call goes through; the CLSID names the command (named from `Config\ML_STAR.cfg`, regex `1-534118383 <Name> … 1-534118394 &{CLSID}`).
+2. **Generated code**, naming the command twice: `arrRetValues = STAR._541143FA_7FA2_11D3_AD85_0004ACB1DCB2("<guid>"); // TipPickUp` — CLSID with dashes as underscores, and the call's argument is the step's own GUID, not a sequence.
+3. **`HxPars` record** in the `.stp` beside the file that holds the step (method or library), section name = the GUID.
+
+The `.stp` record is an HxCfg item list like the `.med`'s, with two more facts (measured over all 407 HxPars records of the session corpus):
+
+- **Key prefixes:** `1` string, `3` int, `5` double, `10` object reference; block names (`(Errors`, `(-534183936`) carry no prefix.
+- **The `(Variables …)` block names the numeric keys.** It maps each method variable to where it is stored: opcode `10` → a top-level key, `30` → a block key, `31` → the sub-index inside it, `32` → the key inside that block. So `-534183924` is the aspirate volume because `p_vol` is bound there. Every key any record binds to a variable is named this way; keys no record binds are constants (same value corpus-wide) or gripper settings named by their neighbours.
+
+`methods.stp_pars.KEY_NAMES` is the resulting table with the per-channel pipetting block (`-534183936`) and the gripper/wash block (`-534183935`) resolved. Open remain (§11): the varying `-534183622`, the `TipType`/`DispenseMode` enums, the `-534118376` command id.
+
+### Sections, functions and includes
+
+Measured on the 10 NIST LMSF methods and their 5 libraries (`methods.hsl_code`, 2026-10-15):
+
+- **Methods and libraries declare code differently.** A method's sub-methods are *sections* (`main`, `GetParams`, `StartUp`, `CleanUp`, `OnAbort`, …) marked with `// {{{ 5 "<name>" "Begin"`; only the method's `OnAbort` (in the `.sub`) is also a `function`. Libraries define everything as HSL `function`s.
+- **A library file lists every function twice**: a prototype block up top (lines ending `;`, sometimes with `= default` arguments), then each definition later, again opening its own `// {{{` section, with the step markers as comments inside the braces. Match definitions and replace prototypes; don't count both.
+- **Function bodies are brace-matched, not marker-bounded**: the body runs from `function name(…) [ret] {` to the matching `}`, skipping strings and `//` comments. The step markers survive inside the body text, so `hsl.steps()` works on a body unchanged.
+- **Includes resolve by basename, elsewhere.** A method includes `"..\\..\\GSF-IMS.shared_submethods.hs_"`, `"Common\\Common96HeadSubMethods.hs_"`, `"HSLTipCountingLib.hsl"` — extensions `.hs_`/`.hsl`/`.hsi` mix in one include list. The files live in the library folders, not next to the method. In the NIST repo they sit beside their `.stp`; the session copies are the `.hsi` under `lmsf_libs\`.
+- **Namespace rule:** a library is called through `NS::function(...)`, where `NS` is the file stem with every non-alphanumeric character replaced by `_`, uppercased: `GSF-IMS.shared_submethods` → `GSF_IMS_SHARED_SUBMETHODS`, `Tip Handling with 96-Head` → `TIP_HANDLING_WITH_96_HEAD`.
+- **The methods are thin; the libraries hold the device steps.** A method's `main` reads `parameters.csv`, calls the lab's libraries, and writes status files; the pipetting calls (`STAR._…`) are in `GSF-IMS.shared_submethods`, `PlateAndLidMovement` (~26 move/lid functions via the CO-RE gripper), `Common96HeadSubMethods`, `Tip Handling with 96-Head` and `LMSF_Utilities`. Counting device steps on the `.hsl`/`.sub` alone reports none.
+
+The decompiler/pretty-printer built on these facts is scoped in [notes/PROTOCOL_EXTRACTOR_SCOPE.md](notes/PROTOCOL_EXTRACTOR_SCOPE.md): `methods.hsl_code` (function bodies), `methods.stp_pars` (HxPars records) and `methods.protocol` (expansion of `main` with library inlining, TraceComment texts as section headings) exist or are under way; the volume maths is kept symbolic (`aspirate volume = <p_vol>`) because that is what the method computes.
 
 ### Footers
 

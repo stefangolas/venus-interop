@@ -56,3 +56,24 @@ def test_footer_rewrite_and_check():
 def test_no_footer():
   with pytest.raises(ValueError):
     footer.read(b"no footer here")
+
+
+DEVICE = """// {{{ 5 "tip_pickup" "Begin"
+function tip_pickup( sequence & tips, variable number_channels, device & STAR ) void {
+// }} ""
+// {{{ 288 1 0 "a511000a_8a13_4a12_83095aaca3842552" "STAR:{541143FA-7FA2-11D3-AD85-0004ACB1DCB2}"
+arrRetValues = STAR._541143FA_7FA2_11D3_AD85_0004ACB1DCB2("a511000a_8a13_4a12_83095aaca3842552"); // TipPickUp
+// }} ""
+// {{{ 5 "tip_pickup" "End"
+}
+// }} ""
+"""
+
+
+def test_device_step_markers():
+  steps = hsl.steps(DEVICE)
+  assert len(steps) == 1
+  assert steps[0].device == "STAR"
+  assert steps[0].type == "device step (STAR)"
+  assert steps[0].code.endswith("// TipPickUp")
+  assert hsl.summary(DEVICE) == {"device step (STAR)": 1}

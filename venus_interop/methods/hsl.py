@@ -29,7 +29,7 @@ STEP_TYPES = {
   "{9EC997CD-FD3B-4280-811B-49E99DCF062C}": "Return (inferred)",
 }
 
-_STEP = re.compile(r'^// \{\{(\{?) (\d+) (\d+) (\d+) "([^"]*)" "(\{[^"]*\})"\s*$')
+_STEP = re.compile(r'^// \{\{(\{?) (\d+) (\d+) (\d+) "([^"]*)" "((?:[A-Za-z_][A-Za-z0-9_]*:)?\{[^"]*\})"\s*$')
 _SECTION = re.compile(r'^// \{\{\{ (\d+) "([^"]*)" "([^"]*)"\s*$')
 _END = re.compile(r'^// \}\} ""\s*$')
 
@@ -46,7 +46,14 @@ class Step:
   code: str
 
   @property
+  def device(self) -> Optional[str]:
+    """The device variable for a device step ("STAR"), None for other steps."""
+    return self.clsid.split(":", 1)[0] if ":" in self.clsid else None
+
+  @property
   def type(self) -> str:
+    if self.device is not None:
+      return f"device step ({self.device})"
     return STEP_TYPES.get(self.clsid.upper(), f"unknown {self.clsid}")
 
 
