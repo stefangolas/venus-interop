@@ -1,0 +1,276 @@
+{
+ "PLT_CAR_L5AC_A00": {
+  "alternatives": [
+   "ml_star\\plt_car_l5ac_a00.tml",
+   "ML_STAR\\PLT_CAR_L5AC.tml"
+  ],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_L5AC_A00",
+  "file": "ML_STAR\\PLT_CAR_L5AC_A00.tml",
+  "model": "hamilton_plate_carrier_L5_ac",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_L5AC_P_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_L5AC_P_A00",
+  "file": "ML_STAR\\Plate\\PLT_CAR_L5AC_P_A00.tml",
+  "model": "PLT_CAR_L5AC_P_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_L5FLEX_MD_A00": {
+  "alternatives": [
+   "ML_STAR\\PLT_CAR_L5FLEX_MD.tml"
+  ],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_L5FLEX_MD_A00",
+  "file": "ML_STAR\\PLT_CAR_L5FLEX_MD_A00.tml",
+  "model": "PLT_CAR_L5FLEX_MD_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_L5MD": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_L5MD",
+  "file": "ML_STAR\\PLT_CAR_L5MD.tml",
+  "model": "PLT_CAR_L5MD",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_L5MD_A00": {
+  "alternatives": [
+   "ml_star\\plt_car_l5md_a00.tml"
+  ],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_L5MD_A00",
+  "file": "ML_STAR\\PLT_CAR_L5MD_A00.tml",
+  "model": "PLT_CAR_L5MD_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_P3AC_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_P3AC_A00",
+  "file": "ML_STAR\\PLT_CAR_P3AC_A00.tml",
+  "model": "PLT_CAR_P3AC_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_P3AC_A01": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_P3AC_A01",
+  "file": "ML_STAR\\PLT_CAR_P3AC_A01.tml",
+  "model": "PLT_CAR_P3AC_A01",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "PLT_CAR_P3LI_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.plate_carriers.PLT_CAR_P3LI_A00",
+  "file": "ML_STAR\\Plate\\PLT_CAR_P3LI_A00.tml",
+  "model": "PLT_CAR_P3LI_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_120BC_4mlTF_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_120BC_4mlTF_A00",
+  "file": "ML_STAR\\TIP_CAR_120BC_4mlTF_A00.tml",
+  "model": "TIP_CAR_120BC_4mlTF_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_120BC_5mlT_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_120BC_5mlT_A00",
+  "file": "ML_STAR\\TIP_CAR_120BC_5mlT_A00.tml",
+  "model": "TIP_CAR_120BC_5mlT_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_288_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_288_A00",
+  "file": "ML_STAR\\TIP_CAR_288_A00.tml",
+  "model": "TIP_CAR_288_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_288_B00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_288_B00",
+  "file": "ML_STAR\\TIP_CAR_288_B00.tml",
+  "model": "TIP_CAR_288_B00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_288_C00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_288_C00",
+  "file": "ML_STAR\\TIP_CAR_288_C00.tml",
+  "model": "TIP_CAR_288_C00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_384BC_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_384BC_A00",
+  "file": "ML_STAR\\TIP_CAR_384BC_A00.tml",
+  "model": "TIP_CAR_384BC_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_384_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_384_A00",
+  "file": "ML_STAR\\TIP_CAR_384_A00.tml",
+  "model": "TIP_CAR_384_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_480": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_480",
+  "file": "ML_STAR\\TIP_CAR_480.tml",
+  "model": "hamilton_tip_carrier_L5",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_480BC_A00": {
+  "alternatives": [
+   "ml_star\\tip_car_480bc_a00.tml"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_480BC_A00",
+  "file": "ML_STAR\\TIP_CAR_480BC_A00.tml",
+  "model": "hamilton_tip_carrier_L5",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_480_A00": {
+  "alternatives": [
+   "ml_star\\tip_car_480_a00.tml"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_480_A00",
+  "file": "ML_STAR\\TIP_CAR_480_A00.tml",
+  "model": "hamilton_tip_carrier_L5",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_72_4mlTF_C00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_72_4mlTF_C00",
+  "file": "ML_STAR\\TIP_CAR_72_4mlTF_C00.tml",
+  "model": "TIP_CAR_72_4mlTF_C00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_72_5mlT_C00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_72_5mlT_C00",
+  "file": "ML_STAR\\TIP_CAR_72_5mlT_C00.tml",
+  "model": "TIP_CAR_72_5mlT_C00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_96BC_4mlTF_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_96BC_4mlTF_A00",
+  "file": "ML_STAR\\TIP_CAR_96BC_4mlTF_A00.tml",
+  "model": "TIP_CAR_96BC_4mlTF_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "TIP_CAR_96BC_5mlT_A00": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_carriers.TIP_CAR_96BC_5mlT_A00",
+  "file": "ML_STAR\\TIP_CAR_96BC_5mlT_A00.tml",
+  "model": "TIP_CAR_96BC_5mlT_A00",
+  "source": "venus install",
+  "why": "same name"
+ },
+ "hamilton_96_tiprack_1000uL": {
+  "alternatives": [
+   "ML_STAR\\HighTip_L.rck",
+   "ml_star\\ht_l.rck",
+   "Labware\\ML_STAR\\Tips\\HT_L.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_1000uL",
+  "file": "ML_STAR\\HT_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_1000uL_filter": {
+  "alternatives": [
+   "ml_star\\htf_l.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_1000uL_filter",
+  "file": "ML_STAR\\HTF_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_10uL_filter": {
+  "alternatives": [
+   "ml_star\\ltf_l.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_10uL_filter",
+  "file": "ML_STAR\\LTF_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_300uL": {
+  "alternatives": [
+   "ML_STAR\\StandardTip_L.rck",
+   "ML_STAR\\96COREHEAD\\Core96_TipSupport_ST_L.rck",
+   "ml_star\\st_l.rck",
+   "ml_star\\96corehead\\core96_tipsupport_st_l.rck",
+   "Labware\\ML_STAR\\Tips\\ST.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_300uL",
+  "file": "ML_STAR\\ST_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_300uL_filter": {
+  "alternatives": [
+   "ml_star\\stf_l.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_300uL_filter",
+  "file": "ML_STAR\\STF_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_300uL_filter_slim": {
+  "alternatives": [],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_300uL_filter_slim",
+  "file": "ML_STAR\\SlimTip300ulFilter.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_50uL": {
+  "alternatives": [
+   "ML_STAR\\96COREHEAD\\Core96_TipSupport_50ulTip_L.rck",
+   "ml_star\\tip_50ul_l.rck",
+   "ml_star\\96corehead\\core96_tipsupport_50ultip_l.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_50uL",
+  "file": "ML_STAR\\TIP_50ul_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ },
+ "hamilton_96_tiprack_50uL_filter": {
+  "alternatives": [
+   "ml_star\\tip_50ulf_l.rck",
+   "ml_star\\96corehead\\core96_tipsupport_50ultipfilter_l.rck"
+  ],
+  "factory": "pylabrobot.resources.hamilton.tip_racks.hamilton_96_tiprack_50uL_filter",
+  "file": "ML_STAR\\TIP_50ulF_L.rck",
+  "model": "hamilton_96_tiprack_standard",
+  "source": "venus install",
+  "why": "same rack geometry and tip type"
+ }
+}

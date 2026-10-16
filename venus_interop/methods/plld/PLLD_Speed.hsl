@@ -1,0 +1,52 @@
+#ifndef __PLLD_SPEED_HSL__
+#define __PLLD_SPEED_HSL__ 1
+
+#include "HSLStrLib.hsl"
+#include "STAR_OEM_toolkit.hs_"                                   // SendFirmwareCommand
+#include "STAR Tools\Resources\SubMethods\FW_HelperLibrary.hs_" // SetParameter, CheckForError
+
+namespace PLLD_SPEED {
+
+  // Channel Z drive: 0.01072765 mm per increment. zv range 20-15000 increments.
+
+  // Lower the stored Z speed (zv) on every active channel. Does nothing when i_speed_mm_s <= 0.
+  function SetZSpeed(device & ML_STAR, variable i_channelPattern, variable i_speed_mm_s) void
+  {
+      variable CH_IDS("123456789ABCDEFG");   // channel 1 -> P1 ... 16 -> PG
+      variable ch, nCh, cmd, p, reply;
+      if (i_speed_mm_s <= 0) { return; }
+      nCh = StrGetLength(i_channelPattern);
+      FW_HELPERLIBRARY::SetParameter("zv", i_speed_mm_s, 93.2171, 5, p);   // mm/s -> "zv00186"
+      for (ch = 0; ch < nCh;)
+      {
+          ch = ch + 1;
+          if (StrMid(i_channelPattern, ch - 1, 1) == "1")
+          {
+              cmd = "P" + StrMid(CH_IDS, ch - 1, 1) + "AA";
+              STAR_OEM_TOOLKIT::SendFirmwareCommand(cmd, ML_STAR, p, reply);
+              FW_HELPERLIBRARY::CheckForError(cmd, reply, 1);
+          }
+      }
+  }
+
+  // Write the default zv back on every active channel. Safe to call when nothing was changed.
+  function RestoreZSpeed(device & ML_STAR, variable i_channelPattern) void
+  {
+      variable ZV_DEFAULT_INCREMENTS(11652);   // <-- replace with the value read in Step 0
+      variable CH_IDS("123456789ABCDEFG");
+      variable ch, nCh, cmd, p, reply;
+      nCh = StrGetLength(i_channelPattern);
+      FW_HELPERLIBRARY::SetParameter("zv", ZV_DEFAULT_INCREMENTS, 1.0, 5, p);
+      for (ch = 0; ch < nCh;)
+      {
+          ch = ch + 1;
+          if (StrMid(i_channelPattern, ch - 1, 1) == "1")
+          {
+              cmd = "P" + StrMid(CH_IDS, ch - 1, 1) + "AA";
+              STAR_OEM_TOOLKIT::SendFirmwareCommand(cmd, ML_STAR, p, reply);
+              FW_HELPERLIBRARY::CheckForError(cmd, reply, 0);   // don't raise: try every channel
+          }
+      }
+  }
+}
+#endif

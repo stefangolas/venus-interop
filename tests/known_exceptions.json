@@ -1,0 +1,1380 @@
+{
+ "0286cbf43e78.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "03520194dbe8.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "0455694ab36e.lay": {
+  "default_sequence": [
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_z": [
+   "TipSupport_1000_offset"
+  ]
+ },
+ "056e26caf33c.lay": {
+  "default_sequence": [
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_z": [
+   "TipSupport_1000_offset"
+  ]
+ },
+ "0dfa9c65c782.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "11aa79e5d83f.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002"
+  ]
+ },
+ "133093b73977.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "14445e43fa8a.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "14c05f8c9171.lay": {
+  "default_sequence": [
+   "Cos_96_DW_1mL_0001",
+   "Cos_96_DW_1mL_0002",
+   "HTF_L_0001",
+   "STF_L_0001",
+   "TIP_50ulF_L_0001"
+  ]
+ },
+ "16ef7d11df17.lay": {
+  "default_sequence": [
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel"
+  ]
+ },
+ "17adef65295f.lay": {
+  "default_sequence": [
+   "Cytometer_Plate_1_To_User",
+   "Cytometer_Plate_2",
+   "Cytometer_Plate_2_To_User",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ]
+ },
+ "17dbfbd43613.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "STF_L_0001",
+   "TIP_50ulF_L_0001"
+  ]
+ },
+ "1831cd285e4e.lay": {
+  "default_sequence": [
+   "Agilent_liquid_waste",
+   "First_Growth_Plate_parking",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "Old_Growth_Plate_parking"
+  ]
+ },
+ "194eef31a3f1.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "STF_L_0001",
+   "TIP_50ulF_L_0001",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001"
+  ]
+ },
+ "1bb56912ab64.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "1c0df642f301.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "23161ec42720.lay": {
+  "default_sequence": [
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "25e46c2df5f7.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "27c0e54b425e.lay": {
+  "default_sequence": [
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel"
+  ]
+ },
+ "288f2fa51705.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001"
+  ]
+ },
+ "2994c8b35bb8.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "2c13a72f46c4.lay": {
+  "rack_on_site": [
+   "Nunc_1_3_mL_Binding_Plate_001_0001",
+   "Nunc_1_3_mL_Binding_Plate_001_0002",
+   "Nunc_1_3_mL_Filter_Plate_001_0001",
+   "Nunc_Binding_Plate"
+  ],
+  "rack_z": [
+   "Nunc_1_3_mL_Binding_Plate_001_0002",
+   "Nunc_1_3_mL_Filter_Plate_001_0001"
+  ]
+ },
+ "2c8cc984c03a.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ],
+  "rack_z": [
+   "TipSupport_1000_offset",
+   "TipSupport_300_offset",
+   "TipSupport_50_offset"
+  ]
+ },
+ "2fd43717b6bf.lay": {
+  "default_sequence": [
+   "Waste",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "318e17d121a0.lay": {
+  "default_sequence": [
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "319229299525.lay": {
+  "default_sequence": [
+   "Growth_Plate_waste"
+  ]
+ },
+ "353f23756bcb.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "369f32379684.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "393518028e0b.lay": {
+  "default_sequence": [
+   "Cytometer_Plate_1_To_User",
+   "Cytometer_Plate_2",
+   "Cytometer_Plate_2_To_User",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ]
+ },
+ "3ae2008ad415.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ],
+  "rack_z": [
+   "TipSupport_1000_offset",
+   "TipSupport_300_offset",
+   "TipSupport_50_offset"
+  ]
+ },
+ "3e813a6f019b.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "3ed5809e547e.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "471ee4569657.lay": {
+  "default_sequence": [
+   "Waste",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "47849d05d68b.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "HTF_L_0003",
+   "HTF_L_0004",
+   "HTF_L_0005",
+   "HT_L_0006",
+   "HT_L_0007",
+   "HT_L_0008",
+   "HT_L_0009",
+   "HT_L_0010",
+   "LTF_L_0001",
+   "LTF_L_0002",
+   "LTF_L_0003",
+   "LTF_L_0004",
+   "LTF_L_0005",
+   "LT_L_0006",
+   "LT_L_0007",
+   "LT_L_0008",
+   "LT_L_0009",
+   "LT_L_0010",
+   "STF_L_0001",
+   "STF_L_0002",
+   "STF_L_0003",
+   "STF_L_0004",
+   "STF_L_0005",
+   "ST_L_0001",
+   "ST_L_0002",
+   "ST_L_0003",
+   "ST_L_0004",
+   "ST_L_0005",
+   "TIP_50ulF_L_0006",
+   "TIP_50ulF_L_0007",
+   "TIP_50ulF_L_0008",
+   "TIP_50ulF_L_0009",
+   "TIP_50ulF_L_0010",
+   "TIP_50ul_L_0006",
+   "TIP_50ul_L_0007",
+   "TIP_50ul_L_0008",
+   "TIP_50ul_L_0009",
+   "TIP_50ul_L_0010",
+   "Waste",
+   "_4mlTF_L_0001",
+   "_4mlTF_L_0002",
+   "_4mlTF_L_0003",
+   "_4mlTF_L_0004",
+   "_4mlTF_L_0005",
+   "_5mlT_L_0001",
+   "_5mlT_L_0002",
+   "_5mlT_L_0003",
+   "_5mlT_L_0004",
+   "_5mlT_L_0005",
+   "core384slidewaste_0001"
+  ]
+ },
+ "4a1a88c474e1.lay": {
+  "default_sequence": [
+   "NTR_384head_96tips_50ul_WASTE",
+   "TIP384_384TIPS_NTR_50ul_A00_0001_0001",
+   "TIP384_384TIPS_NTR_50ul_A00_0001_0002",
+   "TIP384_384TIPS_NTR_50ul_A00_0001_0003",
+   "TIP384_384TIPS_NTR_50ul_A00_0001_0004",
+   "TIP384_384TIPS_NTR_50ul_A00_0002_0001",
+   "TIP384_384TIPS_NTR_50ul_A00_0002_0002",
+   "TIP384_384TIPS_NTR_50ul_A00_0002_0003",
+   "TIP384_384TIPS_NTR_50ul_A00_0002_0004",
+   "TIP384_384TIPS_NTR_50ul_A00_0003_0001",
+   "TIP384_384TIPS_NTR_50ul_A00_0003_0002",
+   "TIP384_384TIPS_NTR_50ul_A00_0003_0003",
+   "TIP384_384TIPS_NTR_50ul_A00_0003_0004",
+   "TIP384_384TIPS_NTR_50ul_A00_0004_0001",
+   "TIP384_384TIPS_NTR_50ul_A00_0004_0002",
+   "TIP384_384TIPS_NTR_50ul_A00_0004_0003",
+   "TIP384_384TIPS_NTR_50ul_A00_0004_0004",
+   "TIP384_384TIPS_NTR_50ul_A00_0005_0001",
+   "TIP384_384TIPS_NTR_50ul_A00_0005_0002",
+   "TIP384_384TIPS_NTR_50ul_A00_0005_0003",
+   "TIP384_384TIPS_NTR_50ul_A00_0005_0004",
+   "TIP384_96TIPS_NTR_50ul_A00_0001_0001",
+   "TIP384_96TIPS_NTR_50ul_A00_0001_0002",
+   "TIP384_96TIPS_NTR_50ul_A00_0001_0003",
+   "TIP384_96TIPS_NTR_50ul_A00_0001_0004",
+   "TIP384_96TIPS_NTR_50ul_A00_0002_0001",
+   "TIP384_96TIPS_NTR_50ul_A00_0002_0002",
+   "TIP384_96TIPS_NTR_50ul_A00_0002_0003",
+   "TIP384_96TIPS_NTR_50ul_A00_0002_0004",
+   "TIP384_96TIPS_NTR_50ul_A00_0003_0001",
+   "TIP384_96TIPS_NTR_50ul_A00_0003_0002",
+   "TIP384_96TIPS_NTR_50ul_A00_0003_0003",
+   "TIP384_96TIPS_NTR_50ul_A00_0003_0004",
+   "TIP384_96TIPS_NTR_50ul_A00_0004_0001",
+   "TIP384_96TIPS_NTR_50ul_A00_0004_0002",
+   "TIP384_96TIPS_NTR_50ul_A00_0004_0003",
+   "TIP384_96TIPS_NTR_50ul_A00_0004_0004",
+   "TIP384_96TIPS_NTR_50ul_A00_0005_0001",
+   "TIP384_96TIPS_NTR_50ul_A00_0005_0002",
+   "TIP384_96TIPS_NTR_50ul_A00_0005_0003",
+   "TIP384_96TIPS_NTR_50ul_A00_0005_0004",
+   "TIP_50ul_L_0001",
+   "TIP_50ul_L_0002",
+   "TIP_50ul_L_0003",
+   "TIP_50ul_L_0004",
+   "TIP_50ul_L_0005",
+   "TIPs384",
+   "core384slidewaste_0001",
+   "myDummyNTRrack"
+  ]
+ },
+ "4b7eaeccc4d9.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "4c535995fe04.lay": {
+  "default_sequence": [
+   "Waste",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "4cb4762132a3.lay": {
+  "default_sequence": [
+   "Fourtitude_Growth_Plate_with_Lid_0001"
+  ]
+ },
+ "4cf8c9c597d3.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "4d9b48ec1e2d.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "4f6ea2297d6d.lay": {
+  "default_sequence": [
+   "HTF_L_0001"
+  ]
+ },
+ "5236cd48350b.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "53c1515b1a8d.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "54113820f547.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "55d7f28f90f1.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "57b31f3092ec.lay": {
+  "default_sequence": [
+   "DNA_Elute_Buffer_0",
+   "DNA_N3_Buffer",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_on_site": [
+   "Agilent_filter_plate_GF_5_0_um_on_Eppendorf_DWP_0001",
+   "Enzymax_FP_MPE2_NoRot",
+   "Nunc_BP_MPE2"
+  ],
+  "rack_z": [
+   "Agilent_filter_plate_GF_5_0_um_on_Eppendorf_DWP_0001"
+  ]
+ },
+ "58ed90d74ca1.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "lid_xy": [
+   "Eppendorf_EP_Handoff",
+   "Eppendorf_EP_Storage",
+   "Nunc_BP_Handoff",
+   "Nunc_BP_Storage"
+  ],
+  "rack_on_site": [
+   "Enzymax_FP_MPE2_NoRot",
+   "Eppendorf_EP_Handoff",
+   "Eppendorf_EP_Storage",
+   "Nunc_BP_Handoff",
+   "Nunc_BP_MPE2"
+  ],
+  "stack_step": [
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "5ae1a84b57e5.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "611648960790.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "62b19d781c9b.lay": {
+  "default_sequence": [
+   "HTF_L_0006",
+   "STF_L_0006",
+   "Waste",
+   "core384slidewaste_0001"
+  ]
+ },
+ "62e59774bd06.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ]
+ },
+ "6890ce6d5fd7.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "6a8c37342690.lay": {
+  "default_sequence": [
+   "Gradient_plate_transport"
+  ],
+  "lid_xy": [
+   "Fourtitude_Growth_Plate_with_Lid_0001"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001",
+   "Fourtitude_Growth_Plate_with_Lid_0001",
+   "Gradient_plate_transport",
+   "Starting_Growth_Plate"
+  ]
+ },
+ "7329719f653c.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "7c5597b3dc4b.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "7de2f59b0178.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "80759af27610.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "836b5b5b8168.lay": {
+  "default_sequence": [
+   "HTF_L_0001"
+  ]
+ },
+ "8a3334ec4561.lay": {
+  "default_sequence": [
+   "Fourtitude_Growth_Plate_with_Lid_0001",
+   "Fourtitude_Growth_Plate_with_Lid_0002",
+   "Fourtitude_Growth_Plate_with_Lid_0003"
+  ]
+ },
+ "8aae5d6e70d1.lay": {
+  "default_sequence": [
+   "Cytometer_Plate_1_To_User",
+   "Cytometer_Plate_2",
+   "Cytometer_Plate_2_To_User",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ]
+ },
+ "8add9db91467.lay": {
+  "default_sequence": [
+   "HAM_DW_22_ml_0001",
+   "HAM_DW_22_ml_0002",
+   "HAM_DW_22_ml_0003",
+   "HAM_DW_22_ml_0004",
+   "HAM_DW_22_ml_0005",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "8df16faeef3f.lay": {
+  "default_sequence": [
+   "HT_L_0001",
+   "HT_L_0002",
+   "HT_L_0003",
+   "ST_L_0001",
+   "ST_L_0002"
+  ],
+  "rack_on_site": [
+   "Cos_96_PCR_0001",
+   "Cos_96_PCR_0002",
+   "Cos_96_PCR_0003",
+   "Cos_96_PCR_0004"
+  ]
+ },
+ "8ffdd51c1ecf.lay": {
+  "rack_on_site": [
+   "Nun_96_U_2ml_L_0001",
+   "Nun_96_U_2ml_L_0002",
+   "Nun_96_U_2ml_L_0004"
+  ],
+  "rack_z": [
+   "Cos_96_PCR_0001",
+   "Ham_DW_Rgt_96_L_0002",
+   "Ham_DW_Rgt_96_L_0003",
+   "Ham_DW_Rgt_96_L_0004",
+   "Ham_DW_Rgt_96_L_0005",
+   "Ham_DW_Rgt_96_L_0006",
+   "Ham_DW_Rgt_96_L_0008",
+   "Nun_96_U_2ml_L_0001",
+   "Nun_96_U_2ml_L_0004"
+  ]
+ },
+ "901bb5b62bc4.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "9651548c3d12.lay": {
+  "lid_xy": [
+   "Fourtitude_Growth_Plate_with_Lid_0001"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_with_Lid_0001"
+  ]
+ },
+ "98055e561260.lay": {
+  "default_sequence": [
+   "Waste",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "98d7c65dfcfb.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "Move_GP",
+   "Move_GP_Handoff"
+  ],
+  "rack_on_site": [
+   "Growth_Plate"
+  ]
+ },
+ "9ab3304cbe2a.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "9cf0d8704c48.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "9d0493ccc3cb.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "9d123c51f8b4.lay": {
+  "default_sequence": [
+   "VER_HT_0001",
+   "ht_l_0001"
+  ]
+ },
+ "9e74ba413a38.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "9e94d02e0c5c.lay": {
+  "default_sequence": [
+   "Fourtitude_Growth_Plate_0001",
+   "Fourtitude_Growth_Plate_0002",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_z": [
+   "TipSupport_1000_offset"
+  ]
+ },
+ "a575ba90bae1.lay": {
+  "default_sequence": [
+   "First_Growth_Plate_parking",
+   "Glycerol_Plate_1",
+   "Glycerol_Plate_2",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "Old_Growth_Plate_parking"
+  ],
+  "rack_z": [
+   "TipSupport_1000_1",
+   "TipSupport_1000_2",
+   "TipSupport_300_2",
+   "TipSupport_50_2"
+  ]
+ },
+ "a6366c13e55e.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "STF_L_0001"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001"
+  ]
+ },
+ "a68c609d006d.lay": {
+  "default_sequence": [
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel"
+  ],
+  "rack_on_site": [
+   "Nunc_1_well_agar_plate_0001"
+  ]
+ },
+ "a76ecc9c87cc.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "a84cff0460d4.lay": {
+  "default_sequence": [
+   "Waste",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "a952fce318b6.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "a9fdf014d189.lay": {
+  "default_sequence": [
+   "HT_L_0001"
+  ],
+  "rack_on_site": [
+   "PlateFilterMPE2"
+  ]
+ },
+ "ac59b054ae98.lay": {
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_with_Lid_0003"
+  ]
+ },
+ "affc12fb6302.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "b112dfd62205.lay": {
+  "default_sequence": [
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel"
+  ]
+ },
+ "b1152b07b6ce.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "STF_L_0001",
+   "TIP_50ulF_L_0001",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "b34b36b2a364.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "b5b5e6b7f525.lay": {
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "b74fd9647456.lay": {
+  "default_sequence": [
+   "First_Growth_Plate_parking",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "Old_Growth_Plate_parking"
+  ],
+  "rack_z": [
+   "TipSupport_1000_1",
+   "TipSupport_1000_2",
+   "TipSupport_300_2",
+   "TipSupport_50_2"
+  ]
+ },
+ "bb604bd5d5c2.lay": {
+  "default_sequence": [
+   "Cytometer_Plate_1_To_User",
+   "Cytometer_Plate_2",
+   "Cytometer_Plate_2_To_User",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ]
+ },
+ "bc2087186e01.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "bca7c85b1aba.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "STF_L_0001",
+   "TIP_50ulF_L_0001"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001",
+   "Fourtitude_Growth_Plate_0002",
+   "Fourtitude_Growth_Plate_0003"
+  ]
+ },
+ "bf162819f6ac.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "c40ee5347f80.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "c503863e0b52.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_on_site": [
+   "FP_on_MPE"
+  ]
+ },
+ "c591a9ab7179.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "HTF_L_0003",
+   "HTF_L_0004",
+   "HTF_L_0005",
+   "HT_L_0006",
+   "HT_L_0007",
+   "HT_L_0008",
+   "HT_L_0009",
+   "HT_L_0010",
+   "LTF_L_0001",
+   "LTF_L_0002",
+   "LTF_L_0003",
+   "LTF_L_0004",
+   "LTF_L_0005",
+   "LT_L_0006",
+   "LT_L_0007",
+   "LT_L_0008",
+   "LT_L_0009",
+   "LT_L_0010",
+   "STF_L_0001",
+   "STF_L_0002",
+   "STF_L_0003",
+   "STF_L_0004",
+   "STF_L_0005",
+   "ST_L_0001",
+   "ST_L_0002",
+   "ST_L_0003",
+   "ST_L_0004",
+   "ST_L_0005",
+   "TIP_50ulF_L_0006",
+   "TIP_50ulF_L_0007",
+   "TIP_50ulF_L_0008",
+   "TIP_50ulF_L_0009",
+   "TIP_50ulF_L_0010",
+   "TIP_50ul_L_0006",
+   "TIP_50ul_L_0007",
+   "TIP_50ul_L_0008",
+   "TIP_50ul_L_0009",
+   "TIP_50ul_L_0010",
+   "Waste",
+   "_4mlTF_L_0001",
+   "_4mlTF_L_0002",
+   "_4mlTF_L_0003",
+   "_4mlTF_L_0004",
+   "_4mlTF_L_0005",
+   "_5mlT_L_0001",
+   "_5mlT_L_0002",
+   "_5mlT_L_0003",
+   "_5mlT_L_0004",
+   "_5mlT_L_0005",
+   "core384slidewaste_0001"
+  ],
+  "rack_on_site": [
+   "RearVerification",
+   "teachingNeedleBlock"
+  ]
+ },
+ "c5ee1f98bdc1.lay": {
+  "default_sequence": [
+   "Cytometer_Plate_1_To_User",
+   "Cytometer_Plate_2",
+   "Cytometer_Plate_2_To_User",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ]
+ },
+ "cabc69212b36.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001"
+  ]
+ },
+ "cc07db344440.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "cc9cae0bc99d.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "ce242e85d05d.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_on_site": [
+   "FP_on_MPE"
+  ]
+ },
+ "cf7b956007e5.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002"
+  ],
+  "rack_on_site": [
+   "Fourtitude_Growth_Plate_0001"
+  ]
+ },
+ "d04fccf83d39.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "d8f8b3798a79.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "dbeb40b4b449.lay": {
+  "default_sequence": [
+   "Waste",
+   "st_l_0001",
+   "st_l_0002",
+   "st_l_0003",
+   "st_l_0004",
+   "st_l_0005"
+  ]
+ },
+ "e0bde83213b0.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "GrowthPlate",
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "e62df38faa3f.lay": {
+  "default_sequence": [
+   "TipSupport_1000_WideBore"
+  ],
+  "rack_on_site": [
+   "Agilent_filter_plate_GF_5_0_um_on_Eppendorf_DWP_0001"
+  ],
+  "rack_z": [
+   "Agilent_filter_plate_GF_5_0_um_on_Eppendorf_DWP_0001"
+  ]
+ },
+ "eca3e635172b.lay": {
+  "default_sequence": [
+   "Growth_Plate_waste",
+   "TipSupport_1000_WideBore"
+  ]
+ },
+ "ee287f732955.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "ee94d825f5fe.lay": {
+  "default_sequence": [
+   "ABGene_96_well_1200_ul_plate_0001",
+   "ABGene_96_well_1200_ul_plate_0002",
+   "ABGene_96_well_1200_ul_plate_0003"
+  ]
+ },
+ "f09e2e8fa599.lay": {
+  "default_sequence": [
+   "ElectroporationPlate",
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "f10945167d22.lay": {
+  "default_sequence": [
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "f1c221217b92.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "f26272d3c115.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "STF_L_0001",
+   "STF_L_0002",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_Offset96Head"
+  ]
+ },
+ "f47f0d114195.lay": {
+  "default_sequence": [
+   "GrowthPlate",
+   "Tips1000ulHighVolumeTipWithFilter_Offset96Head",
+   "Tips1000ulHighVolumeTipWithFilter_OffsetChannels",
+   "Tips300ulStandardVolumeTipWithFilter_Offset96Head",
+   "Tips300ulStandardVolumeTipWithFilter_OffsetChannel",
+   "Tips50ulTipWithFilter_Offset96Head",
+   "Tips50ulTipWithFilter_OffsetChannels"
+  ],
+  "rack_on_site": [
+   "TroughLiquidWasteChannels"
+  ]
+ },
+ "f51e8a63c748.lay": {
+  "default_sequence": [
+   "seqSamples"
+  ]
+ },
+ "f89274f276f5.lay": {
+  "default_sequence": [
+   "Growth_Plate_Handoff",
+   "Growth_Plate_waste"
+  ]
+ },
+ "fcc6b648ae21.lay": {
+  "default_sequence": [
+   "Cytometer_Plate_1_To_User",
+   "Cytometer_Plate_2",
+   "Cytometer_Plate_2_To_User",
+   "Growth_Plate_Handoff",
+   "Growth_Plate_preheating",
+   "Growth_Plate_waste"
+  ]
+ },
+ "pyh_1.lay": {
+  "default_sequence": [
+   "HT_L_0001",
+   "STF_L_0001",
+   "STF_L_0002",
+   "STF_L_0003",
+   "STF_L_0004",
+   "STF_L_0005",
+   "rgt_cont_60ml_BC_A00_0001"
+  ]
+ },
+ "pyh_2.lay": {
+  "rack_on_rail": [
+   "RGT_TUBE_1"
+  ],
+  "rack_on_site": [
+   "MIDI_OnMagnet"
+  ]
+ },
+ "pyh_3.lay": {
+  "default_sequence": [
+   "HTF_L_0001",
+   "HTF_L_0002",
+   "HTF_L_0003",
+   "HTF_L_0004",
+   "HTF_L_0005"
+  ],
+  "rack_on_site": [
+   "COREGripTool_OnWaste_1000ul_0001"
+  ]
+ },
+ "pyh_4.lay": {
+  "default_sequence": [
+   "tips_0",
+   "tips_1",
+   "tips_2",
+   "tips_3",
+   "tips_4"
+  ]
+ },
+ "pyh_star_oem_test.lay": {
+  "default_sequence": [
+   "dirty_tips",
+   "inducer_tips_0",
+   "inducer_tips_1",
+   "media_formulation_tips",
+   "reader_tray_384_Stefan",
+   "sample_plate_0",
+   "sample_plate_1",
+   "sample_plate_2",
+   "sample_plate_3",
+   "sample_plate_4",
+   "sample_plate_lid_0",
+   "sample_plate_lid_1",
+   "sample_plate_lid_2",
+   "sample_plate_lid_3",
+   "sample_plate_lid_4",
+   "turbidostat_tips"
+  ],
+  "lid_xy": [
+   "antibiotics_lid",
+   "antibiotics_lid_park",
+   "inducer_lid",
+   "inducer_lid_park",
+   "media_lid_park",
+   "media_staging_0_lid",
+   "media_staging_1_lid",
+   "park",
+   "park_2",
+   "reader_tray_384_Stefan",
+   "sample_plate_0",
+   "sample_plate_1",
+   "sample_plate_2",
+   "sample_plate_3",
+   "sample_plate_4",
+   "sample_plate_lid_0",
+   "sample_plate_lid_1",
+   "sample_plate_lid_2",
+   "sample_plate_lid_3",
+   "sample_plate_lid_4",
+   "single_channel_bleach",
+   "single_channel_waste",
+   "stage_turbidostat_plate_0",
+   "stage_turbidostat_plate_1",
+   "turbidostat_plate_0",
+   "turbidostat_plate_1"
+  ],
+  "rack_on_site": [
+   "antibiotics_lid",
+   "inducer_lid",
+   "park_2",
+   "sample_plate_0",
+   "sample_plate_1",
+   "sample_plate_2",
+   "sample_plate_3",
+   "sample_plate_4",
+   "sample_plate_lid_0",
+   "sample_plate_lid_1",
+   "sample_plate_lid_2",
+   "sample_plate_lid_3",
+   "stage_turbidostat_plate_0",
+   "stage_turbidostat_plate_1",
+   "turbidostat_plate_0",
+   "turbidostat_plate_1"
+  ]
+ },
+ "venus_StarLineMaintenance_STAR.lay": {
+  "rack_on_site": [
+   "RearVerification"
+  ]
+ },
+ "venus_StarLineMaintenance_StarPlus.lay": {
+  "rack_on_site": [
+   "RearVerification"
+  ]
+ },
+ "venus_StarLineMaintenance_Starlet.lay": {
+  "rack_on_site": [
+   "RearVerification"
+  ]
+ }
+}

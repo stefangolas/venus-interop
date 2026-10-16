@@ -1,0 +1,660 @@
+<title>Venus Layouts and PLR Decks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column (~72ch) with a sticky contents rail on wide screens; code and diagrams break out to a wider measure. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #ffffff;
+  --ink: #1b2328;
+  --muted: #5a6670;
+  --rule: #d9dee2;
+  --accent: #b25f12;          /* gauge amber: the speed parameter */
+  --accent-soft: #fbeedd;
+  --steel: #2f5d73;           /* firmware / master module */
+  --steel-soft: #e3eef3;
+  --code-bg: #f0f2f4;
+  --ok: #2c7a4b;
+  --warn: #9a5b00;
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171a; --surface: #192024; --ink: #e4e9ec; --muted: #9aa7b0; --rule: #2c363c;
+    --accent: #f0a04b; --accent-soft: #3a2a17; --steel: #8cc3dc; --steel-soft: #1d3039;
+    --code-bg: #1e262b; --ok: #6fcf97; --warn: #f2b45a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171a; --surface: #192024; --ink: #e4e9ec; --muted: #9aa7b0; --rule: #2c363c;
+  --accent: #f0a04b; --accent-soft: #3a2a17; --steel: #8cc3dc; --steel-soft: #1d3039;
+  --code-bg: #1e262b; --ok: #6fcf97; --warn: #f2b45a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; padding-top: 40px; font-size: 14px; }
+nav.toc p { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+main { min-width: 0; max-width: 780px; }
+header.top { padding-block: 40px 28px; border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
+.eyebrow { font-size: 13px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 600; margin: 0 0 10px; }
+h1 { font-family: var(--font-display); font-weight: 650; font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 0 0 14px; text-wrap: balance; }
+h1 code { font-size: .8em; }
+.lede { font-size: 19px; color: var(--muted); margin: 0 0 18px; max-width: 62ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.pill.warn { background: var(--accent-soft); color: var(--warn); }
+.pill.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.pill.steel { background: var(--steel-soft); color: var(--steel); }
+section { padding-top: 40px; scroll-margin-top: 16px; }
+h2 { font-family: var(--font-display); font-weight: 650; font-size: 27px; line-height: 1.2; margin: 0 0 14px; text-wrap: balance; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+p, li { max-width: 68ch; }
+a { color: var(--steel); }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.summary { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px 24px; margin-top: 28px; }
+.summary h2 { font-size: 20px; margin-bottom: 8px; }
+.summary ol { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+.callout.steel { border-color: var(--steel); background: var(--steel-soft); }
+.callout p { margin: 0; }
+.callout strong { color: var(--ink); }
+figure { margin: 22px 0; }
+figure.diagram { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; overflow-x: auto; }
+figure img { display: block; border: 1px solid var(--rule); border-radius: 6px; background: #fff; max-width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 68ch; }
+.shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 640px) { .shots { grid-template-columns: minmax(0, 1fr); } }
+.shots figure { margin: 0; }
+.tbl { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; background: var(--code-bg); }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 14px; white-space: nowrap; }
+.codeblock { position: relative; margin: 14px 0 20px; }
+.codeblock .label { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); padding: 6px 12px; background: var(--code-bg); border: 1px solid var(--rule); border-bottom: 0; border-radius: 8px 8px 0 0; }
+.codeblock .label span { font-family: var(--font-mono); min-width: 0; overflow-wrap: anywhere; }
+.codeblock pre { margin: 0; padding: 14px 16px; overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 0 0 8px 8px; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.55; tab-size: 4; }
+.codeblock pre .hl { background: var(--accent-soft); color: var(--ink); display: inline-block; min-width: 100%; }
+.codeblock pre .cm { color: var(--muted); }
+button.copy { font: inherit; font-size: 12px; font-weight: 600; color: var(--steel); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 2px 10px; cursor: pointer; flex: none; }
+button.copy:hover, button.copy:focus-visible { border-color: var(--steel); outline: none; }
+.anatomy { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--font-mono); font-size: 20px; margin: 10px 0 4px; }
+.anatomy .seg { display: grid; gap: 4px; text-align: center; }
+.anatomy .seg b { font-weight: 600; padding: 6px 10px; border-radius: 6px; background: var(--code-bg); border: 1px solid var(--rule); }
+.anatomy .seg.mod b { background: var(--steel-soft); color: var(--steel); border-color: transparent; }
+.anatomy .seg.val b { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.anatomy .seg small { font-family: var(--font-body); font-size: 12px; color: var(--muted); max-width: 13ch; line-height: 1.3; }
+.steps { counter-reset: step; }
+.step { border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 30px; }
+.step h3 { display: flex; align-items: baseline; gap: 12px; margin-top: 8px; font-size: 20px; }
+.step h3 .n { font-family: var(--font-mono); font-size: 14px; color: var(--accent); font-weight: 600; flex: none; }
+.checklist { list-style: none; padding: 0; display: grid; gap: 10px; }
+.checklist label { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.checklist input { margin-top: 5px; width: 18px; height: 18px; accent-color: var(--ok); flex: none; }
+.checklist input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--rule); }
+.refs { padding-left: 22px; display: grid; gap: 8px; font-size: 15px; }
+.refs .why { color: var(--muted); }
+svg text { font-family: var(--font-body); }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.5; }
+svg .box.py { stroke: var(--muted); }
+svg .box.venus { fill: var(--steel-soft); stroke: var(--steel); }
+svg .box.fw { fill: var(--accent-soft); stroke: var(--accent); }
+svg .t { fill: var(--ink); font-size: 14px; font-weight: 600; }
+svg .s { fill: var(--muted); font-size: 12px; }
+svg .m { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln.acc { stroke: var(--accent); stroke-width: 2; }
+svg .arrow { fill: var(--muted); }
+svg .arrow.acc { fill: var(--accent); }
+svg .lbl { fill: var(--accent); font-size: 12px; font-weight: 600; }
+svg .ax { stroke: var(--rule); stroke-width: 1; }
+svg .curve-a { stroke: var(--muted); stroke-width: 2.5; fill: none; }
+svg .curve-b { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+svg .liquid { fill: var(--steel-soft); stroke: var(--steel); stroke-width: 1; }
+svg .dot { fill: var(--accent); }
+footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#corpus">The evidence</a></li>
+    <li><a href="#format">The .lay file</a></li>
+    <li><a href="#reading">Reading without Venus</a></li>
+    <li><a href="#geometry">Geometry rules</a></li>
+    <li><a href="#sequences">Default sequences</a></li>
+    <li><a href="#rules-code">The rules as code</a></li>
+    <li><a href="#mapping">Mapping to PLR</a></li>
+    <li><a href="#open">Still open</a></li>
+    <li><a href="#testing">Round-trip test plan</a></li>
+    <li><a href="#checklist">Build checklist</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <p class="eyebrow">Investigation and test plan · Venus layouts and PyLabRobot</p>
+  <h1>Converting Venus <code>.lay</code> layouts to and from PLR decks</h1>
+  <p class="lede">The placement and sequence rules a converter needs, measured on 152 real layouts, and a test plan that runs both round trips without Venus.</p>
+  <div class="meta">
+    <span class="pill ok">Placement, stacking, sequences: measured</span>
+    <span class="pill warn">Lid Z: open</span>
+    <span>15 October 2026</span>
+  </div>
+</header>
+
+<div class="summary" id="summary">
+  <h2>Summary</h2>
+  <ol>
+    <li><strong>Layouts can be read without Venus.</strong> A small binary reader matches Hamilton's own converter on all 150 binary layouts in the test set. The converter itself is best avoided: it sends a keystroke to whatever window has focus.</li>
+    <li><strong>Carriers:</strong> deck site <code>{w}T-{rail}</code> sits at <code>X = 100 + (rail − 1) × 22.5</code>, Y 63, Z 100, PLR's <code>track_to_location</code>. Exact for all 1,071 carriers on rails.</li>
+    <li><strong>Racks:</strong> Venus stores well A1, at <code>corner + (BndryX, BndryY + (Rows − 1) × Dy)</code>. The rack's corner sits on the carrier site's corner in 3,747 of 3,830 placements (97.8%); the rest are hand nudges.</li>
+    <li><strong>Z:</strong> with <code>ZTransValue</code> 0 or 1 a rack sits at the site's Z (96%). <code>ZTransValue</code> 2 means Z was set by hand. That is the "+1 mm" in <code>STAR_OEM_Test.lay</code>.</li>
+    <li><strong>Stacking:</strong> the next rack up sits at the lower rack's Z plus the lower rack's <code>StackHt</code>, with no exceptions in 524 stacks.</li>
+    <li><strong>Default sequences:</strong> one per rack with <code>DefSeqValid 1</code>, named after the rack, listing every position column-major. Wells are named <code>A1…</code> or numbered down the columns, according to <code>IX.Index</code>.</li>
+    <li><strong>Open:</strong> lid Z. Lids are always named <code>&lt;plate&gt;_lid</code> and centred on the plate, but their height follows no rule found yet.</li>
+  </ol>
+</div>
+
+<section id="corpus">
+  <h2>The evidence</h2>
+  <p>Every rule below was measured across a set of real layouts, not inferred from one file. All work used downloaded copies; no production file was opened for writing.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Source</th><th>Layouts</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/djross22/lmsf_hamilton" target="_blank" rel="noopener">djross22/lmsf_hamilton</a></td><td class="num">141</td><td>A working lab's method collection, with its full <code>LabWare</code> folder (1,148 definitions)</td></tr>
+        <tr><td><a href="https://github.com/dgretton/pyhamilton" target="_blank" rel="noopener">dgretton/pyhamilton</a></td><td class="num">5</td><td>Including <code>STAR_OEM_Test.lay</code></td></tr>
+        <tr><td>ktmeaton/ML-STAR-Axygen-Purification, sniprbiome/PyVenus</td><td class="num">2</td><td></td></tr>
+        <tr><td>Local Venus install</td><td class="num">4</td><td><code>StarLineMaintenance_*.lay</code>, <code>Diagnostic.lay</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>That's 152 distinct layouts after removing duplicates (two more, in stefangolas/prance, wouldn't download), on <code>ML_STAR2.dck</code> (134), <code>ML_Starlet.dck</code> (13), <code>ML_FlexStar.dck</code> (5) and Nimbus decks. They reference 284 labware definitions; 197 were resolved (from the lmsf repo or the local install), plus 87 well (<code>.ctr</code>) files. Layouts whose definitions couldn't be found are skipped in the checks that need them.</p>
+</section>
+
+<section id="format">
+  <h2>The .lay file</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Section</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td class="num">DECKLAY,ML_STAR</td><td>The deck: <code>Labware.N.*</code> entries, <code>Seq.N.*</code> sequences, <code>Layer.1.*</code> lists, counters, and the deck file (<code>Deck, "ML_STAR2.dck"</code>).</td></tr>
+        <tr><td class="num">DECKLAY,ML_STAR_COVER</td><td>Lids, with the same <code>Labware.N.*</code> keys.</td></tr>
+        <tr><td class="num">DEVICE, LABWAREPROPERTIES, RESOURCES, SYSTEM</td><td>Instrument and view settings. Not geometry; pass through unchanged.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="codeblock">
+    <div class="label"><span>a carrier and a plate on it (text form)</span><button class="copy" type="button">Copy</button></div>
+<pre>Labware.64.File, "ML_STAR\\PLT_CAR_L5AC_A00.tml",
+Labware.64.Id, "PLT_CAR_L5AC_A00_0002",
+Labware.64.Template, "default",
+Labware.64.SiteId, "6T-24",
+Labware.64.TForm.3.X, "617.5",
+Labware.64.TForm.3.Y, "63",
+Labware.64.ZTrans, "100",
+Labware.64.Clsid, "{77DF9B91-671E-4974-8380-38AD0B4E0D86}",
+
+Labware.65.File, "Nunc\\Nun_96_Fl_Lb.rck",
+Labware.65.Id, "turbidostat_plate_0",
+Labware.65.Template, "PLT_CAR_L5AC_A00_0002",
+Labware.65.SiteId, "5",
+Labware.65.TForm.3.X, "634.5",
+Labware.65.TForm.3.Y, "146",
+Labware.65.ZTrans, "187.15",
+Labware.65.Angle, "0",
+Labware.65.DefSeqValid, "1",
+Labware.65.Clsid, "{8E1D6C02-F939-11D1-8D14-008029ED67EA}",</pre>
+  </div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="num">File</td><td>Definition, relative to <code>HAMILTON\LabWare</code>: <code>.tml</code> carrier, <code>.rck</code> rack, <code>.lid</code> lid.</td></tr>
+        <tr><td class="num">Id</td><td>Name.</td></tr>
+        <tr><td class="num">Template / SiteId</td><td><code>"default"</code> + deck site (<code>6T-24</code>): on the deck. A carrier's Id + its <code>.tml</code> site Id: on that carrier.</td></tr>
+        <tr><td class="num">TForm.3.X/Y</td><td>Carrier: its corner. Rack: well A1. Lid: its corner.</td></tr>
+        <tr><td class="num">ZTrans</td><td>Z of the labware's base.</td></tr>
+        <tr><td class="num">ZTransValue</td><td><code>0</code>/<code>1</code>: Z follows the site. <code>2</code>: Z set by hand.</td></tr>
+        <tr><td class="num">Angle, TForm.1/2</td><td>Rotation.</td></tr>
+        <tr><td class="num">DefSeqValid</td><td><code>1</code>: has its own default sequence.</td></tr>
+        <tr><td class="num">Clsid</td><td><code>{77DF9B91-…}</code> carriers, <code>{8E1D6C02-…}</code> racks.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The footer is <code>$$checksum=…$$length=…$$</code>, the same CRC32 rule as in the pLLD guide's <code>refooter.py</code>. It verified on the binary layout and on every definition file checked.</p>
+</section>
+
+<section id="reading">
+  <h2>Reading without Venus</h2>
+  <p>The binary form is simple. A header (<code>u16</code> version, <code>u16</code>, <code>u32</code> section count) is followed, for each section, by its name, a <code>u16</code> version, a <code>u32</code> entry count and the key/value strings. Each string has a one-byte length, or <code>0xFF</code> followed by a two-byte length. Some files are stored as text already; those start with <code>HxCfgFile</code>.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Check</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Binary reader vs <code>HxCfgFilConverter /t</code>, deck sections</td><td><span class="pill ok">150 / 150 identical</span> (the other 2 layouts are stored as text)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout"><p><strong>Avoid <code>HxCfgFilConverter.exe</code> for bulk work.</strong> After converting, it calls Windows <code>SendKeys</code>, which types into whatever window has focus. Run in parallel or without a desktop session, it crashes with “Access is denied”. The reader below needs no Venus at all, so it also runs in ordinary CI.</p></div>
+  <div class="codeblock">
+    <div class="label"><span>hxbin.py</span><button class="copy" type="button">Copy</button></div>
+<pre>"""Reader for Hamilton HxCfgFile files in their binary ("packed") form, no Venus tools needed.
+
+Layout, as observed:
+  u16 file version, u16 ?, u32 section count
+  per section:  str "TYPE,NAME", u16 section version, u32 entry count, entries
+  dict entries: str key, str value
+  str:          u8 length, or 0xFF followed by u16 length, then latin-1 bytes
+After the sections comes the "* $$author=...$$" footer.
+Only dictionary sections ({ key, "value" } in text form) are decoded; HxPars list sections (.med) are not.
+"""
+import struct
+
+
+class Reader:
+  def __init__(self, data: bytes):
+    self.d = data
+    self.i = 0
+
+  def u8(self):
+    v = self.d[self.i]
+    self.i += 1
+    return v
+
+  def u16(self):
+    v = struct.unpack_from("&lt;H", self.d, self.i)[0]
+    self.i += 2
+    return v
+
+  def u32(self):
+    v = struct.unpack_from("&lt;I", self.d, self.i)[0]
+    self.i += 4
+    return v
+
+  def s(self):
+    n = self.u8()
+    if n == 0xFF:
+      n = self.u16()
+    v = self.d[self.i:self.i + n].decode("latin-1")
+    self.i += n
+    return v
+
+
+def read_binary(path):
+  """Return {(type, name): {key: value}} like hxcfg.read_sections, for a binary file."""
+  r = Reader(open(path, "rb").read())
+  r.u16()
+  r.u16()
+  count = r.u32()
+  sections = {}
+  for _ in range(count):
+    header = r.s()
+    typ, _, name = header.partition(",")
+    r.u16()
+    n = r.u32()
+    kv = {}
+    for _ in range(n):
+      k = r.s()
+      kv[k] = r.s()
+    # later sections with the same (type, name) are kept separately, as in text form
+    key = (typ, name)
+    while key in sections:
+      key = (typ, name + "#")
+    sections[key] = kv
+  return sections</pre>
+  </div>
+</section>
+
+<section id="geometry">
+  <h2>Geometry rules</h2>
+  <figure class="diagram" aria-labelledby="fig-frames-cap">
+    <svg viewBox="0 0 720 330" width="100%" style="min-width:560px" role="img" aria-label="Rack reference point: A1 is BndryX right and BndryY plus (Rows minus 1) times Dy up from the front-left corner">
+      <rect x="20" y="20" width="680" height="290" rx="6" class="box"/>
+      <text class="s" x="34" y="42">Carrier site (from the .tml), corner at bottom-left</text>
+      <rect x="120" y="70" width="330" height="210" rx="4" class="box fw"/>
+      <text class="s" x="128" y="88">Rack (.rck), Dim.Dx × Dim.Dy</text>
+      <g fill="var(--steel)">
+        <circle cx="170" cy="110" r="6"/><circle cx="200" cy="110" r="6"/><circle cx="230" cy="110" r="6"/>
+        <circle cx="170" cy="140" r="6"/><circle cx="170" cy="170" r="6"/><circle cx="170" cy="200" r="6"/>
+        <circle cx="170" cy="240" r="6"/><circle cx="200" cy="240" r="6"/><circle cx="230" cy="240" r="6"/>
+      </g>
+      <text class="lbl" x="182" y="106">A1 = TForm.3</text>
+      <text class="s" x="182" y="256">front-left well (last row, column 1)</text>
+      <circle cx="120" cy="280" r="5" class="dot"/>
+      <text class="lbl" x="40" y="300">rack corner = site corner</text>
+      <line class="ln acc" x1="120" y1="280" x2="170" y2="280"/>
+      <text class="m" x="128" y="276">BndryX</text>
+      <line class="ln acc" x1="160" y1="280" x2="160" y2="240"/>
+      <text class="m" x="74" y="262">BndryY</text>
+      <line class="ln" x1="155" y1="240" x2="155" y2="110" stroke-dasharray="4 3"/>
+      <text class="m" x="20" y="180" transform="rotate(-90 70 180)">(Rows − 1) × Dy</text>
+      <text class="m" x="480" y="120">TForm.3.X = corner.X + BndryX</text>
+      <text class="m" x="480" y="144">TForm.3.Y = corner.Y + BndryY</text>
+      <text class="m" x="480" y="164">            + (Rows − 1) × Dy</text>
+      <text class="m" x="480" y="196">ZTrans    = site Z   (ZTransValue 0/1)</text>
+    </svg>
+    <figcaption id="fig-frames-cap"><code>BndryX</code>/<code>BndryY</code> locate the front-left well; Venus stores the back-left well, A1. For racks without <code>Rows</code> (troughs, tools), Rows counts as 1. Schematic, not to scale.</figcaption>
+  </figure>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Rule</th><th>Holds in</th><th>Exceptions</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Carrier on a rail.</strong> <code>SiteId "{w}T-{rail}"</code> (<code>M</code> = negative rail): X = 100 + (rail − 1) × 22.5, Y 63, Z 100.</td><td class="num">1,071 / 1,071 carriers</td><td>Same formula as PLR's <code>track_to_location</code>.</td></tr>
+        <tr><td><strong>Rack directly on a rail</strong> (tube carriers defined as <code>.rck</code>): rack corner = rail location.</td><td class="num">61 / 62</td><td>1 hand-placed.</td></tr>
+        <tr><td><strong>Rack on a carrier site.</strong> Rack corner = carrier corner + <code>.tml</code> site X/Y, using the A1 rule above.</td><td class="num">3,747 / 3,830 (97.8%)</td><td>83 small hand nudges (0.2–1 mm; a few up to 8 mm on one module).</td></tr>
+        <tr><td><strong>Rack Z.</strong> <code>ZTransValue</code> 0 or 1: Z = carrier Z + site Z.</td><td class="num">3,419 / 3,561 (96%)</td><td>Mostly tip supports and an MPE² base, adjusted by hand.</td></tr>
+        <tr><td><strong>Manual Z.</strong> <code>ZTransValue</code> 2: Z was set by hand.</td><td class="num">159 of 269 differ from site Z</td><td>Store as an explicit Z.</td></tr>
+        <tr><td><strong>Stacks.</strong> Bottom rack at site Z; each next = lower Z + lower <code>StackHt</code>.</td><td class="num">2,983 / 3,011 bottoms; 524 / 526 steps</td><td>Two racks at the same Z on one site are alternatives (<code>StackHt</code> 0), not a stack: 31 cases.</td></tr>
+        <tr><td><strong>Lid name.</strong> <code>&lt;plate Id&gt;_lid</code>, in the cover layer.</td><td class="num">436 / 436</td><td></td></tr>
+        <tr><td><strong>Lid XY.</strong> Lid <code>TForm.3</code> = its corner, centred on the plate's footprint.</td><td class="num">350 / 383</td><td>Sub-millimetre nudges.</td></tr>
+        <tr><td><strong>Lid Z.</strong> No rule yet: not <code>RackBaseToCoverBase</code>, not the well base, not constant per carrier or per plate.</td><td colspan="2"><span class="pill warn">Open</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Why <code>STAR_OEM_Test.lay</code> looked odd: its plates are <code>ZTransValue 2</code>, so their +1 mm is a hand-set Z. Its −1 mm X offsets on one carrier are nudges. An earlier corner rule, <code>Dim.Dy − BndryY</code>, only worked because for an 86 mm, 8-row plate it gives the same number as the correct rule.</p>
+</section>
+
+<section id="sequences">
+  <h2>Default sequences</h2>
+  <p>Existing sequences are not carried over: real layouts contain broken, stale and hand-edited ones, and PLR has no place for them. The converter only needs to generate what Venus writes for freshly placed labware.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Rule</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Who gets one:</strong> every rack with <code>DefSeqValid 1</code>. Carriers, waste blocks and tools have <code>DefSeqValid 0</code> and none.</td><td>277 / 277 racks and 2,247 / 2,257 tip racks with <code>DefSeqValid 1</code> have their own sequence.</td></tr>
+        <tr><td><strong>Name:</strong> the rack's Id. Items: <code>ObjId</code> = rack Id, one per position.</td><td>All of the above.</td></tr>
+        <tr><td><strong>Order:</strong> column-major: down column 1, then column 2, …</td><td>2,261 sequences.</td></tr>
+        <tr><td><strong>Names, <code>IX.Index 1</code>:</strong> row letter + column number (<code>A1, B1 … H1, A2</code>).</td><td>585 sequences.</td></tr>
+        <tr><td><strong>Names, <code>IX.Index 0</code>:</strong> numbers down the columns, <code>(column − 1) × Rows + row</code>.</td><td>1,676 sequences; only 2 number across rows.</td></tr>
+        <tr><td><strong>No <code>Rows</code>/<code>Columns</code></strong> (troughs, gripper tools, heaters): <code>1 … HoleCnt</code>.</td><td>All 8 such rack types.</td></tr>
+        <tr><td><strong>384-well:</strong> column-major like the rest.</td><td>Weakest rule: 7 of 23 plates. The other 16 are custom orders (10 of them a quadrant order for 8-channel work).</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Shared tip sequences (<code>Tips_1000_Channels</code>, <code>MlStar300ulStandardVolumeTipWithFilter</code> …) are named by each lab and aren't part of the default. Bookkeeping for each generated sequence: append <code>Seq.N.Name/Cnt/ReadOnly "0"/Item.*</code>, add it to <code>Layer.1.*SeqName</code>, and update <code>Seq.Cnt</code> and <code>Layer.1.SeqCnt</code>.</p>
+</section>
+
+<section id="rules-code">
+  <h2>The rules as code</h2>
+  <div class="codeblock">
+    <div class="label"><span>venus_rules.py (sketch)</span><button class="copy" type="button">Copy</button></div>
+<pre>TRACK_WIDTH = 22.5
+
+
+def rail_location(site_id):
+  """'6T-24' -&gt; (617.5, 63, 100); 'M' marks a negative rail ('6T-M3' -&gt; rail -3)."""
+  m = re.match(r"(\d+)T-(M?)(\d+)$", site_id)
+  rail = -int(m.group(3)) if m.group(2) else int(m.group(3))
+  return 100 + (rail - 1) * TRACK_WIDTH, 63.0, 100.0
+
+
+def a1_offset(rck):
+  """Well A1 relative to the rack's front-left corner. BndryX/BndryY locate the front-left well."""
+  rows = int(rck.get("Rows") or 0) or 1
+  return float(rck["BndryX"]), float(rck["BndryY"]) + (rows - 1) * float(rck.get("Dy") or 0)
+
+
+def rack_tform(corner_x, corner_y, rck):
+  dx, dy = a1_offset(rck)
+  return corner_x + dx, corner_y + dy                        # -&gt; TForm.3.X / TForm.3.Y
+
+
+def rack_corner(tform_x, tform_y, rck):
+  dx, dy = a1_offset(rck)
+  return tform_x - dx, tform_y - dy
+
+
+def stack_z(site_z, racks_bottom_up):
+  """Z of each rack in a stack on one site: each sits on the one below plus that one's StackHt."""
+  z, out = site_z, []
+  for rck in racks_bottom_up:
+    out.append(z)
+    z += float(rck.get("StackHt") or 0)
+  return out
+
+
+def lid_tform(plate_corner_x, plate_corner_y, rck, lid):
+  """Lid corner, centred on the plate footprint. (Lid Z: no rule yet.)"""
+  return (plate_corner_x + (float(rck["Dim.Dx"]) - float(lid["Dim.Dx"])) / 2,
+          plate_corner_y + (float(rck["Dim.Dy"]) - float(lid["Dim.Dy"])) / 2)
+
+
+def row_name(r):
+  s = ""
+  while r:
+    r -= 1
+    s = chr(65 + r % 26) + s
+    r //= 26
+  return s
+
+
+def default_sequence(labware_id, rck):
+  """What Venus writes for a rack with DefSeqValid 1: every position, column-major."""
+  rows, cols = int(rck.get("Rows") or 0), int(rck.get("Columns") or 0)
+  if not rows or not cols:                                   # troughs, tools: 1..HoleCnt
+    names = [str(i) for i in range(1, int(rck.get("HoleCnt") or 1) + 1)]
+  elif rck.get("IX.Index") == "1":                           # A1, B1 ... H1, A2 ...
+    names = [f"{row_name(r)}{c}" for c in range(1, cols + 1) for r in range(1, rows + 1)]
+  else:                                                      # 1, 2 ... numbered down the columns
+    names = [str((c - 1) * rows + r) for c in range(1, cols + 1) for r in range(1, rows + 1)]
+  return {"Name": labware_id, "ReadOnly": "0", "Items": [(labware_id, n) for n in names]}</pre>
+  </div>
+</section>
+
+<section id="mapping">
+  <h2>Mapping to PLR</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Venus</th><th>PLR</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td><code>Deck</code> key</td><td><code>STARLetDeck()</code> / <code>STARDeck()</code></td><td><code>ML_Starlet.dck</code> → STARlet; <code>ML_STAR.dck</code>, <code>ML_STAR2.dck</code> → STAR.</td></tr>
+        <tr><td>Carrier on <code>{w}T-{rail}</code></td><td><code>deck.assign_child_resource(carrier, track=rail)</code></td><td>Exact.</td></tr>
+        <tr><td><code>.tml</code> site</td><td>Carrier site</td><td>Match by X/Y/Z. Venus site 1 is at the back; PLR index 0 at the front.</td></tr>
+        <tr><td>Rack on a site</td><td>Child of the site</td><td>A1 rule. A non-zero residual, or <code>ZTransValue 2</code>, becomes an explicit offset.</td></tr>
+        <tr><td>Rack on the deck</td><td>Child of the deck</td><td>Absolute corner from the A1 rule; rotation from <code>Angle</code>.</td></tr>
+        <tr><td>Stack</td><td>Child of the rack below</td><td>Z step = lower <code>StackHt</code>.</td></tr>
+        <tr><td><code>&lt;plate&gt;_lid</code> in the cover layer</td><td><code>Lid</code> child of the plate</td><td>XY centred. Z: keep the stored value until a rule is found.</td></tr>
+        <tr><td><code>Seq.N.*</code></td><td>Not represented</td><td>Dropped; regenerated as defaults on the way back.</td></tr>
+        <tr><td>Other Venus-only keys</td><td><code>metadata</code></td><td>Carried through unchanged.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Names</h3>
+  <ul>
+    <li><strong>Carriers and Hamilton tip racks:</strong> 29 PLR factories carry <code>Hamilton name: 'X'</code> in their docstring (e.g. <code>PLT_CAR_L5AC_A00 → hamilton_plate_carrier_L5_ac</code>, <code>HT → hamilton_96_tiprack_1000uL</code>); others are named after the Venus name. Rack files add an orientation suffix (<code>HT_L.rck</code>).</li>
+    <li><strong>Other labware:</strong> most of the 284 definitions in the test set have no PLR equivalent by name. Building a PLR resource straight from the <code>.rck</code> (rows, columns, pitch, boundary, size, well file) covers them all, and is checkable with the A1 rule.</li>
+  </ul>
+</section>
+
+<section id="open">
+  <h2>Still open</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Question</th><th>What the test set shows</th><th>Next step</th></tr></thead>
+      <tbody>
+        <tr><td>Lid Z</td><td>Extra height above site Z + <code>RackBaseToCoverBase</code> is often 6.65 mm, but varies (2.65–41.85) for the same lid and carrier.</td><td>Keep stored Z on <code>LAY → PLR → LAY</code>. For new lids, use PLR's lid nesting and check against Venus later.</td></tr>
+        <tr><td>384-well default order</td><td>Column-major in 7 of 23; the rest are custom.</td><td>Check one freshly placed 384-well plate in Venus later.</td></tr>
+        <tr><td>Rotated labware</td><td>Few examples; not analysed yet.</td><td>Analyse <code>Angle</code> ≠ 0 entries in the test set.</td></tr>
+        <tr><td>Deck files <code>ML_STAR2.dck</code> etc.</td><td>The binary reader stops on them (likely a list-type section). Not needed: the rail formula covers carrier positions.</td><td>Optional.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="testing">
+  <h2>Round-trip test plan</h2>
+  <p>Everything here runs without Venus. Checks that need Venus (opening generated layouts in the Deck Editor, exporting Venus's own well coordinates) are deferred.</p>
+  <pre class="mermaid">
+flowchart LR
+  subgraph A["Round trip A: LAY → PLR → LAY"]
+    L0["layout.lay"] --> J1["PLR deck JSON"] --> L1["layout'.lay"]
+  end
+  subgraph B["Round trip B: PLR → LAY → PLR"]
+    P0["deck.json"] --> L2["layout.lay"] --> P1["deck'.json"]
+  end
+  L1 -. "normalize, compare" .-> L0
+  P1 -. "normalize, compare" .-> P0
+  </pre>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Level</th><th>Test</th><th>Pass condition</th></tr></thead>
+      <tbody>
+        <tr><td class="num">T0</td><td><strong>Reader.</strong> Read every layout and definition; verify every footer checksum.</td><td>No errors; every checksum verifies. The reader's output was already compared with Venus's converter (150 / 150), and those text forms are kept as fixtures.</td></tr>
+        <tr><td class="num">T1</td><td><strong>Writer.</strong> Read a layout and write it back unchanged.</td><td>Identical bytes after re-footering (binary) or identical text.</td></tr>
+        <tr><td class="num">T2</td><td><strong>Rule checks.</strong> The geometry and sequence rules over the whole test set.</td><td>Each rule holds at least at the rates measured here. Exceptions are listed explicitly (nudges, hand-set Z) and a new one fails the test.</td></tr>
+        <tr><td class="num">T3</td><td><strong>Round trip A</strong> on every layout.</td><td>Equal after normalization. Sequences are compared against the generated defaults, not the input.</td></tr>
+        <tr><td class="num">T4</td><td><strong>Round trip B</strong> on generated PLR decks: every mapped carrier on several rails (including negative), every rack type on every site, stacks, lids.</td><td>PLR JSON equal after normalization: tree, types, every absolute location to 0.01 mm.</td></tr>
+        <tr><td class="num">Later</td><td>Venus acceptance and a Venus-computed well-position check.</td><td>Deferred.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Normalization</h3>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Side</th><th>Ignored</th><th>Compared exactly</th></tr></thead>
+      <tbody>
+        <tr><td><code>.lay</code></td><td>Footer; key order; <code>Labware.N</code> numbering; number formatting (<code>617.5</code> = <code>617.50</code>); input sequences</td><td>Every labware entry by Id and key; counters; pass-through sections; generated sequences against the rules</td></tr>
+        <tr><td>PLR JSON</td><td>Child order where PLR defines none; float noise below 0.005 mm</td><td>Tree, <code>type</code>, <code>model</code>, absolute locations, rotation, <code>metadata</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Test skeleton</h3>
+  <div class="codeblock">
+    <div class="label"><span>tests/test_roundtrip.py</span><button class="copy" type="button">Copy</button></div>
+<pre>import pathlib
+
+import pytest
+from pylabrobot.resources import Deck
+
+# venus_lay is the converter module to be written; these are its planned entry points.
+from venus_lay import (
+  read_lay, write_lay, footer_ok, lay_to_plr, plr_to_lay,
+  normalize_lay, normalize_plr, default_sequence, rule_report,
+)
+
+LAYOUTS = sorted(pathlib.Path("fixtures/lay").glob("*.lay"))     # binary, as found
+DECKS = sorted(pathlib.Path("fixtures/plr").glob("*.json"))      # generated PLR decks
+
+
+@pytest.mark.parametrize("path", LAYOUTS, ids=lambda p: p.stem)
+def test_t0_read_and_checksum(path):
+  assert footer_ok(path.read_bytes())
+  read_lay(path)
+
+
+@pytest.mark.parametrize("path", LAYOUTS, ids=lambda p: p.stem)
+def test_t1_write_is_lossless(path):
+  assert write_lay(read_lay(path)) == path.read_bytes()       # footer recomputed identically
+
+
+def test_t2_rules_hold_on_test_set():
+  report = rule_report(LAYOUTS)                               # counts per rule, exceptions by name
+  assert report.carrier_on_rail.failures == []
+  assert report.rack_on_site.failures &lt;= KNOWN_NUDGES         # listed, not just counted
+  assert report.stack_step.failures &lt;= KNOWN_STACK_EXCEPTIONS
+
+
+@pytest.mark.parametrize("path", LAYOUTS, ids=lambda p: p.stem)
+def test_t3_roundtrip_lay_plr_lay(path):
+  lay = read_lay(path)
+  again = plr_to_lay(lay_to_plr(lay))
+  assert normalize_lay(again, sequences=False) == normalize_lay(lay, sequences=False)
+  for rack in again.racks_with_default_sequence():
+    assert again.sequence(rack.id) == default_sequence(rack.id, rack.definition)
+
+
+@pytest.mark.parametrize("path", DECKS, ids=lambda p: p.stem)
+def test_t4_roundtrip_plr_lay_plr(path):
+  deck = Deck.load_from_json_file(str(path))
+  again = lay_to_plr(read_lay(write_lay(plr_to_lay(deck))))
+  assert normalize_plr(again) == normalize_plr(deck)</pre>
+  </div>
+</section>
+
+<section id="checklist">
+  <h2>Build checklist</h2>
+  <p>Ticks are saved in this browser only.</p>
+  <ul class="checklist">
+    <li><label><input type="checkbox" id="c1"><span>Check in the test set: binary layouts and definitions, plus their text forms as reference.</span></label></li>
+    <li><label><input type="checkbox" id="c2"><span>T0: binary/text reader and footer check on everything.</span></label></li>
+    <li><label><input type="checkbox" id="c3"><span>T1: writer that reproduces input exactly.</span></label></li>
+    <li><label><input type="checkbox" id="c4"><span>T2: rule checks as regression tests, with the exception lists.</span></label></li>
+    <li><label><input type="checkbox" id="c5"><span>Name map from PLR docstrings, plus a <code>.rck</code> → PLR resource builder for the rest.</span></label></li>
+    <li><label><input type="checkbox" id="c6"><span><code>LAY → PLR</code>: deck, carriers by rail, sites by coordinate, racks by the A1 rule, stacks, lids, metadata.</span></label></li>
+    <li><label><input type="checkbox" id="c7"><span><code>PLR → LAY</code>: entries, counters, layers, default sequences.</span></label></li>
+    <li><label><input type="checkbox" id="c8"><span>T3 and T4 round trips pass on the whole test set.</span></label></li>
+    <li><label><input type="checkbox" id="c9"><span>Later, with Venus: Deck Editor acceptance, well-position check, lid Z, 384-well default.</span></label></li>
+  </ul>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ol class="refs">
+    <li><a href="https://github.com/djross22/lmsf_hamilton" target="_blank" rel="noopener">djross22/lmsf_hamilton</a> <span class="why">· most of the test layouts and labware definitions</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/blob/master/pyhamilton/star-oem/VENUS_Method/STAR_OEM_Test.lay" target="_blank" rel="noopener">PyHamilton <code>STAR_OEM_Test.lay</code></a> <span class="why">· the first layout analysed</span></li>
+    <li><a href="https://github.com/VerisFlow/verisflow-dotnet" target="_blank" rel="noopener">VerisFlow/verisflow-dotnet</a> (MIT) <span class="why">· a C# layout parser; confirmed the length-prefixed format. Its <code>ZTransValue</code> rule (adds the well base) did not hold in this test set</span></li>
+    <li><a href="https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/resources/hamilton/star_decks.py" target="_blank" rel="noopener">PLR <code>star_decks.py</code></a> <span class="why">· <code>track_to_location</code></span></li>
+    <li><a href="https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/resources/hamilton/plate_carriers.py" target="_blank" rel="noopener">PLR <code>plate_carriers.py</code></a> <span class="why">· carrier sites, <code>Hamilton name</code> docstrings</span></li>
+    <li><a href="https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/resources/resource.py" target="_blank" rel="noopener">PLR <code>resource.py</code></a> <span class="why">· JSON <code>serialize</code> / <code>deserialize</code></span></li>
+  </ol>
+</section>
+
+<footer>
+  Rates come from public layouts, mostly one lab's. Rules marked open, and anything Venus-dependent, still need checking against Venus.
+</footer>
+</main>
+</div>
+
+<script>
+(function () {
+  document.querySelectorAll('.codeblock').forEach(function (block) {
+    var btn = block.querySelector('button.copy');
+    var pre = block.querySelector('pre');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', function () {
+      var text = pre.innerText;
+      var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+      var fallback = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'Selected';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+      };
+      try {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } catch (e) { fallback(); }
+    });
+  });
+  var KEY = 'lay-plr-checklist';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+  document.querySelectorAll('.checklist input').forEach(function (box) {
+    if (saved[box.id]) box.checked = true;
+    box.addEventListener('change', function () {
+      saved[box.id] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+})();
+</script>

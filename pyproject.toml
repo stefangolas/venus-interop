@@ -1,0 +1,27 @@
+[project]
+name = "venus-interop"
+version = "0.1.0"
+description = "Hamilton Venus <-> PyLabRobot interop and Venus file utilities, without Venus installed"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+plr = ["pylabrobot @ git+https://github.com/PyLabRobot/pylabrobot.git@0f03af330d0db0032b650bd8171fcf4dccb6ff9e"]
+models = ["trimesh", "manifold3d", "numpy", "scipy", "shapely", "networkx", "rtree"]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["venus_interop*"]
+
+[tool.setuptools.package-data]
+"venus_interop.plr" = ["templates/*.lay", "data/*.json"]
+"venus_interop.multiflex" = ["data/*.json"]
+"venus_interop.methods" = ["plld/*.hsl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests", "tools"]

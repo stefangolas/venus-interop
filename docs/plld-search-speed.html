@@ -1,0 +1,908 @@
+<title>pLLD Search Speed for PyHamilton</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column (~72ch) with a sticky contents rail on wide screens; code and diagrams break out to a wider measure. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #ffffff;
+  --ink: #1b2328;
+  --muted: #5a6670;
+  --rule: #d9dee2;
+  --accent: #b25f12;          /* gauge amber: the speed parameter */
+  --accent-soft: #fbeedd;
+  --steel: #2f5d73;           /* firmware / master module */
+  --steel-soft: #e3eef3;
+  --code-bg: #f0f2f4;
+  --ok: #2c7a4b;
+  --warn: #9a5b00;
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171a; --surface: #192024; --ink: #e4e9ec; --muted: #9aa7b0; --rule: #2c363c;
+    --accent: #f0a04b; --accent-soft: #3a2a17; --steel: #8cc3dc; --steel-soft: #1d3039;
+    --code-bg: #1e262b; --ok: #6fcf97; --warn: #f2b45a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171a; --surface: #192024; --ink: #e4e9ec; --muted: #9aa7b0; --rule: #2c363c;
+  --accent: #f0a04b; --accent-soft: #3a2a17; --steel: #8cc3dc; --steel-soft: #1d3039;
+  --code-bg: #1e262b; --ok: #6fcf97; --warn: #f2b45a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; padding-top: 40px; font-size: 14px; }
+nav.toc p { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+main { min-width: 0; max-width: 780px; }
+header.top { padding-block: 40px 28px; border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
+.eyebrow { font-size: 13px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 600; margin: 0 0 10px; }
+h1 { font-family: var(--font-display); font-weight: 650; font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 0 0 14px; text-wrap: balance; }
+h1 code { font-size: .8em; }
+.lede { font-size: 19px; color: var(--muted); margin: 0 0 18px; max-width: 62ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.pill.warn { background: var(--accent-soft); color: var(--warn); }
+.pill.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.pill.steel { background: var(--steel-soft); color: var(--steel); }
+section { padding-top: 40px; scroll-margin-top: 16px; }
+h2 { font-family: var(--font-display); font-weight: 650; font-size: 27px; line-height: 1.2; margin: 0 0 14px; text-wrap: balance; }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+p, li { max-width: 68ch; }
+a { color: var(--steel); }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.summary { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px 24px; margin-top: 28px; }
+.summary h2 { font-size: 20px; margin-bottom: 8px; }
+.summary ol { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+.callout.steel { border-color: var(--steel); background: var(--steel-soft); }
+.callout p { margin: 0; }
+.callout strong { color: var(--ink); }
+figure { margin: 22px 0; }
+figure.diagram { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; overflow-x: auto; }
+figure img { display: block; border: 1px solid var(--rule); border-radius: 6px; background: #fff; max-width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 68ch; }
+.shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 640px) { .shots { grid-template-columns: minmax(0, 1fr); } }
+.shots figure { margin: 0; }
+.tbl { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; background: var(--code-bg); }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 14px; white-space: nowrap; }
+.codeblock { position: relative; margin: 14px 0 20px; }
+.codeblock .label { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); padding: 6px 12px; background: var(--code-bg); border: 1px solid var(--rule); border-bottom: 0; border-radius: 8px 8px 0 0; }
+.codeblock .label span { font-family: var(--font-mono); min-width: 0; overflow-wrap: anywhere; }
+.codeblock pre { margin: 0; padding: 14px 16px; overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 0 0 8px 8px; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.55; tab-size: 4; }
+.codeblock pre .hl { background: var(--accent-soft); color: var(--ink); display: inline-block; min-width: 100%; }
+.codeblock pre .cm { color: var(--muted); }
+button.copy { font: inherit; font-size: 12px; font-weight: 600; color: var(--steel); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 2px 10px; cursor: pointer; flex: none; }
+button.copy:hover, button.copy:focus-visible { border-color: var(--steel); outline: none; }
+.anatomy { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--font-mono); font-size: 20px; margin: 10px 0 4px; }
+.anatomy .seg { display: grid; gap: 4px; text-align: center; }
+.anatomy .seg b { font-weight: 600; padding: 6px 10px; border-radius: 6px; background: var(--code-bg); border: 1px solid var(--rule); }
+.anatomy .seg.mod b { background: var(--steel-soft); color: var(--steel); border-color: transparent; }
+.anatomy .seg.val b { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.anatomy .seg small { font-family: var(--font-body); font-size: 12px; color: var(--muted); max-width: 13ch; line-height: 1.3; }
+.steps { counter-reset: step; }
+.step { border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 30px; }
+.step h3 { display: flex; align-items: baseline; gap: 12px; margin-top: 8px; font-size: 20px; }
+.step h3 .n { font-family: var(--font-mono); font-size: 14px; color: var(--accent); font-weight: 600; flex: none; }
+.checklist { list-style: none; padding: 0; display: grid; gap: 10px; }
+.checklist label { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.checklist input { margin-top: 5px; width: 18px; height: 18px; accent-color: var(--ok); flex: none; }
+.checklist input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--rule); }
+.refs { padding-left: 22px; display: grid; gap: 8px; font-size: 15px; }
+.refs .why { color: var(--muted); }
+svg text { font-family: var(--font-body); }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.5; }
+svg .box.py { stroke: var(--muted); }
+svg .box.venus { fill: var(--steel-soft); stroke: var(--steel); }
+svg .box.fw { fill: var(--accent-soft); stroke: var(--accent); }
+svg .t { fill: var(--ink); font-size: 14px; font-weight: 600; }
+svg .s { fill: var(--muted); font-size: 12px; }
+svg .m { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln.acc { stroke: var(--accent); stroke-width: 2; }
+svg .arrow { fill: var(--muted); }
+svg .arrow.acc { fill: var(--accent); }
+svg .lbl { fill: var(--accent); font-size: 12px; font-weight: 600; }
+svg .ax { stroke: var(--rule); stroke-width: 1; }
+svg .curve-a { stroke: var(--muted); stroke-width: 2.5; fill: none; }
+svg .curve-b { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+svg .liquid { fill: var(--steel-soft); stroke: var(--steel); stroke-width: 1; }
+svg .dot { fill: var(--accent); }
+footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#architecture">How the pieces connect</a></li>
+    <li><a href="#firmware">What the firmware commands do</a></li>
+    <li><a href="#evidence">Evidence from PyLabRobot</a></li>
+    <li><a href="#units">Units and string format</a></li>
+    <li><a href="#bench">Step 0: bench test</a></li>
+    <li><a href="#venus-files">How Venus stores a method</a></li>
+    <li><a href="#implementation">Steps 1–5: implementation</a></li>
+    <li><a href="#validation">Validation checklist</a></li>
+    <li><a href="#fallback">Fallback: the ZE route</a></li>
+    <li><a href="#open">Open questions</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <p class="eyebrow">Implementation plan · PyHamilton on Hamilton STAR</p>
+  <h1>Controlling pressure-LLD search speed from PyHamilton</h1>
+  <p class="lede">Add a <code>plldSearchSpeed</code> option to <code>ham.aspirate()</code>. It lowers each active channel's stored Z speed with a firmware command, runs the normal Venus aspirate with pLLD on, and then restores the speed.</p>
+  <div class="meta">
+    <span class="pill warn">Needs bench test before build</span>
+    <span>15 October 2026</span>
+    <span>Not yet run on an instrument</span>
+  </div>
+</header>
+
+<div class="summary" id="summary">
+  <h2>Summary</h2>
+  <ol>
+    <li>The firmware aspirate command (<code>C0AS</code>) has no search-speed field, so the speed can't be passed into the aspirate itself.</li>
+    <li>Each pipetting channel stores its own Z speed (<code>zv</code>), read with <code>PxRA</code> and written with <code>PxAA</code>. PyLabRobot shows that master-module commands use this stored value.</li>
+    <li><strong>Plan A:</strong> write a slow <code>zv</code> to the active channels, run the unchanged Venus aspirate, then write the default back as the next step after every aspirate. All channels still search together, and the liquid class still applies.</li>
+    <li>Whether the pLLD search inside <code>C0AS</code> actually follows <code>zv</code> is unconfirmed. A five-command bench test settles it before any code is written.</li>
+    <li>The Venus change is a small hand-written HSL library plus four steps in the universal method. Make those steps in the Method Editor, or by a scripted edit of the <code>.med</code> and <code>.hsl</code> pair. A plain edit of the generated <code>.hsl</code> alone is not enough.</li>
+    <li>If Step 0 fails, fall back to <strong>Plan B</strong>: a direct per-channel pLLD search (<code>PxZE</code>) with its own speed field, then a fixed-height aspirate.</li>
+  </ol>
+</div>
+
+<section id="architecture">
+  <h2>How the pieces connect</h2>
+  <p>PyHamilton never talks to the instrument directly. Python sends a JSON command to the Venus universal method, which calls a sub-method in <code>STAR_OEM_Toolkit</code>, and that runs ordinary Venus steps. Venus already has a Firmware Command step, and the toolkit wraps it as <code>SendFirmwareCommand</code>. So everything in this plan stays inside the existing data path.</p>
+  <figure>
+    <img src="data:image/png;base64,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" alt="Diagram: Venus universal method STAR_OEM_noFan.hsl exchanging messages with the Python interpreter running robot_method.py" width="371" height="359" style="max-width:300px">
+    <figcaption>The two halves of PyHamilton. From the “Getting Started with PyHamilton” thread on labautomation.io.</figcaption>
+  </figure>
+  <figure class="diagram" aria-labelledby="fig-arch-cap">
+    <svg viewBox="0 0 720 470" width="100%" style="min-width:560px" role="img" aria-label="Command path from a Python aspirate call down to the pipetting channels">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow"/></marker>
+        <marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow acc"/></marker>
+      </defs>
+      <!-- Python -->
+      <rect class="box py" x="200" y="10" width="320" height="58" rx="8"/>
+      <text class="t" x="360" y="34" text-anchor="middle">Python script</text>
+      <text class="m" x="360" y="54" text-anchor="middle">ham.aspirate(..., plldSearchSpeed=2.0)</text>
+      <line class="ln" x1="360" y1="68" x2="360" y2="98" marker-end="url(#ah)"/>
+      <text class="s" x="372" y="88">JSON: channelAspirate + new field</text>
+      <!-- Venus universal method -->
+      <rect class="box venus" x="200" y="100" width="320" height="58" rx="8"/>
+      <text class="t" x="360" y="124" text-anchor="middle">STAR_OEM_noFan · channelAspirate</text>
+      <text class="s" x="360" y="144" text-anchor="middle">set speed → aspirate → restore default</text>
+      <!-- three toolkit calls -->
+      <line class="ln acc" x1="270" y1="158" x2="110" y2="196" marker-end="url(#ahA)"/>
+      <line class="ln" x1="360" y1="158" x2="360" y2="196" marker-end="url(#ah)"/>
+      <line class="ln acc" x1="450" y1="158" x2="610" y2="196" marker-end="url(#ahA)"/>
+      <text class="lbl" x="150" y="172">1</text>
+      <text class="lbl" x="368" y="182">2</text>
+      <text class="lbl" x="560" y="172">3</text>
+      <rect class="box fw" x="10" y="198" width="200" height="62" rx="8"/>
+      <text class="t" x="110" y="222" text-anchor="middle">PLLD_SPEED::SetZSpeed</text>
+      <text class="m" x="110" y="244" text-anchor="middle">PxAA zv&lt;slow&gt;</text>
+      <rect class="box venus" x="260" y="198" width="200" height="62" rx="8"/>
+      <text class="t" x="360" y="222" text-anchor="middle">Channels_1ml_Aspirate</text>
+      <text class="s" x="360" y="244" text-anchor="middle">unchanged Venus step</text>
+      <rect class="box fw" x="510" y="198" width="200" height="62" rx="8"/>
+      <text class="t" x="610" y="222" text-anchor="middle">PLLD_SPEED::RestoreZSpeed</text>
+      <text class="m" x="610" y="244" text-anchor="middle">PxAA zv&lt;default&gt;</text>
+      <!-- down to firmware -->
+      <line class="ln acc" x1="110" y1="260" x2="110" y2="380" marker-end="url(#ahA)"/>
+      <line class="ln" x1="360" y1="260" x2="360" y2="296" marker-end="url(#ah)"/>
+      <line class="ln acc" x1="610" y1="260" x2="610" y2="380" marker-end="url(#ahA)"/>
+      <text class="s" x="120" y="300">via toolkit SendFirmwareCommand</text>
+      <text class="s" x="120" y="316">(Firmware Command step)</text>
+      <rect class="box" x="260" y="298" width="200" height="58" rx="8"/>
+      <text class="t" x="360" y="322" text-anchor="middle">Master module C0</text>
+      <text class="m" x="360" y="342" text-anchor="middle">C0AS (pLLD on)</text>
+      <line class="ln" x1="360" y1="356" x2="360" y2="380" marker-end="url(#ah)"/>
+      <text class="s" x="372" y="374">moves channels using stored zv?</text>
+      <!-- channels -->
+      <rect class="box" x="10" y="382" width="700" height="76" rx="8"/>
+      <text class="t" x="360" y="404" text-anchor="middle">Pipetting channels P1 … P8</text>
+      <g class="m">
+        <text x="60" y="438">P1 zv</text><text x="145" y="438">P2 zv</text><text x="230" y="438">P3 zv</text><text x="315" y="438">P4 zv</text>
+        <text x="400" y="438">P5 zv</text><text x="485" y="438">P6 zv</text><text x="570" y="438">P7 zv</text><text x="655" y="438" text-anchor="middle">P8 zv</text>
+      </g>
+    </svg>
+    <figcaption id="fig-arch-cap">Plan A command path. Amber marks what this plan adds. The open question is the label under <code>C0AS</code>: whether the master's pLLD search uses the stored <code>zv</code>.</figcaption>
+  </figure>
+</section>
+
+<section id="firmware">
+  <h2>What the firmware commands do</h2>
+  <p>Three commands matter here. Only one of them is a whole aspirate.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Command</th><th>Sent to</th><th>What it does</th><th>Speed control</th></tr></thead>
+      <tbody>
+        <tr><td class="num">C0AS</td><td>Master</td><td>The whole aspirate: move to wells, LLD search if on, aspirate, swap out, transport air. Venus's Aspirate step sends this.</td><td>No search-speed field. LLD fields are only mode (<code>lm</code>), sensitivity (<code>lv</code>, <code>ll</code>) and start height (<code>lp</code>).</td></tr>
+        <tr><td class="num">PxAA / PxRA</td><td>One channel</td><td>Write or read a stored drive parameter: <code>zv</code> Z speed, <code>zr</code> Z acceleration, <code>yv</code> Y speed, <code>yr</code> Y acceleration level. Doesn't move anything.</td><td>Sets the default Z speed that later moves use.</td></tr>
+        <tr><td class="num">PxZE</td><td>One channel</td><td>A standalone pLLD search: fast to the start height, slow downward search, stop on detection, reply with the detected Z. Doesn't aspirate.</td><td>Explicit: <code>zv</code> for the approach, <code>zl</code> for the search itself.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figure class="diagram" aria-labelledby="fig-ze-cap">
+    <svg viewBox="0 0 640 260" width="100%" style="min-width:480px" role="img" aria-label="Z position over time during a pLLD search at default speed and at slow speed">
+      <line class="ax" x1="70" y1="20" x2="70" y2="220"/>
+      <line class="ax" x1="70" y1="220" x2="620" y2="220"/>
+      <text class="s" x="60" y="34" text-anchor="end">start</text>
+      <text class="s" x="60" y="98" text-anchor="end">search</text>
+      <text class="s" x="60" y="112" text-anchor="end">start</text>
+      <text class="s" x="60" y="174" text-anchor="end">liquid</text>
+      <text class="s" x="345" y="246" text-anchor="middle">time →</text>
+      <text class="s" x="22" y="130" transform="rotate(-90 22 130)" text-anchor="middle">tip Z</text>
+      <rect class="liquid" x="70" y="170" width="550" height="50" opacity=".55"/>
+      <line class="ax" x1="70" y1="104" x2="620" y2="104" stroke-dasharray="4 4"/>
+      <!-- default: fast approach then fast search -->
+      <path class="curve-a" d="M70,30 L120,104 L160,170"/>
+      <circle cx="160" cy="170" r="4" fill="var(--muted)"/>
+      <!-- slow: fast approach then slow search -->
+      <path class="curve-b" d="M70,30 L120,104 L470,170"/>
+      <circle class="dot" cx="470" cy="170" r="5"/>
+      <text class="s" x="176" y="160">default search</text>
+      <text class="lbl" x="300" y="122">slow search (lower zv / zl)</text>
+      <text class="s" x="476" y="196">detection</text>
+    </svg>
+    <figcaption id="fig-ze-cap">Schematic, not to scale. The approach down to the search start stays fast; only the descent from the search start to the liquid surface slows. With Plan A, the test is whether lowering <code>zv</code> slows this segment, or every Z move in the aspirate.</figcaption>
+  </figure>
+</section>
+
+<section id="evidence">
+  <h2>Evidence from PyLabRobot</h2>
+  <p>The newer PyLabRobot STAR driver (<code>pylabrobot/hamilton/star/driver/features/pipettes.py</code>) reads and writes these per-channel parameters. Its <code>move_to_safe_z</code> writes a temporary Z speed to each channel and then sends a <em>master</em> command, <code>C0ZA</code>. That only makes sense if the master's move uses each channel's stored speed.</p>
+  <div class="codeblock">
+    <div class="label"><span>pipettes.py · move_to_safe_z</span><button class="copy" type="button">Copy</button></div>
+<pre>  async def move_to_safe_z(
+    self, speed: Optional[float] = None, acceleration: Optional[float] = None
+  ) -&gt; None:
+    """Raise every channel to Z safety together (`C0 ZA`), whatever is mounted.
+
+    Args:
+      speed: in mm/s, held by the drives for the move. The stored speed when None.
+      acceleration: in mm/s2, held by the drives for the move. The stored one when None.
+    """
+<span class="hl">    async with self._temporary_z_drive_profile(speed=speed, acceleration=acceleration):</span>
+<span class="hl">      await self.probe_z_max()   # sends module="C0", command="ZA"</span></pre>
+  </div>
+  <div class="codeblock">
+    <div class="label"><span>pipettes.py · _set_drive_parameter</span><button class="copy" type="button">Copy</button></div>
+<pre>  async def _set_drive_parameter(self, channel: int, parameter: str, value: float) -&gt; None:
+    """Write a channel's stored drive parameter (`Px AA`).
+    ...
+    increments = self._drive_parameter_to_increments(parameter, value)
+    written: Dict[str, Any] = {parameter: f"{increments:0{width}}"}
+<span class="hl">    await self._driver.send_command(module=self.channel_id(channel), command="AA", **written)</span></pre>
+  </div>
+  <p>Two more details from the same file:</p>
+  <ul>
+    <li>The known stored parameters and their widths: <code>{"zv": 5, "zr": 3, "yv": 4, "yr": 1}</code>. The allowed Z speed is 20–15000 increments.</li>
+    <li>PyLabRobot restores to a constant default (<code>default_z_speed = 125.0</code> mm/s), not a value read back at run time, and rewrites every channel's defaults during setup (<code>_set_default_drive_parameters</code>). That suggests the values don't survive re-initialisation.</li>
+  </ul>
+  <div class="callout steel"><p><strong>What this doesn't prove.</strong> The confirmed case is a plain Z move. No PyLabRobot code sets <code>zv</code> and then runs an aspirate. The pLLD search inside <code>C0AS</code> could still use a speed the master sends itself.</p></div>
+</section>
+
+<section id="units">
+  <h2>Units and string format</h2>
+  <p>The channel Z drive counts in increments of <strong>0.01072765 mm</strong>, so speeds go over the wire as increments per second, zero-padded to five digits.</p>
+  <div class="anatomy" aria-label="Anatomy of the firmware string P1AAzv00186">
+    <div class="seg mod"><b>P1</b><small>channel module (P1…PG)</small></div>
+    <div class="seg"><b>AA</b><small>write stored parameter</small></div>
+    <div class="seg"><b>zv</b><small>Z speed</small></div>
+    <div class="seg val"><b>00186</b><small>186 inc/s ≈ 2.0 mm/s</small></div>
+  </div>
+  <p style="font-size:15px;color:var(--muted)">In the Venus Firmware Command step, <code>P1AA</code> goes in the Command field and <code>zv00186</code> in the Parameter field. Leave out <code>id</code>. The STAR Tools library sends commands such as <code>C0RD</code> + <code>pn01</code> without one, so Venus appears to add it.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>mm/s</th><th>Increments</th><th>Parameter string</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0.21</td><td class="num">20</td><td class="num">zv00020</td><td>Minimum allowed</td></tr>
+        <tr><td class="num">1.0</td><td class="num">93</td><td class="num">zv00093</td><td></td></tr>
+        <tr><td class="num">2.0</td><td class="num">186</td><td class="num">zv00186</td><td>Suggested first test</td></tr>
+        <tr><td class="num">5.0</td><td class="num">466</td><td class="num">zv00466</td><td></td></tr>
+        <tr><td class="num">10.0</td><td class="num">932</td><td class="num">zv00932</td><td>PyLabRobot's default <code>ZE</code> search speed</td></tr>
+        <tr><td class="num">125.0</td><td class="num">11652</td><td class="num">zv11652</td><td>PyLabRobot's default channel Z speed</td></tr>
+        <tr><td class="num">160.9</td><td class="num">15000</td><td class="num">zv15000</td><td>Maximum allowed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:15px;color:var(--muted)">Increments = round(mm/s ÷ 0.01072765). In HSL, <code>FW_HELPERLIBRARY::SetParameter("zv", speed, 93.2171, 5, p)</code> does this conversion and padding.</p>
+</section>
+
+<section id="bench">
+  <h2>Step 0: bench test</h2>
+  <p>Run this before building anything. Use Venus Firmware Command steps around a normal Aspirate step on <strong>channel 1 only</strong>, with a tip mounted, on a well with known liquid.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>#</th><th>Command</th><th>Parameter</th><th>Expect</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td class="num">P1RA</td><td class="num">razv</td><td><code>…zv#####</code>. <strong>Write this number down.</strong> It's your restore value.</td></tr>
+        <tr><td class="num">2</td><td class="num">P1AA</td><td class="num">zv00186</td><td><code>er00</code></td></tr>
+        <tr><td class="num">3</td><td colspan="2">Normal Venus Aspirate, channel 1, pLLD on</td><td>Watch the descent. Does it slow?</td></tr>
+        <tr><td class="num">4</td><td class="num">P1AA</td><td class="num">zv + saved value</td><td><code>er00</code></td></tr>
+        <tr><td class="num">5</td><td class="num">P1RA</td><td class="num">razv</td><td>The original value again</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Watch for</h3>
+  <ul>
+    <li>Whether only the LLD search slows, or every Z move in the aspirate (the descent to the well, the retract).</li>
+    <li>Whether the detected liquid height matches a normal-speed run.</li>
+    <li>Whether Initialize resets the value: write a slow <code>zv</code>, run Initialize, then read <code>P1RA razv</code>.</li>
+  </ul>
+  <pre class="mermaid">
+flowchart TD
+  A["Step 0: P1AA zv00186, then a normal pLLD aspirate"] --> B{"Did the LLD search slow down?"}
+  B -- "Yes" --> C["Plan A: wrap the existing Venus aspirate with PxAA set and restore"]
+  B -- "No" --> D["Plan B: PxZE search with zl, then a fixed-height aspirate"]
+  C --> E{"Did other Z moves slow too?"}
+  E -- "No, or acceptable" --> F["Build Steps 1-5"]
+  E -- "Yes, too slow" --> D
+  </pre>
+</section>
+
+<section id="venus-files">
+  <h2>How Venus stores a method</h2>
+  <p>Read this before touching any Venus file. It explains why the generated <code>.hsl</code> can't be edited on its own, and what a correct edit has to change.</p>
+
+  <div class="callout"><p><strong>Rule of thumb:</strong> a step in a Venus method lives in two files at once. Its <em>position</em> is in the <code>.hsl</code>, and its <em>settings</em> are in the <code>.med</code>. Change one without the other and the Method Editor no longer sees a valid step.</p></div>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th>File</th><th>What it holds</th><th>Editable as text?</th></tr></thead>
+      <tbody>
+        <tr><td class="num">STAR_OEM_noFan.med</td><td>One parameter record per step, keyed by a GUID: the function called, its library path, the parameter bindings, the variables it uses, and the code line it generates. Plus one encoded blob for the flowchart view. <strong>It contains no step order.</strong></td><td>Binary by default. Converts to text and back with Hamilton's <code>HxCfgFilConverter.exe</code>.</td></tr>
+        <tr><td class="num">STAR_OEM_noFan.hsl</td><td>The step order and nesting, written as marker comments around each step's code. Also the method's variable declarations and library <code>#include</code> lines.</td><td>Yes, but only by following the marker format exactly.</td></tr>
+        <tr><td class="num">STAR_OEM_noFan.sub</td><td>The method's own sub-methods (such as <code>JSON_GetFloatValue</code>), in the same marker format.</td><td>Same as the <code>.hsl</code>.</td></tr>
+        <tr><td class="num">.stp / .res</td><td>Device-step instances (Aspirate, Firmware Command) and resources.</td><td>Not needed for this change.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="diagram" aria-labelledby="fig-files-cap">
+    <svg viewBox="0 0 720 300" width="100%" style="min-width:560px" role="img" aria-label="The .hsl marker points to a .med record by GUID; the Method Editor joins them into one step">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow"/></marker>
+        <marker id="ah2A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow acc"/></marker>
+      </defs>
+      <rect class="box venus" x="10" y="10" width="330" height="150" rx="8"/>
+      <text class="t" x="24" y="36">STAR_OEM_noFan.hsl · order</text>
+      <text class="m" x="24" y="64">// {{{ 90 1 0 "7cb70e6b_…" "{7C4EF7A7…}"</text>
+      <text class="m" x="24" y="84">STAR_OEM_TOOLKIT::Channels_1ml_Aspirate(…);</text>
+      <text class="m" x="24" y="104">// }} ""</text>
+      <text class="s" x="24" y="132">row 90 · record GUID · step type</text>
+      <rect class="box fw" x="380" y="10" width="330" height="150" rx="8"/>
+      <text class="t" x="394" y="36">STAR_OEM_noFan.med · settings</text>
+      <text class="m" x="394" y="64">DataDef,HxPars,3,7cb70e6b_…,</text>
+      <text class="m" x="394" y="84">"1FunctionName", "…Channels_1ml_Aspirate",</text>
+      <text class="m" x="394" y="104">"3FieldCount", "23", … code, variables …</text>
+      <text class="s" x="394" y="132">one record per step, unordered</text>
+      <line class="ln acc" x1="250" y1="64" x2="390" y2="64" marker-end="url(#ah2A)"/>
+      <text class="lbl" x="300" y="56" text-anchor="middle">same GUID</text>
+      <line class="ln" x1="175" y1="160" x2="330" y2="214" marker-end="url(#ah2)"/>
+      <line class="ln" x1="545" y1="160" x2="390" y2="214" marker-end="url(#ah2)"/>
+      <rect class="box" x="210" y="216" width="300" height="70" rx="8"/>
+      <text class="t" x="360" y="244" text-anchor="middle">Method Editor</text>
+      <text class="s" x="360" y="266" text-anchor="middle">joins them into the step list you see</text>
+    </svg>
+    <figcaption id="fig-files-cap">Each step is a marker in the <code>.hsl</code> plus a record in the <code>.med</code>, joined by GUID. On save, the Method Editor writes both back out.</figcaption>
+  </figure>
+
+  <h3>Anatomy of a step marker</h3>
+  <div class="anatomy" aria-label="Anatomy of a .hsl step marker">
+    <div class="seg"><b>// {{{</b><small>opens a step (<code>{{</code> for blocks such as If)</small></div>
+    <div class="seg"><b>90</b><small>row number in the editor</small></div>
+    <div class="seg"><b>1 0</b><small>fixed fields, copy as-is</small></div>
+    <div class="seg mod"><b>"7cb70e6b_…"</b><small>GUID of the .med record</small></div>
+    <div class="seg val"><b>"{7C4EF7A7…}"</b><small>step type</small></div>
+  </div>
+  <p>The step's code follows on its own line(s), and <code>// }} ""</code> closes it. An If step uses the same GUID on its opening, <code>else</code> and closing markers.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Step type ID</th><th>Step</th><th>Example in the method</th></tr></thead>
+      <tbody>
+        <tr><td class="num">{7C4EF7A7-39BE-406a-897F-71F3A35B4093}</td><td>Sub-method call</td><td><code>JSON_GetFloatValue(…)</code>, <code>STAR_OEM_TOOLKIT::Channels_1ml_Aspirate(…)</code></td></tr>
+        <tr><td class="num">{C1F3C015-47B3-4514-9407-AC2E65043419}</td><td>Library function call</td><td><code>HSLJsonLib::GetIntegerProperty(…)</code>, <code>TrcTrace(…)</code></td></tr>
+        <tr><td class="num">{B31F3531-5D80-11d4-A5EB-0050DA737D89}</td><td>If / Else</td><td><code>if (commandFromServer == "initialize")</code></td></tr>
+        <tr><td class="num">{B31F3532-5D80-11d4-A5EB-0050DA737D89}</td><td>Loop</td><td><code>for(…)</code> in the FirmwareCommand handler</td></tr>
+        <tr><td class="num">{B31F3544-5D80-11d4-A5EB-0050DA737D89}</td><td>Assignment</td><td><code>xOrigin = xDisplacement * -1;</code></td></tr>
+        <tr><td class="num">{586C3429-F931-405f-9938-928E22C90BFA}</td><td>Blank line</td><td>spacing between handlers</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>What a <code>.med</code> record looks like as text</h3>
+  <p>This is the record behind one library call in the <code>FirmwareCommand</code> handler, shortened. The generated code line is stored in the record too.</p>
+  <div class="codeblock">
+    <div class="label"><span>STAR_OEM_noFan.med (text form), record 5f5e5c89_…</span><button class="copy" type="button">Copy</button></div>
+<pre>DataDef,HxPars,3,5f5e5c89_0c1a_497b_80c550dbc4676208,
+[
+"1ReturnValue",          "CommandListLength",
+"1FunctionName",         "HSLJsonLib::GetArrayLength",
+"3FieldCount",           "2",
+"(FunctionPars",          ...parameter names i_objJSON, i_strName...
+"1-534642685",           "HSLJson\HSLJson.hsl",        &lt;- library path
+"(BlockData",
+  "1-533921782",         "SingleLibFunction.bmp",       &lt;- icon
+  "1-533921779",         "CommandListLength = HSLJsonLib::GetArrayLength(objJSONFromServer, Translate(\"FirmwareCommandList\"));",
+")",
+"1Timestamp",            "2021-01-27 23:12:40",
+"(ParamValue",           "1Value.0", "objJSONFromServer", "1Value.1", "\"FirmwareCommandList\"", ")",
+"(Variables",             ...objJSONFromServer, CommandListLength...
+];</pre>
+  </div>
+
+  <h3>Converting the <code>.med</code> to text and back</h3>
+  <p>Venus ships a converter: <code>C:\Program Files (x86)\HAMILTON\Bin\HxCfgFilConverter.exe</code>. <code>/t</code> converts a file to text in place, and <code>/b</code> converts it back to binary. <strong>Only ever run it on a copy.</strong> Run it from PowerShell or cmd; Git Bash rewrites <code>/t</code> into a path and the converter just prints its usage text.</p>
+  <div class="callout"><p><strong>The converter sends a keystroke to your desktop.</strong> After converting, <code>HxCfgFilConverter.exe</code> calls Windows <code>SendKeys</code>, which types into whatever window has focus. Run it one file at a time, with nothing important focused. Run in parallel or without a desktop session, it crashes with “Access is denied” (after converting). For reading files, the companion page's binary reader avoids the converter entirely.</p></div>
+  <div class="codeblock">
+    <div class="label"><span>PowerShell · on a copy</span><button class="copy" type="button">Copy</button></div>
+<pre># PowerShell. Work on a copy - never on the deployed file.
+$conv = "C:\Program Files (x86)\HAMILTON\Bin\HxCfgFilConverter.exe"
+$work = "C:\temp\venus-edit"
+New-Item -ItemType Directory -Force $work | Out-Null
+Copy-Item "&lt;path to&gt;\star-oem\VENUS_Method\STAR_OEM_noFan.med" $work
+
+&amp; $conv /t "$work\STAR_OEM_noFan.med"    # binary -&gt; text, in place ("Conversion completed successfully")
+# ... edit the text file ...
+&amp; $conv /b "$work\STAR_OEM_noFan.med"    # text -&gt; binary, in place
+
+# The converter writes a fresh footer itself (your user name, valid=0, current time).</pre>
+  </div>
+
+  <h3>The checksum footer</h3>
+  <p>Every Venus-written file ends with a footer such as <code>// $$author=Stefan.Golas$$valid=0$$time=2025-10-16 10:24$$checksum=9da6c249$$length=089$$</code> (<code>* </code> instead of <code>// </code> in a text <code>.med</code>).</p>
+  <ul>
+    <li><strong><code>checksum</code></strong> is a standard CRC32 of the whole file, from the first byte up to and including the text <code>$$checksum=</code>. This matched on all 14 Venus files checked, including <code>STAR_OEM_noFan.hsl</code>, <code>.sub</code>, a converted <code>STAR_OEM_noFan.med</code>, the toolkit and the STAR Tools libraries.</li>
+    <li><strong><code>length</code></strong> is the character length of the footer line, plus 2 in some file types (every <code>.hsi</code> and <code>.sub</code> checked) and plus 0 in others (<code>.hsl</code>, <code>.hs_</code>, text <code>.med</code>). The script keeps whatever offset the file already has.</li>
+  </ul>
+  <p>Any file you change by script needs a new footer. This script writes one; check it first on an untouched file, where it must reproduce the existing checksum.</p>
+  <div class="codeblock">
+    <div class="label"><span>refooter.py</span><button class="copy" type="button">Copy</button></div>
+<pre>"""Recompute the footer of a Venus file (.hsl, .hs_, .hsi, .sub, text-form .med).
+
+  checksum = CRC32 of the file from the first byte up to and including "$$checksum="
+  length   = character length of the footer line, plus a per-file offset (0 or 2)
+             that this script keeps as it finds it
+
+Usage:
+  python refooter.py --check FILE...   check the stored checksum (run on untouched files first)
+  python refooter.py FILE...           rewrite the footer in place (run on copies only)
+"""
+import datetime
+import re
+import sys
+import zlib
+
+FOOTER = re.compile(
+    rb"\$\$author=(.*?)\$\$valid=(\d)\$\$time=(.*?)\$\$checksum=([0-9a-f]{8})\$\$length=(\d{3})\$\$"
+)
+
+
+def parse(data):
+    start = data.rfind(b"$$author=")
+    line_start = data.rfind(b"\n", 0, start) + 1
+    m = FOOTER.match(data, start)
+    if m is None:
+        raise ValueError("no Venus footer found")
+    line = data[line_start:m.end()]
+    offset = int(m.group(5)) - len(line)
+    return data[:line_start], data[line_start:start], m, offset
+
+
+def footer(body, prefix, author, valid, time, offset):
+    head = prefix + b"$$author=" + author + b"$$valid=" + valid + b"$$time=" + time + b"$$checksum="
+    crc = zlib.crc32(body + head) &amp; 0xFFFFFFFF
+    line = head + b"%08x$$length=" % crc
+    return line + b"%03d$$" % (len(line) + len(b"000$$") + offset)
+
+
+def main(argv):
+    check = argv[:1] == ["--check"]
+    for path in argv[1:] if check else argv:
+        data = open(path, "rb").read()
+        body, prefix, m, offset = parse(data)
+        author, valid, time = m.group(1), m.group(2), m.group(3)
+        if check:
+            same = body + footer(body, prefix, author, valid, time, offset) == data[:m.end()]
+            print(f"{path}: checksum {m.group(4).decode()} {'OK' if same else 'MISMATCH'} (length offset {offset})")
+            continue
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M").encode()
+        open(path, "wb").write(body + footer(body, prefix, author, valid, now, offset))
+        print(f"{path}: footer rewritten")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])</pre>
+  </div>
+</section>
+
+<section id="implementation" class="steps">
+  <h2>Steps 1–5: implementation</h2>
+  <div class="callout steel"><p><strong>Before you start.</strong> Step 0 must have passed. Make every change on a copy or a git branch, not on the files the instrument runs. Step 5 covers deploying.</p></div>
+  <p>There are two parts. Python gets one new field. Venus gets one new hand-written library, plus four new steps in the universal method.</p>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Step</th><th>File</th><th>Change</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td class="num">defaultcmds.py</td><td>Add <code>plldSearchSpeed</code></td><td>Text edit</td></tr>
+        <tr><td class="num">2</td><td class="num">PLLD_Speed.hsl</td><td>New library with <code>SetZSpeed</code> and <code>RestoreZSpeed</code></td><td>New text file</td></tr>
+        <tr><td class="num">3</td><td class="num">STAR_OEM_noFan.med</td><td>Import the library, add a variable and four steps</td><td>Method Editor (3A) or script (3B)</td></tr>
+        <tr><td class="num">4</td><td class="num">robot_method.py</td><td>Pass <code>plldSearchSpeed</code></td><td>Text edit</td></tr>
+        <tr><td class="num">5</td><td>Install folder</td><td>Deploy and commit</td><td>Copy</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="step">
+    <h3><span class="n">STEP 1</span>Add the field in <code>defaultcmds.py</code></h3>
+    <p>Add the key to the <code>'channelAspirate'</code> entry. <code>assert_valid_cmd</code> checks commands against this key list, so <code>aspirate()</code> passes the field through with no other Python changes.</p>
+    <div class="codeblock">
+      <div class="label"><span>pyhamilton/defaultcmds.py</span><button class="copy" type="button">Copy</button></div>
+<pre>    'channelAspirate':('ASPIRATE', {
+        ...
+        'aspPosAboveTouch':0.0, # (float)  mm to move up in Z after touch off ...
+        'plldSearchSpeed':0.0,  # (float) mm/s channel Z speed during the aspirate; 0 = leave the stored speed alone. Allowed 0.22-160.9
+    }),</pre>
+    </div>
+    <p>Optionally, add a range check in <code>interface.aspirate</code>:</p>
+    <div class="codeblock">
+      <div class="label"><span>pyhamilton/interface.py · aspirate()</span><button class="copy" type="button">Copy</button></div>
+<pre>        s = more_options.get('plldSearchSpeed', 0)
+        if s and not 0.22 &lt;= s &lt;= 160.9:
+            raise ValueError('plldSearchSpeed must be 0 (off) or 0.22-160.9 mm/s')</pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <h3><span class="n">STEP 2</span>Write the library <code>PLLD_Speed.hsl</code></h3>
+    <p>This is an ordinary text file. Hand-written HSL libraries are normal in Venus: <code>HSLLabwrAccess.hsl</code> and <code>HslHamHeaterShakerLib.hsl</code> in PyHamilton are examples. A library has no <code>.med</code> behind it, so all the logic stays readable and diffable.</p>
+    <ul>
+      <li><strong>Where:</strong> <code>star-oem/VENUS_Method/</code>, next to <code>STAR_OEM_toolkit.hs_</code>.</li>
+      <li><strong>Firmware calls:</strong> it uses the toolkit's existing <code>SendFirmwareCommand</code>. A plain-HSL library can't define its own Firmware Command step, because device steps need an instance stored in a <code>.stp</code> file.</li>
+      <li><strong>No branch needed:</strong> <code>SetZSpeed</code> returns straight away when the speed is 0 or less, so the universal method calls it unconditionally.</li>
+    </ul>
+    <div class="codeblock">
+      <div class="label"><span>star-oem/VENUS_Method/PLLD_Speed.hsl</span><button class="copy" type="button">Copy</button></div>
+<pre>#ifndef __PLLD_SPEED_HSL__
+#define __PLLD_SPEED_HSL__ 1
+
+#include "HSLStrLib.hsl"
+#include "STAR_OEM_toolkit.hs_"                                   // SendFirmwareCommand
+#include "STAR Tools\Resources\SubMethods\FW_HelperLibrary.hs_" // SetParameter, CheckForError
+
+namespace PLLD_SPEED {
+
+  // Channel Z drive: 0.01072765 mm per increment. zv range 20-15000 increments.
+
+  // Lower the stored Z speed (zv) on every active channel. Does nothing when i_speed_mm_s &lt;= 0.
+  function SetZSpeed(device &amp; ML_STAR, variable i_channelPattern, variable i_speed_mm_s) void
+  {
+      variable CH_IDS("123456789ABCDEFG");   // channel 1 -&gt; P1 ... 16 -&gt; PG
+      variable ch, nCh, cmd, p, reply;
+      if (i_speed_mm_s &lt;= 0) { return; }
+      nCh = StrGetLength(i_channelPattern);
+      FW_HELPERLIBRARY::SetParameter("zv", i_speed_mm_s, 93.2171, 5, p);   // mm/s -&gt; "zv00186"
+      for (ch = 0; ch &lt; nCh;)
+      {
+          ch = ch + 1;
+          if (StrMid(i_channelPattern, ch - 1, 1) == "1")
+          {
+              cmd = "P" + StrMid(CH_IDS, ch - 1, 1) + "AA";
+              STAR_OEM_TOOLKIT::SendFirmwareCommand(cmd, ML_STAR, p, reply);
+              FW_HELPERLIBRARY::CheckForError(cmd, reply, 1);
+          }
+      }
+  }
+
+  // Write the default zv back on every active channel. Safe to call when nothing was changed.
+  function RestoreZSpeed(device &amp; ML_STAR, variable i_channelPattern) void
+  {
+      variable ZV_DEFAULT_INCREMENTS(11652);   // &lt;-- replace with the value read in Step 0
+      variable CH_IDS("123456789ABCDEFG");
+      variable ch, nCh, cmd, p, reply;
+      nCh = StrGetLength(i_channelPattern);
+      FW_HELPERLIBRARY::SetParameter("zv", ZV_DEFAULT_INCREMENTS, 1.0, 5, p);
+      for (ch = 0; ch &lt; nCh;)
+      {
+          ch = ch + 1;
+          if (StrMid(i_channelPattern, ch - 1, 1) == "1")
+          {
+              cmd = "P" + StrMid(CH_IDS, ch - 1, 1) + "AA";
+              STAR_OEM_TOOLKIT::SendFirmwareCommand(cmd, ML_STAR, p, reply);
+              FW_HELPERLIBRARY::CheckForError(cmd, reply, 0);   // don't raise: try every channel
+          }
+      }
+  }
+}
+#endif</pre>
+    </div>
+    <p><code>11652</code> is a placeholder: it's PyLabRobot's 125 mm/s default. Replace it with the value you read in Step 0, after checking that all channels report the same number.</p>
+    <p><strong>Check it compiles</strong> before going further: open it in Venus's HSL editor and run its syntax check. How the <code>STAR_OEM_TOOLKIT::</code> and <code>FW_HELPERLIBRARY::</code> names resolve inside the method's <code>namespace _Method { #include … }</code> wrappers is the part most likely to need adjusting.</p>
+  </div>
+
+  <div class="step">
+    <h3><span class="n">STEP 3</span>Wire it into <code>STAR_OEM_noFan.med</code></h3>
+    <p>Whichever route you take, the result is the same: one library import, one variable, and four steps.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>#</th><th>Where</th><th>Step type</th><th>Call</th></tr></thead>
+        <tbody>
+          <tr><td class="num">a</td><td><code>channelAspirate</code>, with the other JSON reads (after <code>aspPosAboveTouch</code>, row 80)</td><td>Sub-method call</td><td><code>JSON_GetFloatValue(Translate("plldSearchSpeed"), plldSearchSpeed)</code></td></tr>
+          <tr><td class="num">b</td><td><code>channelAspirate</code>, directly before <code>Channels_1ml_Aspirate</code> (row 90)</td><td>Library function</td><td><code>PLLD_SPEED::SetZSpeed(ML_STAR, channelVariable, plldSearchSpeed)</code></td></tr>
+          <tr><td class="num">c</td><td><code>channelAspirate</code>, directly after <code>Channels_1ml_Aspirate</code></td><td>Library function</td><td><code>PLLD_SPEED::RestoreZSpeed(ML_STAR, channelVariable)</code></td></tr>
+          <tr><td class="num">d</td><td><code>initialize</code>, after <code>LiquidClassLib::Initialize</code> (row 27)</td><td>Library function</td><td><code>PLLD_SPEED::RestoreZSpeed(ML_STAR, "11111111")</code>, one <code>1</code> per installed channel</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Step <strong>d</strong> covers the one case where step <strong>c</strong> can't run: a hard abort of the whole method mid-aspirate. Step <strong>c</strong> still runs when the aspirate itself fails, because <code>Channels_1ml_Aspirate</code> catches step errors (<code>onerror goto</code> → <code>o_stepReturn = ErrGetDataAt(3)</code>) and returns normally.</p>
+
+    <h3>3A. In the Method Editor (recommended)</h3>
+    <p>This route is guaranteed to produce valid files, because the Method Editor writes all of them itself.</p>
+    <ol>
+      <li>Open <code>STAR_OEM_noFan.med</code> (the copy, not the deployed one).</li>
+      <li>Import <code>PLLD_Speed.hsl</code> as a library, the same way <code>HSLInhecoTECLib.hsl</code> is imported (screenshot below). Its two functions then appear as steps.</li>
+      <li>Add a method variable <code>plldSearchSpeed</code>.</li>
+      <li>Add steps <strong>a</strong>–<strong>d</strong> from the table at the rows given. For <strong>b</strong>–<strong>d</strong>, bind <code>ML_STAR</code>, <code>channelVariable</code> and <code>plldSearchSpeed</code> in the step's parameter dialog.</li>
+      <li>Save. The Method Editor rewrites <code>.med</code>, <code>.hsl</code>, <code>.sub</code>, <code>.stp</code> and <code>.res</code>.</li>
+    </ol>
+    <div class="shots">
+      <figure>
+        <img src="data:image/png;base64,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" alt="Library function step dialog for HSLInhecoTECLib::Initialize with parameters bound to variables" width="638" height="397" loading="lazy">
+        <figcaption>A library function step and its parameter dialog. <code>PLLD_SPEED::SetZSpeed</code> looks the same: <code>i_channelPattern</code> → <code>channelVariable</code>, <code>i_speed_mm_s</code> → <code>plldSearchSpeed</code>.</figcaption>
+      </figure>
+      <figure>
+        <img src="data:image/png;base64,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" alt="Universal method block: If/Else, Get Json strings, toolkit call, TrcTrace, SendStepReturnToServer" width="480" height="352" loading="lazy">
+        <figcaption>The shape of a command block in the universal method: read the JSON fields, make the calls, send the step return. Steps a–c slot into <code>channelAspirate</code>'s version of this.</figcaption>
+      </figure>
+    </div>
+    <p style="font-size:15px;color:var(--muted)">Screenshots from the “Getting Started with PyHamilton” thread (Inheco TEC example).</p>
+
+    <h3>3B. By script (not yet tested in the Method Editor)</h3>
+    <p>Use this to produce the change reproducibly, for example to review it as a diff. It works on copies and edits the same two places the Method Editor would.</p>
+    <ol>
+      <li><strong>Copy</strong> <code>STAR_OEM_noFan.med</code> and <code>.hsl</code> to a scratch folder.</li>
+      <li><strong>Convert the copied <code>.med</code> to text</strong> with <code>HxCfgFilConverter.exe /t</code>.</li>
+      <li><strong>Add four records</strong> to the text <code>.med</code>, each a clone of an existing record with a new GUID (lowercase hex, written <code>8_4_4_16</code> like the existing ones):
+        <ul>
+          <li><strong>a:</strong> clone the <code>JSON_GetFloatValue("aspPosAboveTouch")</code> record (<code>3f8b6af1_7872_4a20_92bf2c4507ea9f31</code>); change the key and the variable.</li>
+          <li><strong>b, c, d:</strong> clone a library-call record such as <code>HSLJsonLib::GetIntegerProperty("touchOff")</code> (<code>7dd1b818_5a89_4b03_82734e6f4d7b5fad</code>); change the function name, library path (<code>PLLD_Speed.hsl</code>), parameter names, bound values, code line and variable list.</li>
+        </ul>
+      </li>
+      <li><strong>Convert the <code>.med</code> back</strong> with <code>/b</code>.</li>
+      <li><strong>Edit the <code>.hsl</code>:</strong>
+        <ul>
+          <li>add <code> namespace _Method { #include "PLLD_Speed.hsl" } </code> above the <code>LibraryInsertLine</code> marker;</li>
+          <li>add <code>variable plldSearchSpeed;</code> above the <code>VariableInsertLine</code> marker;</li>
+          <li>insert the four marker blocks shown below;</li>
+          <li>renumber the rows after each insertion so they stay sequential.</li>
+        </ul>
+      </li>
+      <li><strong>Refooter</strong> the <code>.hsl</code> with <code>refooter.py</code>. The converter writes the <code>.med</code> footer itself.</li>
+      <li><strong>Open the result in the Method Editor.</strong> If it shows the four new steps with their parameters filled in, the scripted edit worked. Save once from the editor so it rewrites every file itself.</li>
+    </ol>
+    <p>The <code>channelAspirate</code> part of the edited <code>.hsl</code> looks like this. New lines are highlighted, and <code>&lt;guid-a&gt;</code>, <code>&lt;guid-b&gt;</code> and <code>&lt;guid-c&gt;</code> stand for the new record GUIDs. This is also what 3A produces, apart from the GUIDs.</p>
+    <div class="codeblock">
+      <div class="label"><span>STAR_OEM_noFan.hsl · channelAspirate (after the edit)</span><button class="copy" type="button">Copy</button></div>
+<pre>// {{{ 80 1 0 "3f8b6af1_7872_4a20_92bf2c4507ea9f31" "{7C4EF7A7-39BE-406a-897F-71F3A35B4093}"
+JSON_GetFloatValue(Translate("aspPosAboveTouch"), aspPosAboveTouch);
+// }} ""
+<span class="hl">// {{{ 81 1 0 "&lt;guid-a&gt;" "{7C4EF7A7-39BE-406a-897F-71F3A35B4093}"</span>
+<span class="hl">JSON_GetFloatValue(Translate("plldSearchSpeed"), plldSearchSpeed);</span>
+<span class="hl">// }} ""</span>
+// {{{ 82 1 0 "7dd1b818_5a89_4b03_82734e6f4d7b5fad" "{C1F3C015-47B3-4514-9407-AC2E65043419}"
+HSLJsonLib::GetIntegerProperty(objJSONFromServer, Translate("touchOff"), touchOff);
+// }} ""
+<span class="cm">(rows 83-89 unchanged apart from their row numbers)</span>
+// {{{ 90 1 0 "8304f32d_4b9e_4ce9_af8dfbf1e3ab28a0" "{C1F3C015-47B3-4514-9407-AC2E65043419}"
+APPSLIB::MoveSequence(ML_STAR, seq, xDisplacement, yDisplacement, zDisplacement);
+// }} ""
+<span class="hl">// {{{ 91 1 0 "&lt;guid-b&gt;" "{C1F3C015-47B3-4514-9407-AC2E65043419}"</span>
+<span class="hl">PLLD_SPEED::SetZSpeed(ML_STAR, channelVariable, plldSearchSpeed);</span>
+<span class="hl">// }} ""</span>
+// {{{ 92 1 0 "7cb70e6b_15bb_4380_b62150df065d208f" "{7C4EF7A7-39BE-406a-897F-71F3A35B4093}"
+STAR_OEM_TOOLKIT::Channels_1ml_Aspirate(ML_STAR, seq, arrayOfVolumes, channelVariable, liquidClass, sequenceCounting, channelUse, aspirateMode, capacitiveLLD, pressureLLD, liquidFollowing, submergeDepth, liquidHeight, maxLLdDifference, mixCycles, mixPosition, mixVolume, airTransportRetractDist, touchOff, aspPosAboveTouch, o_stepReturn, o_liquidLevels_mm, o_liquidLevels_mL);
+// }} ""
+<span class="hl">// {{{ 93 1 0 "&lt;guid-c&gt;" "{C1F3C015-47B3-4514-9407-AC2E65043419}"</span>
+<span class="hl">PLLD_SPEED::RestoreZSpeed(ML_STAR, channelVariable);</span>
+<span class="hl">// }} ""</span>
+// {{ 94 1 0 "4714958b_0632_4de2_983c7fe9de68df6c" "{B31F3544-5D80-11d4-A5EB-0050DA737D89}"
+xOrigin = xDisplacement * -1;
+// }} ""</pre>
+    </div>
+    <p style="font-size:15px;color:var(--muted)">The row numbers shown count only steps a–c. Step d sits earlier in the file (in <code>initialize</code>, around row 28), so with it every row here moves down by one more. Renumber the whole <code>main</code> method in one pass after all insertions.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Unknown in route 3B</th><th>What happens if it's wrong</th></tr></thead>
+        <tbody>
+          <tr><td>Whether the editor needs contiguous row numbers</td><td>Renumbering avoids the question.</td></tr>
+          <tr><td>Whether a library import is registered anywhere besides the <code>#include</code> line</td><td>The new steps may show as unknown. Import the library in the editor and re-save.</td></tr>
+          <tr><td>Whether the editor wants the flowchart blob updated</td><td>The flowchart view may be stale until the first save from the editor.</td></tr>
+          <tr><td>The exact parameter-binding fields in a cloned record</td><td>The step's dialog shows blanks. Fill them in the editor.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>In every case the fix is the same: open the result in the Method Editor and finish the step there, which turns 3B into 3A.</p>
+  </div>
+
+  <div class="step">
+    <h3><span class="n">STEP 4</span>Use it from Python</h3>
+    <div class="codeblock">
+      <div class="label"><span>robot_method.py</span><button class="copy" type="button">Copy</button></div>
+<pre>from pyhamilton import HamiltonInterface
+
+with HamiltonInterface() as ham:
+    ham.initialize()
+    result = ham.aspirate(
+        pos_tuples, vols,
+        liquidClass='StandardVolume_Water_DispenseJet_Empty',
+        pressureLLD=1,          # pLLD on, as usual
+        plldSearchSpeed=2.0,    # mm/s; 0 (the default) leaves the speed alone
+    )
+    print(result.liquidHeights)</pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <h3><span class="n">STEP 5</span>Deploy</h3>
+    <ol>
+      <li><strong>Find the copy PyHamilton runs.</strong> PyHamilton runs the <code>.hsl</code>, not the <code>.med</code>: <code>paths.py</code> sets <code>OEM_HSL_PATH = …/star-oem/VENUS_Method/STAR_OEM_noFan.hsl</code> under the installed package, and <code>interface.py</code> starts <code>HxRun.exe</code> on it.</li>
+      <li><strong>Diff before replacing.</strong> Compare the new <code>.hsl</code> with the deployed one. The diff should contain only the include, the variable, the four new steps and the renumbered rows. Anything else means someone hand-edited the deployed <code>.hsl</code>, and saving from the <code>.med</code> would drop that edit.</li>
+      <li><strong>Copy in all the files together:</strong> <code>PLLD_Speed.hsl</code>, plus <code>STAR_OEM_noFan</code> <code>.med</code>, <code>.hsl</code>, <code>.sub</code>, <code>.stp</code> and <code>.res</code>. Commit them together too.</li>
+      <li><strong>Run the validation checklist</strong> below.</li>
+    </ol>
+  </div>
+
+  <pre class="mermaid">
+sequenceDiagram
+  participant Py as Python
+  participant V as Venus universal method
+  participant Ch as Channels P1-P8
+  participant M as Master C0
+  Py->>V: channelAspirate, plldSearchSpeed = 2.0
+  V->>Ch: SetZSpeed, PxAA zv00186 (each active channel)
+  V->>M: Aspirate step, C0AS with pLLD on
+  M->>Ch: search, aspirate (stored zv?)
+  M-->>V: step return, liquid levels
+  V->>Ch: RestoreZSpeed, PxAA zv default (always)
+  V-->>Py: step-return1/2/3
+  </pre>
+</section>
+
+<section id="validation">
+  <h2>Validation checklist</h2>
+  <p>Run on the instrument after building. Ticks are saved in this browser only.</p>
+  <ul class="checklist">
+    <li><label><input type="checkbox" id="chk0"><span>The Method Editor opens the edited <code>STAR_OEM_noFan.med</code> and shows steps a–d with their parameters filled in.</span></label></li>
+    <li><label><input type="checkbox" id="chk1"><span>After an aspirate, <code>PxRA razv</code> on every active channel returns the default.</span></label></li>
+    <li><label><input type="checkbox" id="chk2"><span>Aspirating from empty wells (forcing a pLLD error) still restores <code>zv</code>.</span></label></li>
+    <li><label><input type="checkbox" id="chk3"><span>Cycle time with <code>plldSearchSpeed</code> compared with without. Note whether every Z move slowed or only the search.</span></label></li>
+    <li><label><input type="checkbox" id="chk4"><span><code>AspirateResult.liquidHeights</code> matches a normal-speed run on the same wells.</span></label></li>
+    <li><label><input type="checkbox" id="chk5"><span>After an abort mid-aspirate, Initialize puts <code>zv</code> back to the default.</span></label></li>
+    <li><label><input type="checkbox" id="chk6"><span>A run with <code>plldSearchSpeed=0</code> aspirates exactly as before. The only addition is the restore commands, which leave <code>zv</code> at the default.</span></label></li>
+  </ul>
+</section>
+
+<section id="fallback">
+  <h2>Fallback: the ZE route</h2>
+  <p>If Step 0 shows that the <code>C0AS</code> search ignores the stored <code>zv</code>, do the search yourself with <code>PxZE</code>, which has an explicit search-speed field (<code>zl</code>). Then aspirate with LLD off at the detected heights. It works, but it costs more:</p>
+  <ul>
+    <li><strong>One channel at a time.</strong> The firmware can run <code>ZE</code> on all channels at once, and PyLabRobot does this with <code>asyncio.gather</code>. But the Venus Firmware Command step waits for each reply, so through Venus the searches run one after another.</li>
+    <li><strong>Positioning and coordinates.</strong> <code>ZE</code> only moves Z. You position the channels first (<code>C0JM</code>, via STAR Tools' <code>Move_Channels_To_Absolute_Position</code>) and convert between tip and head-probe Z using the tip length (<code>QueryTipLength</code>).</li>
+    <li><strong>The aspirate after.</strong> Venus's Aspirate step takes one fixed height for all channels. Either aspirate one channel at a time, which keeps the liquid class, or use STAR Tools' <code>PIPAspirateFromFixedHeight_ArrayVolumes</code>, which is one <code>C0AS</code> without liquid class correction.</li>
+  </ul>
+  <div class="codeblock">
+    <div class="label"><span>PxZE parameters (PyLabRobot defaults, converted to increments)</span><button class="copy" type="button">Copy</button></div>
+<pre>Command:   P1ZE   (P1...PG)
+Parameter: zh&lt;lowest Z&gt;zc&lt;search start Z&gt;        head-probe Z, increments, 5 digits
+           zi0186zj1                              2 mm post-detection move
+           gf0gt0010gl0002gu0030gn0010gm0gz0466   tip filter, cLLD/pLLD edge+drop, cLLD check off
+           cj0co0030cp0030cq0030cl00932           liquid mode, foam settings
+           cc0cd00000                             no dispense-back
+           zv11186                                approach speed 120 mm/s
+           zl&lt;search speed&gt;                       &lt;-- the slow search, 20-15000 increments
+           zr075zw3dl01829dr073dv05303dw3         acceleration, current, dispensing drive
+Reply:     ...er00/00if12345                      detected head-probe Z in increments</pre>
+  </div>
+</section>
+
+<section id="open">
+  <h2>Open questions</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Question</th><th>How to settle it</th></tr></thead>
+      <tbody>
+        <tr><td>Does the <code>C0AS</code> pLLD search use the stored <code>zv</code>?</td><td>Step 0 bench test.</td></tr>
+        <tr><td>Does a slow <code>zv</code> also slow other Z moves inside the aspirate?</td><td>Step 0, timing the aspirate.</td></tr>
+        <tr><td>Does the stored value survive Initialize or a power cycle?</td><td>Step 0, last check. Step 4 restores it regardless.</td></tr>
+        <tr><td>What is the instrument's factory <code>zv</code>?</td><td><code>PxRA razv</code> on every channel before any writes.</td></tr>
+        <tr><td>Does the Method Editor accept a scripted <code>.med</code>/<code>.hsl</code> edit (route 3B)?</td><td>Open the result in the Method Editor. Route 3A avoids the question.</td></tr>
+        <tr><td>Does <code>PLLD_Speed.hsl</code> compile inside the method's namespace wrappers?</td><td>Syntax check in Venus's HSL editor (Step 2).</td></tr>
+        <tr><td>Is there a dedicated stored LLD search-speed parameter?</td><td>Not in any source reviewed. Hamilton's STAR firmware manual or service would know.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ol class="refs">
+    <li><a href="https://labautomation.io/t/getting-started-with-pyhamilton/28" target="_blank" rel="noopener">Getting Started with PyHamilton</a>, labautomation.io <span class="why">· data path, “Extending the API” procedure, screenshots</span></li>
+    <li><a href="https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/hamilton/star/driver/features/pipettes.py" target="_blank" rel="noopener">PyLabRobot <code>hamilton/star/driver/features/pipettes.py</code></a> <span class="why">· <code>PxAA</code>/<code>PxRA</code> drive parameters, <code>move_to_safe_z</code>, speed ranges</span></li>
+    <li><a href="https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/legacy/liquid_handling/backends/hamilton/STAR_backend.py" target="_blank" rel="noopener">PyLabRobot legacy <code>STAR_backend.py</code></a> <span class="why">· <code>C0AS</code> fields, <code>_search_for_surface_using_plld</code> (<code>PxZE</code>), 96-head stored speeds</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/blob/master/pyhamilton/defaultcmds.py" target="_blank" rel="noopener">PyHamilton <code>defaultcmds.py</code></a> <span class="why">· <code>channelAspirate</code> defaults, <code>FirmwareCommand</code> entry</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/blob/master/pyhamilton/star-oem/VENUS_Method/STAR_OEM_noFan.hsl" target="_blank" rel="noopener">PyHamilton <code>STAR_OEM_noFan.hsl</code></a> <span class="why">· <code>channelAspirate</code> and <code>FirmwareCommand</code> handlers</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/blob/master/pyhamilton/star-oem/VENUS_Method/STAR_OEM_noFan.med" target="_blank" rel="noopener">PyHamilton <code>STAR_OEM_noFan.med</code></a> <span class="why">· step records, read in text form via <code>HxCfgFilConverter.exe /t</code> (installed with Venus)</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/blob/master/pyhamilton/paths.py" target="_blank" rel="noopener">PyHamilton <code>paths.py</code></a> <span class="why">· <code>OEM_HSL_PATH</code>, the file <code>HxRun.exe</code> runs</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/blob/master/pyhamilton/star-oem/STAR_OEM_toolkit.hsi" target="_blank" rel="noopener">PyHamilton <code>STAR_OEM_toolkit.hsi</code></a> <span class="why">· <code>SendFirmwareCommand</code>, <code>Channels_1ml_Aspirate</code> error handling</span></li>
+    <li><a href="https://github.com/dgretton/pyhamilton/tree/master/pyhamilton/library/STAR%20Tools/Resources/SubMethods" target="_blank" rel="noopener">PyHamilton STAR Tools library</a> <span class="why">· <code>FW_HelperLibrary</code>, channel movement tools, firmware pipetting commands</span></li>
+  </ol>
+</section>
+
+<footer>
+  Code snippets are a starting point and haven't been compiled in Venus. Firmware formats come from PyLabRobot's reverse-engineered implementation and may vary between firmware versions.
+</footer>
+</main>
+</div>
+
+<script>
+(function () {
+  document.querySelectorAll('.codeblock').forEach(function (block) {
+    var btn = block.querySelector('button.copy');
+    var pre = block.querySelector('pre');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', function () {
+      var text = pre.innerText;
+      var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+      var fallback = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'Selected';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+      };
+      try {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } catch (e) { fallback(); }
+    });
+  });
+  var KEY = 'plld-speed-checklist';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+  document.querySelectorAll('.checklist input').forEach(function (box) {
+    if (saved[box.id]) box.checked = true;
+    box.addEventListener('change', function () {
+      saved[box.id] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+})();
+</script>
