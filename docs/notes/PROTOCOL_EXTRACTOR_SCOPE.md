@@ -1,6 +1,6 @@
 # Scope: HSL → protocol decompiler and pretty-printer
 
-Status: scoped 2026-10-15, **build started same day**: `methods/hsl_code.py` (function bodies, tested) and `methods/stp_pars.py` (HxPars records, tested) are in; both green over the full corpus (407/407 records parse, every settings key named or an acknowledged constant). Remaining: the binder/expansion + markdown back-end (`methods/protocol.py`), then the write-ups. Ground-truth probes backing every claim are listed with their evidence.
+Status: scoped 2026-10-15, **built 2026-10-16**: `methods/hsl_code.py`, `methods/stp_pars.py` and `methods/protocol.py` are in, tested, and produce full + condensed traces for all 10 NIST methods (`.local\session_state\analysis\traces\*.trace.md` / `*.condensed.md`, 0 unresolved settings). The trace captures everything (capture-everything, then condense): library and method-section calls inline recursively with bound args, every call tagged by role (`robot`/`equipment`/`data`/`config`/`ui`), device steps render with their `.stp` settings and volumes symbolic (`aspirate volume = <p_vol>`); identical function bodies elide after 3 expansions (settings are per-GUID, so repeats are structurally identical). The condensed view drops trace-file plumbing and error-guard boilerplate, renders parameter reads as `params[key]`, and keeps robot operations, control logic and device settings. Remaining: write the protocol documents for the 10 methods from these traces.
 
 ## What it is
 

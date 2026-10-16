@@ -65,15 +65,23 @@ def test_load_library_replaces_prototypes():
 
 
 def test_trace_inlines_and_renders_settings():
-  out = tracer().section(METHOD, "main")
-  text = "\n".join(out)
+  text = "\n".join(protocol.render(tracer().section(METHOD, "main")))
   assert "### Pipette media into growth plate" in text
   assert "> [lab] simple_aspirate(asp_seq = ML_STAR.Media_source, number_channels = 8, STAR = ML_STAR)" in text
-  assert "- **TipPickUp** (STAR)" in text
+  assert "- **TipPickUp (STAR)**" in text
   assert "SequenceObject = <asp_seq>" in text
   assert "TipType = 5" in text
   assert "channel constant" not in text
   assert "vol = culture_volume / dilution_factor;" in text
+
+
+def test_condense_collapses_data_and_keeps_robot():
+  lines = tracer().section(METHOD, "main")
+  text = "\n".join(protocol.render(lines, condensed=True))
+  assert "> [lab] simple_aspirate" in text
+  assert "- **TipPickUp (STAR)**" in text
+  assert "TipType = 5" in text
+  assert "channel constant" not in text
 
 
 def test_raw_call_lines_get_role_tags():
@@ -89,7 +97,7 @@ unknown_lib::Something(1);
 } }
 // }} ""
 """
-  out = "\n".join(tracer().section(method, "main"))
+  out = "\n".join(protocol.render(tracer().section(method, "main")))
   assert "Dictionary::CreateDictionary();  # [data]" in out
   assert "LMSF_UTILITIES::Modulo(5, 2);  # [data]" in out
   assert "unknown_lib::Something(1);" in out and "unknown_lib::Something(1);  #" not in out
