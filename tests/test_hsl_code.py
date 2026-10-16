@@ -62,3 +62,12 @@ def test_steps_inside_body():
   steps = hsl.steps(tip.body)
   assert [s.type for s in steps] == ["sub-method call", "If / Else", "Return (inferred)", "If / Else"]
   assert steps[0].code == "set_channel_pattern(number_channels);"
+
+
+def test_private_and_static_functions_are_definitions():
+  text = ("private function _helper( variable & x ) void ;\n"
+          "private function _helper( variable & x ) void {\nx = 1;\n}\n"
+          "static function counter(  ) variable {\nreturn(0);\n}\n")
+  fs = {f.name: f for f in hsl_code.functions(text)}
+  assert not fs["_helper"].prototype_only and "x = 1;" in fs["_helper"].body
+  assert fs["counter"].ret == "variable" and not fs["counter"].prototype_only

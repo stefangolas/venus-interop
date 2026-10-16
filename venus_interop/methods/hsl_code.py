@@ -18,7 +18,8 @@ import dataclasses
 import re
 from typing import Optional
 
-_FUNC = re.compile(r"^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^;{]*)\)\s*([A-Za-z_][A-Za-z0-9_& ]*?)?\s*([;{])")
+# "private function" and "static function" are definitions too (Hamilton's and labs' libraries use both)
+_FUNC = re.compile(r"^\s*(?:(?:private|static)\s+)*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^;{]*)\)\s*([A-Za-z_][A-Za-z0-9_& ]*?)?\s*([;{])")
 
 
 @dataclasses.dataclass
