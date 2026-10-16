@@ -116,20 +116,36 @@ def load_stps(paths: Iterable) -> dict[str, stp_pars.Record]:
 
 
 def render_settings(rec: stp_pars.Record) -> list[str]:
-  """Readable settings lines; identical consecutive values collapse as xN."""
-  merged: list[list] = []
+  """Readable settings: per-channel blocks collapse when identical."""
+  lines: list[str] = []
   for path, name, val in rec.readable():
+    if re.match(r"^\d+$", name):  # (Variables) opcode pairs
+      continue
     if name.startswith("channel constant") or name in ("NbrOfErrors",):
       continue
-    if merged and merged[-1][:3] == [path, name, val]:
-      merged[-1][3] += 1
+    if path == "/channels":
+      continue  # the per-channel block renders below, collapsed
+    if path.startswith("/Variables") or path.startswith("/Errors"):
       continue
-    merged.append([path, name, val, 1])
-  lines = []
-  for path, name, val, n in merged:
-    where = "" if path in ("", "/channels") else f" [{path}]"
-    times = f" x{n}" if n > 1 else ""
-    lines.append(f"{name} = {val}{times}{where}")
+    lines.append(f"{name} = {val} [{path}]" if path else f"{name} = {val}")
+  # per-channel block: collapse identical channels
+  chan = [v for k, v in rec.tree if stp_pars.key_id(k) == "-534183936"]
+  if chan and isinstance(chan[0], list):
+    blocks = sorted(((int(stp_pars.key_id(k)), v) for k, v in chan[0] if isinstance(v, list)), key=lambda x: x[0])
+    flat = lambda blk: [(stp_pars.key_name(k), v) for k, v in blk
+                        if not stp_pars.key_name(k).startswith("channel constant") and not re.match(r"^\d+$", stp_pars.key_name(k))]
+    flats = [(ch, flat(blk)) for ch, blk in blocks]
+    if flats:
+      bound = set(rec.variable_bindings)
+      mark = lambda v: f"<{v}>" if isinstance(v, str) and v in bound else v
+      ref = flats[0][1]
+      differing = {n for n, _ in ref if len({repr(v) for _, f in flats for n2, v in f if n2 == n}) > 1}
+      lines.append(f"({len(flats)} channels"
+                   + (f" {flats[0][0]}–{flats[-1][0]}" if len(flats) > 1 else "") + ", one shown)")
+      lines.extend(f"{n} = {mark(v)}" for n, v in ref if n not in differing)
+      for n in (k for k in dict(ref) if k in differing):
+        vals = ", ".join(f"{ch}:{mark(dict(f)[n])}" for ch, f in flats)
+        lines.append(f"{n}: {vals}")
   return lines
 
 
@@ -159,9 +175,10 @@ def _params_form(line: str) -> str:
     m = _GETITEM.search(line)
     if not m:
       break
-    args = split_args(line[m.end() - 1 : _call_close(line, m.end() - 1)])
+    close = _call_close(line, m.end() - 1)
+    args = split_args(line[m.end() : close])
     key = _TRANSLATE.sub(r"\1", args[-1]).strip() if args else "?"
-    line = line[: m.start()] + f"params[{key}]" + line[_call_close(line, m.end() - 1) + 1 :]
+    line = line[: m.start()] + f"params[{key}]" + line[close + 1 :]
   return line
 
 

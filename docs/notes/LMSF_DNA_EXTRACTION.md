@@ -1,0 +1,91 @@
+# NIST LMSF protocol: DNA Extraction
+
+Reconstructed 2026-10-16 from `Methods/GSF-IMS Project/E. coli Methods/Fitness Selection 2.With DNA Extraction/DNA Extraction.{med,hsl,sub,stp,lay}` via the decompiler traces (`.local/session_state/analysis/traces/DNA Extraction.{trace,condensed}.md`). 566 steps, 18 sub-methods. Everything below is read from the trace; the few inferences are marked.
+
+## What it does
+
+Plasmid-free genomic DNA extraction from *E. coli* cultures grown in a deep-well **Spin Plate**: pellet resuspension (P1), alkaline lysis (P2) and neutralisation (N3) on a heater shaker, clarification through an **Agient Filter Plate** pushed by the **MPE²** into a Receiving Plate, DNA binding on a **Nunc Binding Plate**, two washes (PB, PE), drying, and elution in water — either pushed by the MPE² into an Eppendorf 350 µL elution plate, or spun through in a centrifuge (operator choice).
+
+**Scheduling context:** it runs after "Combine old GP wells into Spin Plate.med" and the Overlord job "Get DWP from STAR then Centrifuge DWP.ovp"; at start the Spin Plate (with lid) sits at the Handoff position. It reads `C:\Program Files (x86)\HAMILTON\LMSF_FrontEnd\parameters.csv` and is one stage of a PAA Overlord chain.
+
+**Four-fold multiplexing:** every consumable exists in 4 deck copies (`Lysate_Plate_Buffer_1..4`, `N3_Buffer_1..4`, …); `DNA_plate_number` from `parameters.csv` (else an operator dialog) selects one via `sequence_number = DNA_plate_number % 4` (0 → 4). One extraction runs per invocation; four share the deck.
+
+## Parameters (`parameters.csv` keys → defaults)
+
+| Key | Default | Notes |
+|---|---|---|
+| `DNAPlateNumber` | dialog | which of the 4 deck sets |
+| `cultureVolume` | 500 | clamped to 200–500 µL; sets the supernatant split (below) |
+| `isPipetting` | "true" | when "false", pipetting is skipped and operator dialogs stand in |
+| `isDebugging` | "true" in csv, **forced "false"** in code | dialogs per sub-method |
+| `spin_final_elution` | "maybe" | "yes" → centrifuge elution, "no" → MPE² elution, "maybe" → dialog |
+| (hardcoded) | | `use_iSWAP = "true"`, `shake_speed = 200` RPM |
+
+Fixed MPE² geometry: `FPonRPNozzleHeight = FPonRPFilterHeight = 86.5`, `BPNozzleHeight = 38.4`, `BPFilterHeight = 31.35`, `BPLenghtofNozzles = 6.6`, `BPNozzleOffset = 0`, `EPlateH = 14.35`, COM port 7.
+
+## Deck (sequence roles)
+
+Spin Plate (deep-well, with `supernatant`, `liquid_waste`, `Buffer_P1` well sequences) · Lysate Plate (Abgene, on HHS_1) + 4 buffer troughs · Buffer plates P2/N3/PB/PE/elution (4 copies each) · Agilent Filter Plate (FP) + Eppendorf DWP Receiving Plate (RP) at storage → MPE² · Nunc Binding Plate (BP) storage → MPE² · Eppendorf 350 µL elution plate (EP) storage → pipetting position → MPE² · 2× Heater Shaker (HHS_1, HHS_2, clamps closed at start) · tips: 1000 µL filtered channels, 300 µL filtered channels, wide-bore (support-seated, cut length 79.8 mm), and an **offset** 1000 µL rack with its own support + handoff · CO-RE gripper tool `COREGripTool_OnWaste_1000ul_0001` · MPE² waste.
+
+## The protocol
+
+### StartUp
+Tip counters for the four tip types (auto values); `Initialize`; MPE² init/connect (skipped in simulator); both HHS created and plate locks closed.
+
+### PipetteMove01 — remove supernatant
+1. CO-RE gripper: Spin Plate lid → lid waste (ZSwap get/place, grip width 84.5, force 5, speed 277).
+2. Loop over `Spin_Plate_supernatant` (8 channels, 1000 µL filtered tips, liquid class `HighVolumeFilter_Water_SlowAsp_DispSurfEmpty`):
+   - aspirate **1000 µL** (cLLD 5, liquid following, submerge 3) → dispense into **adjacent wells of the same Spin Plate** (`Spin_Plate_liquid_waste`, dispense mode 8 = surface, submerge 2);
+   - aspirate the remainder **`culture_volume × 3.6` − 1000 µL** (aspirate mode 2, submerge 2) → dispense to the waste wells.
+   The 3.6× factor says the pellets retain ≈3.6× the culture volume in liquid (inference from the maths, not stated in the method).
+
+### PipetteMove01A — resuspend and transfer to Lysate Plate
+1. Lids: Lysate Plate (on HHS) and DNA Buffers 2 lid off (ZSwap, plate press 0.5 on park).
+2. Per column: **200 µL Buffer P1** into the Spin Plate wells (300 µL filtered tips, `StandardVolumeFilter_Water_DispenseSurface_Empty`); then aspirate **300 µL** of the resuspended culture with **mix 10 × 220 µL** (`StandardVolumeFilter_Water_FastMixing…`) and dispense into Lysate Plate `sequence_number` (dispense mode 8).
+3. `RenewOffsetTips` (below) if the offset rack is empty.
+
+### PipetteMove02 — Buffer P2, shake
+96-head **stamping with 24 tips** (channel pattern = first 24 of 96) from the offset tip support: **250 µL Buffer P2** into the Lysate Plate (`HighVolumeFilter_96COREHead1000ul_…`), tips ejected to the waste chute with a 2 s shake. Then **HHS_1 shake 120 s at 200 RPM** (start shaker, park the P2 lid back, wait, stop). The emptied Spin Plate goes to waste (gripper, no tap, grip width 78.95 for the DWP).
+
+### PipetteMove03 — Buffer N3, shake
+Clear 96-head/arm; N3 buffer lid off; 96-head 24 tips: **350 µL Buffer N3** into the Lysate Plate; eject+shake 2 s; **HHS_1 shake 120 s**; lid back on N3 during the wait.
+
+### PipetteMove04 — filter the lysate
+1. With iSWAP/CO-RE: RP from storage → MPE² (lid parked); Agilent FP from storage → MPE² (lid parked).
+2. 96-head 24 tips with **wide-bore tips** (support-seated; `DPXPRECUTTEDTIPSLIB::SetCuttedTipLenght(…, 79.8 mm, 1000 µL)`), aspirate **900 µL** lysate with **mix 3 × 675 µL** (0.75 × volume), liquid class `HighVolume_WideBore3_2_Water_DispenseSurfaceEmpty`; dispense onto the FP (dispense height 13 above filter, detect mode 18 — open question §11).
+3. **FP incubation 120 s** (timer runs across the next moves).
+4. **MPE²: `FilterPlateToWaste` with program `pressure,20,240;pressure,65,60;`** — 20 (mbar?) for 240 (s?), then 65 for 60 — pushing lysate through the filter into the RP below. Units are the MPE library's; not verifiable from the method alone.
+5. FP and RP back to storage, lids on.
+
+### PipetteMove05 — bind DNA
+BP from storage → MPE² (no lid); RP lid off. 96-head 24 tips: **900 µL** cleared lysate RP → BP (submerge 7, dispense height 13). RP lid back. **MPE²: `FilterPlateToWaste` `pressure,40,60;`** — DNA binds to the silica membrane; flow-through to waste. `RenewOffsetTips`.
+
+### PipetteMove06 — wash PB
+Lid off DNA Buffers 1 (PB/PE); 96-head 24 tips: **900 µL Buffer PB** → BP; **MPE²: `FilterPlateToWaste` `pressure,40,60;`** to waste. `RenewOffsetTips`.
+
+### PipetteMove07 — wash PE, dry
+**900 µL Buffer PE** → BP; **MPE²: `FilterPlateToWaste` `pressure,40,60;pressure,65,420;`** — wash then a 420 s high-pressure dry. Then the BP is lifted off the nozzles and re-seated (same-position move, `z_shift = 7`).
+
+### PipetteMove08 — elution
+`UserChoiceElution`: `spin_final_elution` "yes" → centrifuge, "no" → MPE², "maybe" → dialog (`mpe_final_elution = 2 − return`).
+1. **130 µL water/elution buffer** into each BP well (300 µL filtered tips, `StandardVolumeFilter_Water_DispenseJet_Empty`, dispense jet onto the membrane); **incubate 300 s**.
+2. **MPE² path:** BP back onto the MPE²; EP to the MPE² (grip force 4 — lighter for the lo-bind plate); MPE clamps the BP (`SetFilterHeight/SetNozzleHeight/FilterPlatePlaced/ClampFilterPlate`), collection plate registered (`SetCollectionPlateHeight(14.35)`, `SetControlPoints("pressure,65,420;")`), **`ProcessFilterToCollectionPlate`** pushes the eluate into the EP; EP back to storage with lid; BP retrieved to storage; `FilterPlateRemoved`.
+3. **Centrifuge path:** BP onto the EP-spin adapter (operator does the spin); dialogs in/out; **210 s** timer stands in for the centrifuge run.
+
+### CleanUp
+Tip counters written to the status file; MPE² disconnect; HHS terminate; head/arm parked; completion dialogs; BP lid restored on the spin path.
+
+## Recurring mechanics worth knowing
+
+- **RenewOffsetTips:** the 96-head stamping picks from an *offset* rack. The sub-method ejects anything on the offset support to the waste chute (with a 10 s chute shake), then picks 96 tips from `Tips_1000_Handoff` and ejects them onto `TipSupport_1000_offset_1`. The 24-channel steps then pick from `Tips_1000_Offset_pickup`.
+- **96-head channel pattern** `111111111111111111111111` + 72 zeros = the first 24 positions — i.e. 3 rows × 8. All stamping uses these 24.
+- **Lids never move by hand** when `use_iSWAP` is true: every lid/plate move is a CO-RE ZSwap pair with grip parameters per labware (84.5 mm plates, 80 mm FP/EP, 78–78.95 mm DWPs; plate press 0–0.5).
+- **FirmwareCommand steps** drive the 96-head park: `H0ZA za68500` (Z up 500), `H0YA ya07500` (Y to 7500).
+- **Error handling:** every file/step gets `MECC::RaiseRuntimeErrorEx` guards (11–6 recoveries per device step, string-table ids). Endless-sequence loop warnings guard `while (GetCurrentPosition() > 0)` idioms.
+- **The manual fallback:** with `use_iSWAP = "false"` or `is_pipetting = "false"`, each robot action is replaced by an operator dialog naming the next manual action — the method doubles as a printed SOP.
+
+## Open items (§11-adjacent, specific to this method)
+
+- `dispense mode 8`, `DispenseMode 3/5`, `detect mode (open)` 5/7/10/18, `aspirate mode 0/2`, `TipType 0/1/5` — enum semantics still open (§11).
+- MPE² pressure program units ("pressure,65,420") — from `MPE_LIBRARY`, whose source is in the NIST repo's Library folder; readable with the same tools if needed.
+- `pipette_volume_2 = culture_volume × 3.6` — pellet hold-up factor, measured by the lab, not derived.
