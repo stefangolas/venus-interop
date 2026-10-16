@@ -25,7 +25,7 @@ Fixed MPE² geometry: `FPonRPNozzleHeight = FPonRPFilterHeight = 86.5`, `BPNozzl
 
 ## Deck (sequence roles)
 
-Spin Plate (deep-well, with `supernatant`, `liquid_waste`, `Buffer_P1` well sequences) · Lysate Plate (Abgene, on HHS_1) + 4 buffer troughs · Buffer plates P2/N3/PB/PE/elution (4 copies each) · Agilent Filter Plate (FP) + Eppendorf DWP Receiving Plate (RP) at storage → MPE² · Nunc Binding Plate (BP) storage → MPE² · Eppendorf 350 µL elution plate (EP) storage → pipetting position → MPE² · 2× Heater Shaker (HHS_1, HHS_2, clamps closed at start) · tips: 1000 µL filtered channels, 300 µL filtered channels, wide-bore (support-seated, cut length 79.8 mm), and an **offset** 1000 µL rack with its own support + handoff · CO-RE gripper tool `COREGripTool_OnWaste_1000ul_0001` · MPE² waste.
+Spin Plate (deep-well; pellets in columns 4/6/8, and the supernatant goes into columns 3/5/7 beside them) · Lysate Plate (Abgene, on HHS_1; one 3-column set per `sequence_number`) · N3 per set (`N3_Buffer_1..4`). P1/P2 (DNA_Buffers_2 columns 2–4 / 9–11), PB/PE (DNA_Buffers_1 columns 3–5 / 8–10) and elution buffer (column 5) are **one fixed set**, not one per run. The positions come from the layout's sequences; see `LMSF_OPERATIONAL_LOGIC.md` · Agilent Filter Plate (FP) + Eppendorf DWP Receiving Plate (RP) at storage → MPE² · Nunc Binding Plate (BP) storage → MPE² · Eppendorf 350 µL elution plate (EP) storage → pipetting position → MPE² · 2× Heater Shaker (HHS_1, HHS_2, clamps closed at start) · tips: 1000 µL filtered channels, 300 µL filtered channels, wide-bore (support-seated, cut length 79.8 mm), and an **offset** 1000 µL rack with its own support + handoff · CO-RE gripper tool `COREGripTool_OnWaste_1000ul_0001` · MPE² waste.
 
 ## The protocol
 
@@ -45,7 +45,7 @@ Tip counters for the four tip types (auto values); `Initialize`; MPE² init/conn
 3. `RenewOffsetTips` (below) if the offset rack is empty.
 
 ### PipetteMove02 — Buffer P2, shake
-96-head **stamping with 24 tips** (channel pattern = first 24 of 96) from the offset tip support: **250 µL Buffer P2** into the Lysate Plate (`HighVolumeFilter_96COREHead1000ul_…`), tips ejected to the waste chute with a 2 s shake. Then **HHS_1 shake 120 s at 200 RPM** (start shaker, park the P2 lid back, wait, stop). The emptied Spin Plate goes to waste (gripper, no tap, grip width 78.95 for the DWP).
+96-head **stamping with 24 tips** (channel pattern = first 24 of 96) from the offset tip support: **250 µL Buffer P2** into the Lysate Plate (`HighVolumeFilter_96COREHead1000ul_…`), tips ejected to the waste chute with a 5 s shake (2 s in the later stages). Then **HHS_1 shake 120 s at 200 RPM** (start shaker, park the P2 lid back, wait, stop). The emptied Spin Plate goes to waste (gripper, no tap, grip width 78.95 for the DWP).
 
 ### PipetteMove03 — Buffer N3, shake
 Clear 96-head/arm; N3 buffer lid off; 96-head 24 tips: **350 µL Buffer N3** into the Lysate Plate; eject+shake 2 s; **HHS_1 shake 120 s**; lid back on N3 during the wait.
@@ -103,10 +103,14 @@ Tip counters written to the status file (`C:\Shared Files\LMSF Scheduler\Hamilto
   - clamp the plate, retrieve it, or mark the filter or collection plate as removed.
   Any of these that fails shows the device error and returns to the menu.
 - **Error handling:** every file/step gets `MECC::RaiseRuntimeErrorEx` guards (11–6 recoveries per device step, string-table ids). Endless-sequence loop warnings guard `while (GetCurrentPosition() > 0)` idioms.
-- **The manual fallback:** with `use_iSWAP = "false"` or `is_pipetting = "false"`, each robot action is replaced by an operator dialog naming the next manual action — the method doubles as a printed SOP.
+- **The manual fallback:** with `use_iSWAP = "false"` or `is_pipetting = "false"`, each robot action is replaced by an operator dialog naming the next manual action — the method doubles as a printed SOP. The fallback is incomplete, though. `PipetteMove08` sets `is_pipetting = "true"` before eluting, so elution always pipettes. The MPE² steps, the heater shaker and the lid moves outside `[if use_iSWAP]` run in either mode.
 
 ## Open items (§11-adjacent, specific to this method)
 
 - `dispense mode 8`, `DispenseMode 3/5`, `detect mode (open)` 5/7/10/18, `aspirate mode 0/2`, `TipType 0/1/5` — enum semantics still open (§11).
 - MPE² pressure program units ("pressure,65,420"): the lab's `Methods/Common/MPE_Library` passes the string straight to Hamilton's `HSLMPELib`, so the units are Hamilton's and are not stated in either.
 - `pipette_volume_2 = culture_volume × 3.6` — pellet hold-up factor, measured by the lab, not derived.
+- **An abort leaves tip type 5 redefined.** `OnAbort` only writes a trace comment and never calls `ResetCuttedTipLenght`. An abort between the two `C0TT`s in `PipetteMove04` therefore leaves tip type 5 at 71.8 mm / 1003 µL. Whether a re-initialise restores the firmware's tip table is unverified.
+- **The `C0TT` comes after the wide-bore pick-up:** `Head96TipPickUp` runs first, then `SetCuttedTipLenght`. Whether the 96-head reads the `C0TT` tip table at all is unverified.
+- **Spin path, last lid move:** on the spin path, `PipetteMove08` moves the BP lid from `Lid_parking_Numc_BP` onto the BP/EP stack. `main` then moves a lid from that same parking position to BP storage. Unless the operator puts the lid back during the centrifuge dialogs, whose text isn't in the method files, the gripper reaches into an empty position.
+- **The supernatant pass visits each column twice:** `Spin_Plate_supernatant` and `Spin_Plate_liquid_waste` list each column twice, so there are 6 passes of 1000 µL + the remainder. With aspirate mode 2 on the remainder (possibly "aspirate all"), the second visit takes whatever is left.

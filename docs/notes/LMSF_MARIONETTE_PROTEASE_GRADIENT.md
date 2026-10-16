@@ -1,6 +1,6 @@
 # NIST LMSF protocol: Marionette protease gradient plate prep v5
 
-Reconstructed 2026-10-16 from `Methods/GSF-IMS Project/E. coli Methods/Marionette Gradient Plate Prep/Marionette protease.gradient plate prep.v5.*` via the decompiler traces (`.local/session_state/analysis/traces/Marionette protease.gradient plate prep.v5.{trace,condensed}.md`). Companion to the GROQ-Seq methods: it prepares **plates 2–5** of the growth-selection workflow. Despite the name, the trace shows the pharmacology is **TMP (selector) + salicylate at two gradient maxima + vancomycin gradient** — "protease" is the strain panel, not a reagent (inference; nothing protease-related appears in the code).
+Reconstructed 2026-10-16 from `Methods/GSF-IMS Project/E. coli Methods/Fitness Selection 2.With DNA Extraction/Marionette protease.gradient plate prep.v5.*` (layout `Fitness Selection.Marionette protease.v5.lay`) via the decompiler traces (`.local/session_state/analysis/traces/Marionette protease.gradient plate prep.v5.{trace,condensed}.md`). Companion to the GROQ-Seq methods: it prepares **plates 2–5** of the growth-selection workflow. Despite the name, the trace shows the pharmacology is **TMP (selector) + salicylate at two gradient maxima + vancomycin gradient** — "protease" is the strain panel, not a reagent (inference; nothing protease-related appears in the code).
 
 Re-checked 2026-10-16 against the longer trace that includes the shared libraries' `private` functions. The check corrected the channel counts and added the shape checks below.
 
@@ -60,4 +60,9 @@ grad_start_*_volume    = plain well volume × multiplier             (gradient s
   - `set_channel_pattern` turns `number_channels` into the first-N pattern (`11110000`, `11111111`).
 - The two pipetting helper libraries (`tip_pickup`/`pipette_media`/`pipette_dil_series`, `add_reagent_*`) carry all the error handling, so the method body is pure volume logistics.
 - The **gradient-start multiplier** trick (over-fill by `f/(f−1)`) keeps every well's final volume equal after the series withdraws `media_volume/(f−1)` per step — the arithmetic centre of the method.
-- Same operator fallbacks as the rest of the lab's methods (`isPipetting=false` → dialogs), same tip counters, same `LMSF_FrontEnd` parameters contract.
+- Same operator fallbacks as the rest of the lab's methods (`isPipetting=false` → dialogs), same tip counters, same `LMSF_FrontEnd` parameters contract. The fallback is incomplete here too: the TMP additions (`if (with_tmp == 1)`) and both serial dilutions sit outside every `is_pipetting` check, so they run in a "manual" run.
+- **The plate map and the series ends** come from the layout's sequences; see `LMSF_OPERATIONAL_LOGIC.md`:
+  - columns 3–7 are the salicylate gradient (column 7 is the top, odd rows from stock 1, even rows from stock 2), with column 2 its zero;
+  - columns 8–12 are the vancomycin gradient (column 12 is the top) on a TMP + salicylate background;
+  - column 1 is the no-TMP control, with media only in odd rows and vancomycin in even rows.
+  - Each series runs `from [12,12,11,10,9,8] → to [12,11,10,9,8,waste]` (salicylate likewise from 7). The first step is a self-transfer, which mixes the start column. The last step sends t to `Liquid_waste`, so every well ends at the same volume.
