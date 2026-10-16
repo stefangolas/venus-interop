@@ -154,3 +154,20 @@ def test_condensed_drops_emptied_blocks_but_keeps_if_else():
            "if (b == 1)", "{", "}", "else", "{", "y = 2;", "}", "z = 3;"]
   out = [ln.text for ln in protocol.condense([protocol.Line(0, "code", "", t) for t in texts])]
   assert out == ["if (b == 1)", "{", "}", "else", "{", "y = 2;", "}", "z = 3;"]
+
+
+def test_condensed_keeps_the_call_inside_an_error_guard():
+  texts = ['if( 0 == hnd.Open(path, hslWrite) )', "{",
+           'MECC::RaiseRuntimeErrorEx(-1, MECC::IDS::stepNameFileOpen, 0, path, "HxMetEdCompCmd");', "}",
+           "if( 0 != hnd.Close() )", "{", 'MECC::RaiseRuntimeErrorEx(-2, 0, 0, "", "HxMetEdCompCmd");', "}"]
+  out = [ln.text for ln in protocol.condense([protocol.Line(0, "code", "", t) for t in texts])]
+  assert out == ["hnd.Open(path, hslWrite);", "hnd.Close();"]
+
+
+def test_disabled_step_is_shown_marked_and_not_run():
+  off, on = '/* {{ 1 "" "0" */ if(0){  /* }} "" */\n', '/* {{ 1 "" "1" */ } /* }} "" */\n'
+  method = _method(_step(1, "a1", ASSIGN, 'dbg = "true";'), off,
+                   _step(2, "a2", ASSIGN, 'dbg = "false";'), on, _step(3, "a3", ASSIGN, "x = 1;"))
+  secs = dict(protocol.method_lines(method, [], {}))
+  texts = [ln.text for ln in secs["main"]]
+  assert texts == ['dbg = "true";', '# [disabled step, never runs] dbg = "false";', "x = 1;"]

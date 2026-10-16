@@ -1,6 +1,6 @@
 # NIST LMSF protocol: DNA Extraction
 
-Reconstructed 2026-10-16 from `Methods/GSF-IMS Project/E. coli Methods/Fitness Selection 2.With DNA Extraction/DNA Extraction.{med,hsl,sub,stp,lay}` via the decompiler traces (`.local/session_state/analysis/traces/DNA Extraction.{trace,condensed}.md`). 566 steps, 18 sub-methods. Everything below is read from the trace; the few inferences are marked.
+Reconstructed 2026-10-16 from `Methods/GSF-IMS Project/E. coli Methods/Fitness Selection 2.With DNA Extraction/DNA Extraction.{med,hsl,sub,stp,lay}` via the decompiler traces (`.local/session_state/analysis/traces/DNA Extraction.{trace,condensed}.md`). 566 steps, 18 sub-methods. Everything below is read from the trace; the few inferences are marked. Re-checked 2026-10-16 against the longer traces. These now include the libraries' `private` functions (plate moves, MPE² error handling) and mark steps switched off in the editor as disabled. Those disabled steps had been shown as live, and two statements in the first version came from them.
 
 ## What it does
 
@@ -17,11 +17,11 @@ Plasmid-free genomic DNA extraction from *E. coli* cultures grown in a deep-well
 | `DNAPlateNumber` | dialog | which of the 4 deck sets |
 | `cultureVolume` | 500 | clamped to 200–500 µL; sets the supernatant split (below) |
 | `isPipetting` | "true" | when "false", pipetting is skipped and operator dialogs stand in |
-| `isDebugging` | "true" in csv, **forced "false"** in code | dialogs per sub-method |
+| `isDebugging` | from the csv; "true" if the key is missing | dialogs per sub-method. The method also has a step `is_debugging = "false"`, but it is **disabled** in the editor and never runs, so the csv value decides. The csv is written by the LMSF front end at run time and isn't in the repo, so the value a real run uses is unknown. |
 | `spin_final_elution` | "maybe" | "yes" → centrifuge elution, "no" → MPE² elution, "maybe" → dialog |
 | (hardcoded) | | `use_iSWAP = "true"`, `shake_speed = 200` RPM |
 
-Fixed MPE² geometry: `FPonRPNozzleHeight = FPonRPFilterHeight = 86.5`, `BPNozzleHeight = 38.4`, `BPFilterHeight = 31.35`, `BPLenghtofNozzles = 6.6`, `BPNozzleOffset = 0`, `EPlateH = 14.35`, COM port 7.
+Fixed MPE² geometry: `FPonRPNozzleHeight = FPonRPFilterHeight = 86.5`, `BPNozzleHeight = 38.4`, `BPFilterHeight = 31.35`, `BPLenghtofNozzles = 6.6`, `BPNozzleOffset = 0`, `EPlateH = 14.35`. The method sets `MPE2COMPort = 7` but never uses it: the lab's `Methods/Common/MPE_Library` (`InitializeMPELibrary`) hard-codes **COM 14 at 921600 baud**, and that is what `Connect` opens. A dialog asks for the port only if either value is 0.
 
 ## Deck (sequence roles)
 
@@ -52,10 +52,17 @@ Clear 96-head/arm; N3 buffer lid off; 96-head 24 tips: **350 µL Buffer N3** int
 
 ### PipetteMove04 — filter the lysate
 1. With iSWAP/CO-RE: RP from storage → MPE² (lid parked); Agilent FP from storage → MPE² (lid parked).
-2. 96-head 24 tips with **wide-bore tips** (support-seated; `DPXPRECUTTEDTIPSLIB::SetCuttedTipLenght(…, 79.8 mm, 1000 µL)`), aspirate **900 µL** lysate with **mix 3 × 675 µL** (0.75 × volume), liquid class `HighVolume_WideBore3_2_Water_DispenseSurfaceEmpty`; dispense onto the FP (dispense height 13 above filter, detect mode 18 — open question §11).
+2. 96-head 24 tips with **wide-bore tips** (support-seated), aspirate **900 µL** lysate with **mix 3 × 675 µL** (0.75 × volume), liquid class `HighVolume_WideBore3_2_Water_DispenseSurfaceEmpty`; dispense onto the FP (dispense height 13 above filter, detect mode 18 — open question §11).
+   **The wide-bore tips are a firmware redefinition, done at run time.** `DPXPRECUTTEDTIPSLIB::SetCuttedTipLenght(ML_STAR, 5, 79.8, wide_bore_volume)` rewrites tip type 5 (1000 µL filtered) with a `C0TT` firmware command:
+   - Stock definition `tt05tf1tl0871tv10650tg3tu0`: 87.1 mm, 1065.0 µL.
+   - New length: 79.8 mm − 8.0 mm (a fixed offset in the library) = `tl0718`, so 15.3 mm is cut off.
+   - New volume: the cut-off cone is modelled with diameter `0.171 × 15.3 + 0.632` = 3.25 mm, so `π/4·d²·L/3` = 42 µL. The library takes that off plus a 20 µL safety margin: `tv10030`.
+   - It hands back 938 µL as the usable volume (by reference, into `wide_bore_volume`). The method caps `pipette_volume_1` at that volume; 900 µL is under it, so nothing changes.
+
+   The library also has a cut-length check, `CheckForOrginalLengthMinusNewLengthGreater15mm`, which would show a "Verify TipParameter" dialog with no timeout. The call to it is a **disabled step**, so it never runs; no check or dialog stands between the cut and the `C0TT`. (The disabled check would have said "Maximum cutting length = 15mm" but rejected only cuts over 40 mm. Its message for a negative cut reads "Please consult your Hairdresser for Tip extension.;)".) After the wide-bore transfer, `ResetCuttedTipLenght(ML_STAR, 5)` sends `C0TT` with the stock `tt05…tl0871tv10650…` again, so tip type 5 is back to normal for later steps.
 3. **FP incubation 120 s** (timer runs across the next moves).
 4. **MPE²: `FilterPlateToWaste` with program `pressure,20,240;pressure,65,60;`** — 20 (mbar?) for 240 (s?), then 65 for 60 — pushing lysate through the filter into the RP below. Units are the MPE library's; not verifiable from the method alone.
-5. FP and RP back to storage, lids on.
+5. FP lid back on, then the FP (with lid) is **lifted and placed back on the MPE² 4 mm higher** (a same-position move with `z_shift = 4`). This is presumably to break it off the nozzles before transport; that's an inference. Then FP and RP go back to storage with their lids.
 
 ### PipetteMove05 — bind DNA
 BP from storage → MPE² (no lid); RP lid off. 96-head 24 tips: **900 µL** cleared lysate RP → BP (submerge 7, dispense height 13). RP lid back. **MPE²: `FilterPlateToWaste` `pressure,40,60;`** — DNA binds to the silica membrane; flow-through to waste. `RenewOffsetTips`.
@@ -73,19 +80,33 @@ Lid off DNA Buffers 1 (PB/PE); 96-head 24 tips: **900 µL Buffer PB** → BP; **
 3. **Centrifuge path:** BP onto the EP-spin adapter (operator does the spin); dialogs in/out; **210 s** timer stands in for the centrifuge run.
 
 ### CleanUp
-Tip counters written to the status file; MPE² disconnect; HHS terminate; head/arm parked; completion dialogs; BP lid restored on the spin path.
+Tip counters written to the status file (`C:\Shared Files\LMSF Scheduler\Hamilton\tip_status.csv`, from the private `TipHandlingParameters`); MPE² disconnect; HHS terminate; head/arm parked; completion dialogs; BP lid restored on the spin path.
 
 ## Recurring mechanics worth knowing
 
 - **RenewOffsetTips:** the 96-head stamping picks from an *offset* rack. The sub-method ejects anything on the offset support to the waste chute (with a 10 s chute shake), then picks 96 tips from `Tips_1000_Handoff` and ejects them onto `TipSupport_1000_offset_1`. The 24-channel steps then pick from `Tips_1000_Offset_pickup`.
 - **96-head channel pattern** `111111111111111111111111` + 72 zeros = the first 24 positions — i.e. 3 rows × 8. All stamping uses these 24.
-- **Lids never move by hand** when `use_iSWAP` is true: every lid/plate move is a CO-RE ZSwap pair with grip parameters per labware (84.5 mm plates, 80 mm FP/EP, 78–78.95 mm DWPs; plate press 0–0.5).
-- **FirmwareCommand steps** drive the 96-head park: `H0ZA za68500` (Z up 500), `H0YA ya07500` (Y to 7500).
+- **Plate and lid moves** (`Methods/Common/PlateAndLidMovement`). When `use_iSWAP` is true, every move is a CO-RE gripper (ZSwap) get/place pair; nothing is moved by hand. Each public `Move<Labware>…` sets that labware's grip height, width and force: 84.5 mm plates, 80 mm FP/EP, 78–78.95 mm DWPs, force 4 for the lo-bind EP and 5 otherwise. It then calls one of two private movers:
+  - Shared settings: grip opening 88 mm, Z speed 75, grip speed 277, `ZSwapStrengthFactor = 0.5`.
+  - `MovePlateWithLidAndTap` uses `TransportMode = 2`, so plate and lid travel together. It checks the plate after placing it and doesn't check it on pick-up; X acceleration level 1, plate press 0.
+  - `MovePlateNoLidNoTap` turns both plate checks off.
+  - `MoveLid` checks the lid after placing it, with plate press 0.5; `MoveLidNoTap` uses no check and press 0. So "Tap" in these names appears to mean the presence check plus press after a place; that's an inference from the parameter differences.
+  - **`z_shift`:** before placing, the destination labware's Z is raised by `z_shift` mm (`HSLLabwrAccess::RelativePositionValuesSetForLabwareID`, via `LMSF_UTILITIES::SeqZShift`), and it's lowered again afterwards. The plate is therefore set down `z_shift` mm above its nominal seat: 1 mm for MPE²/storage places, 4 mm for the FP re-seat, 7 mm for the BP re-seat.
+  - **Gripper channel choice:** on every new gripper pick-up (`new_front_gripper = 1`), the upper channel (`ToolUpperChannel`) is chosen from the clock's seconds: `floor(sec / 59.01 × 7 + 2)`, giving channel 2–8. `CheckFrontChannel` re-draws if the stored value isn't an integer from 2 to 8. Presumably this spreads wear across channels; that's an inference.
+  - `TraceGripper` logs the tool's absolute X/Y/Z/R whenever the grippers are ejected after a move.
+- **96-head park:** `Move96HeadToFront` runs a `Head96Move` step (MoveType 2, direction 2) to `move_seq`. Its other two steps are disabled and never run: the `Move96HeadUp` call, and a `FirmwareCommand` `H0YA ya07500` (Y to 750.0 mm). (The first version of this note named `H0ZA`/`H0YA` firmware commands as the park; that came from disabled code.)
+- **MPE² errors go to an operator console.** Every MPE² wrapper call in `MPE_Library` (`Connect`, `FilterPlatePlaced`, `ProcessFilterToWasteContainer`, `FilterPlateRemoved`, …) loops until the call succeeds. Auto-recovery is off (`useAutoErrorRecovery = 0`), so each failure calls the private `HandleError`. It reads the MPE²'s last error into a custom dialog and returns the operator's choice; 5 breaks out of the retry loop. Choice 7 opens `ManualMPEErrorRecovery`, a menu that loops until the operator finishes, with these actions:
+  - re-initialise the library, connect over COM, disconnect, or initialise the device;
+  - toggle the vacuum check;
+  - re-register the filter plate's heights;
+  - process to waste or to the collection plate, with control points the operator types in (`UserSelectControlPoints`) and a "return plate?" flag;
+  - clamp the plate, retrieve it, or mark the filter or collection plate as removed.
+  Any of these that fails shows the device error and returns to the menu.
 - **Error handling:** every file/step gets `MECC::RaiseRuntimeErrorEx` guards (11–6 recoveries per device step, string-table ids). Endless-sequence loop warnings guard `while (GetCurrentPosition() > 0)` idioms.
 - **The manual fallback:** with `use_iSWAP = "false"` or `is_pipetting = "false"`, each robot action is replaced by an operator dialog naming the next manual action — the method doubles as a printed SOP.
 
 ## Open items (§11-adjacent, specific to this method)
 
 - `dispense mode 8`, `DispenseMode 3/5`, `detect mode (open)` 5/7/10/18, `aspirate mode 0/2`, `TipType 0/1/5` — enum semantics still open (§11).
-- MPE² pressure program units ("pressure,65,420") — from `MPE_LIBRARY`, whose source is in the NIST repo's Library folder; readable with the same tools if needed.
+- MPE² pressure program units ("pressure,65,420"): the lab's `Methods/Common/MPE_Library` passes the string straight to Hamilton's `HSLMPELib`, so the units are Hamilton's and are not stated in either.
 - `pipette_volume_2 = culture_volume × 3.6` — pellet hold-up factor, measured by the lab, not derived.

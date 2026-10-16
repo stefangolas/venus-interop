@@ -77,3 +77,11 @@ def test_device_step_markers():
   assert steps[0].type == "device step (STAR)"
   assert steps[0].code.endswith("// TipPickUp")
   assert hsl.summary(DEVICE) == {"device step (STAR)": 1}
+
+
+def test_disabled_steps_are_marked():
+  text = METHOD.replace('// {{{ 3 1 0', '/* {{ 1 "" "0" */ if(0){  /* }} "" */\n// {{{ 3 1 0', 1)
+  text = text.replace('return;\n// }} ""\n', 'return;\n// }} ""\n/* {{ 1 "" "1" */ } /* }} "" */\n', 1)
+  steps = hsl.steps(text)
+  assert [s.row for s in steps] == [1, 2, 3, 4]
+  assert [s.disabled for s in steps] == [False, False, True, False]

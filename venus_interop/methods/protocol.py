@@ -382,6 +382,7 @@ _KEEP_PTL = re.compile(
   r"|ChannelPattern|ErrorHandling")
 _NOISE = re.compile(r"^\s*(?:MECC::)?Trc?Trace\s*\(")
 _GUARD = re.compile(r"MECC::RaiseRuntimeErrorEx\s*\(")
+_GUARDED_CALL = re.compile(r"^if\s*\(\s*0\s*[!=]=\s*(.+?)\s*\)$")
 _GETITEM = re.compile(r"HSLExtensions::Dictionary::GetItem\s*\(")
 _TRANSLATE = re.compile(r"Translate\(\"([^\"]*)\"\)")
 
@@ -499,7 +500,15 @@ def condense(lines: list[Line]) -> list[Line]:
       skip = ln.depth
       continue
     if ln.kind == "code":
-      if _NOISE.search(ln.text) or _GUARD.search(ln.text):
+      if _GUARD.search(ln.text):
+        # `if( 0 == f.Open(...) ) { MECC::RaiseRuntimeErrorEx(...) }` is how Venus writes a
+        # checked call: dropping the guard must keep the call itself, as a plain statement
+        if len(out) >= 2 and out[-1].kind == "code" and out[-1].text.strip() == "{":
+          m = _GUARDED_CALL.match(out[-2].text.strip())
+          if m and out[-2].kind == "code":
+            out[-2] = Line(out[-2].depth, "code", out[-2].role, m.group(1) + ";")
+        continue
+      if _NOISE.search(ln.text):
         continue
       text = _params_form(ln.text)
       # pure data-plumbing calls (no assignment) drop; assignments stay
@@ -570,6 +579,9 @@ class Tracer:
 
   def _walk(self, steps: list[hsl.Step], out: list[Line], depth: int, seen: tuple, lib: Optional[Library] = None):
     for s in steps:
+      if s.disabled:
+        self._disabled(s, out, depth)
+        continue
       if s.device:
         self._device(s, out, depth)
         continue
@@ -673,6 +685,22 @@ class Tracer:
       if role:
         line = line + f"  # [{role}]"
     return line
+
+  def _disabled(self, s: hsl.Step, out: list[Line], depth: int):
+    """A step switched off in the editor: shown, marked, never expanded (it never runs).
+    A device step keeps its settings, so what it would have done stays readable."""
+    mark = "# [disabled step, never runs]"
+    if s.device:
+      dev: list[Line] = []
+      self._device(s, dev, depth)
+      head, rest = dev[0], dev[1:]
+      out.append(Line(depth, "code", "", f"{mark} {head.text}"))
+      out.extend(Line(ln.depth, "code", "", f"{mark}   - {ln.text}") for ln in rest if ln.kind == "setting"
+                 and ln.role != "error")
+      return
+    for line in s.code.splitlines():
+      if line.strip():
+        out.append(Line(depth, "code", "", f"{mark} {line.strip()}"))
 
   def _device(self, s: hsl.Step, out: list[Line], depth: int):
     m = _DEVICE.search(s.code)

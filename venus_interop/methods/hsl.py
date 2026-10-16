@@ -6,6 +6,13 @@
                                                  parts share the GUID
   // }} ""                                       end of the marker's code
 
+A step switched off in the Method Editor stays in the code, wrapped in
+
+  /* {{ 1 "" "0" */ if(0){  /* }} "" */           the disabled steps follow ...
+  /* {{ 1 "" "1" */ } /* }} "" */                 ... up to here
+
+so it never runs. `Step.disabled` marks the steps inside.
+
 The .med holds the steps' parameters and is authoritative; the code here is what Venus generated from
 it. Reading is enough to list, find and diff steps; writing steps is deliberately not supported.
 """
@@ -32,6 +39,8 @@ STEP_TYPES = {
 _STEP = re.compile(r'^// \{\{(\{?) (\d+) (\d+) (\d+) "([^"]*)" "((?:[A-Za-z_][A-Za-z0-9_]*:)?\{[^"]*\})"\s*$')
 _SECTION = re.compile(r'^// \{\{\{ (\d+) "([^"]*)" "([^"]*)"\s*$')
 _END = re.compile(r'^// \}\} ""\s*$')
+_OFF = re.compile(r'^/\* \{\{ \d+ "" "0" \*/\s*if\s*\(\s*0\s*\)\s*\{')
+_ON = re.compile(r'^/\* \{\{ \d+ "" "1" \*/\s*\}')
 
 
 @dataclasses.dataclass
@@ -44,6 +53,7 @@ class Step:
   section: Optional[str]  # the sub-method it is in
   line: int  # 1-based line of its marker
   code: str
+  disabled: bool = False  # switched off in the Method Editor: inside `if(0){ ... }`, never runs
 
   @property
   def device(self) -> Optional[str]:
@@ -62,6 +72,7 @@ def steps(text: str) -> list[Step]:
   section: Optional[str] = None
   current: Optional[Step] = None
   buf: list[str] = []
+  off = 0  # depth of disabled-step wrappers
   for n, line in enumerate(text.splitlines(), 1):
     if current is not None:
       if _END.match(line):
@@ -75,9 +86,16 @@ def steps(text: str) -> list[Step]:
     if m:
       section = m.group(2) if m.group(3) != "End" else None
       continue
+    if _OFF.match(line):
+      off += 1
+      continue
+    if off and _ON.match(line):
+      off -= 1
+      continue
     m = _STEP.match(line)
     if m:
-      current = Step(int(m.group(2)), int(m.group(3)), m.group(5), m.group(6), m.group(1) == "", section, n, "")
+      current = Step(int(m.group(2)), int(m.group(3)), m.group(5), m.group(6), m.group(1) == "", section, n, "",
+                     off > 0)
   return out
 
 
