@@ -210,6 +210,86 @@ class Record:
     return out
 
 
+  def errors(self) -> list["ErrorPolicy"]:
+    """The step's `(Errors` block: per error, the recoveries the operator is
+    offered (or the default applied) when it occurs."""
+    out = []
+    for k, v in self.tree:
+      if key_id(k) != "Errors" or not isinstance(v, list):
+        continue
+      for _idx, err in v:
+        if not isinstance(err, list):
+          continue
+        top = {key_id(kk): vv for kk, vv in err if not isinstance(vv, list)}
+        recs = []
+        for kk, vv in err:
+          if key_id(kk) == "Recoveries" and isinstance(vv, list):
+            for code, r in sorted(((c, r) for c, r in vv if isinstance(r, list)), key=lambda x: int(x[0])):
+              rt = {key_id(a): b for a, b in r}
+              recs.append(Recovery(int(code), int(rt.get("RecoveryTitle", 0)), rt.get("RecoveryVisible") == "1",
+                                   rt.get("RecoveryDefault") == "1", rt.get("RecoveryFlag", "")))
+        out.append(ErrorPolicy(int(top.get("ErrorNumber", 0)), int(top.get("ErrorTitle", 0)), recs,
+                               int(top.get("RepeatCount", 0) or 0), top.get("UseDefault") == "1",
+                               top.get("Timeout", ""), top.get("Infinite") == "1",
+                               top.get("AddRecovery", "0"), top.get("ErrorSound", "")))
+    return out
+
+
+# String-table titles of the ids in `(Errors` blocks, from the RT_STRING
+# resources of Venus's Bin\HxGruCommandEnu.dll (every id used under
+# C:\Program Files (x86)\HAMILTON and in the NIST corpus; regenerate with
+# tools/gru_strings.py).
+ERROR_TITLES = {
+  372: "Hardware Error", 374: "Not Executed Error", 376: "Clot Error", 380: "Barcode Error",
+  382: "Insufficient Liquid Error", 384: "Tip Present Error", 386: "No Tip Error",
+  388: "No Carrier Error", 390: "Execution Error", 392: "Pressure LLD Error",
+  394: "Calibrate Error", 402: "Loading tray Error", 404: "Improper Aspiration Error",
+  503: "Wash Liquid Error", 638: "Labware not Found Error", 677: "Labware Present Error",
+  734: "Wrong Carrier Error", 758: "Improper Dispense Error", 764: "Cover Open Error",
+  766: "Illegal Intervention Error", 784: "No Carrier Barcode Error", 816: "Liquid Level Error",
+  861: "Not Detected Error", 935: "Not aspirated Error", 1587: "No Labware Error",
+  1589: "Unexpected Labware Error", 1592: "Wrong Labware Error", 1594: "Barcode Mask Error",
+  1596: "Barcode Not Unique Error", 1598: "Barcode Already Used Error", 1688: "Other errors",
+  1854: "Unexpected cLLD found Error", 1980: "Delimiter Error", 2059: "TADM upper limit Error",
+  2061: "TADM lower limit Error", 2083: "Anti drop control error",
+}
+RECOVERY_TITLES = {
+  370: "Cancel", 416: "Exclude", 418: "Initialize", 420: "Repeat", 424: "Next", 426: "Waste",
+  428: "Continue", 430: "Barcode", 432: "Bottom", 434: "Air", 436: "Abort", 818: "Available",
+  1482: "Refill",
+}
+
+
+@dataclasses.dataclass
+class Recovery:
+  code: int  # the sub-block key; 1 = Cancel and 2 = Abort everywhere, 3-7 vary by error
+  title_id: int
+  visible: bool  # offered to the operator
+  default: bool
+  flag: str
+
+  @property
+  def title(self) -> str:
+    return RECOVERY_TITLES.get(self.title_id, f"#{self.title_id}")
+
+
+@dataclasses.dataclass
+class ErrorPolicy:
+  number: int  # the error's number (ErrorNumber)
+  title_id: int
+  recoveries: list[Recovery]
+  repeat_count: int
+  use_default: bool
+  timeout: str  # seconds or a variable name (e.g. userResponseTime)
+  infinite: bool
+  add_recovery: str  # "0", "-1" or a recovery title id (424, 428, 432); meaning open (§11)
+  sound: str
+
+  @property
+  def title(self) -> str:
+    return ERROR_TITLES.get(self.title_id, f"#{self.title_id}")
+
+
 def record(section: "object") -> Record:
   """A Record from an hxcfg section that holds HxPars items."""
   return Record(section.name, parse(section.items or []))

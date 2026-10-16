@@ -67,7 +67,7 @@ def test_load_library_replaces_prototypes():
 def test_trace_inlines_and_renders_settings():
   text = "\n".join(protocol.render(tracer().section(METHOD, "main")))
   assert "### Pipette media into growth plate" in text
-  assert "> [lab] simple_aspirate(asp_seq = ML_STAR.Media_source, number_channels = 8, STAR = ML_STAR)" in text
+  assert "> [lab] arrRet = simple_aspirate(asp_seq = ML_STAR.Media_source, number_channels = 8, STAR = ML_STAR)" in text
   assert "- **TipPickUp (STAR)**" in text
   assert "SequenceObject = <asp_seq>" in text
   assert "TipType = 5" in text
@@ -78,7 +78,7 @@ def test_trace_inlines_and_renders_settings():
 def test_condense_collapses_data_and_keeps_robot():
   lines = tracer().section(METHOD, "main")
   text = "\n".join(protocol.render(lines, condensed=True))
-  assert "> [lab] simple_aspirate" in text
+  assert "> [lab] arrRet = simple_aspirate" in text
   assert "- **TipPickUp (STAR)**" in text
   assert "TipType = 5" in text
   assert "channel constant" not in text

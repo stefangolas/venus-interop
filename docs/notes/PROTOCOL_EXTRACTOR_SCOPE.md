@@ -44,9 +44,9 @@ venus_interop.methods.protocol   NEW: binder (args, globals, params.csv) + expan
 
 - **~10 anonymous numeric keys per channel block** (`-534183918`, `-534183919`, `-534183622`, `-534183700`, `-534183876`, `-534183913`, `-534183920`, `-534183925/6/28`, `3DispenseMode`, `3TipType` enum). Decodable by (a) records where the value is a literal rather than a variable (meaning inferred from context), (b) comparison across the 105 `.stp` files, (c) Venus step dialogs. Bounded: one table, built once, reused by every method.
 - Enum values for `TipType` (numeric 5 = ?), `DispenseMode`, `SequenceCounting`, `TouchOffMode` — same approach.
-- Error/recovery text is string-table IDs (`3ErrorDescription = 1689`); not resolvable without Venus resources. For protocol output: count and skip, or note "11 error handlers".
+- Error/recovery text is string-table IDs (`3ErrorDescription = 1689`). *Resolved 2026-10-16:* the titles are in `Bin\HxGruCommandEnu.dll` (CONVENTIONS §12, "Error policies"); traces render every error policy, and the condensed view keeps the ones set to repeat or use their default.
 - The ~15 unknown control-flow CLSIDs — nameable by inspection, one afternoon.
-- Includes resolve by basename (`GSF-IMS.shared_submethods.hs_` → fetched `.hsi` in `lmsf_libs\`, **not** next to the method). Extension variants `.hs_/.hsl/.hsi` seen in the same method's include list.
+- Includes resolve under the Library and Methods folders, not next to the method. Extension variants `.hs_/.hsl/.hsi` seen in the same method's include list. *Resolved 2026-10-16:* `protocol.load_method` follows the include closure (a `.hs_` header to its `.hsi` body) and loads only the `.stp` files beside those files (CONVENTIONS §12).
 
 ## Effort estimate
 
