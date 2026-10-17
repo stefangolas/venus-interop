@@ -58,5 +58,33 @@
   "IF_AND_IF_OR::If_Or_3_Variables": {
     "scope": "inline",
     "note": "a == b or c == d or e == f"
+  },
+  "VECTORCUSTOMDIALOGS::*": {
+    "scope": "out",
+    "note": "operator dialogs and status-window text (a compiled dialog component)"
+  },
+  "NGSSTARPROCESSES::DATA_UpdateInformationIntoReportFile": {
+    "scope": "out",
+    "note": "appends a line to the run's report file"
+  },
+  "NGSSTARPROCESSES::DATA_SendEmail": {
+    "scope": "out",
+    "note": "mail alert"
+  },
+  "NGSSTARLOADING::Display_Error_Dialog": {
+    "scope": "out",
+    "note": "error dialog, then abort"
+  },
+  "NGSSTARLOADING::Display_Message_Dialog": {
+    "scope": "out",
+    "note": "message dialog"
+  },
+  "NGSSTARLOADING::_CheckBindReturnValueVectorCustomDialogs": {
+    "scope": "out",
+    "note": "checks a dialog's return"
+  },
+  "STCC::GenerateMappingFileV43Ex1": {
+    "scope": "out",
+    "note": "writes a mapping file"
   }
 }
