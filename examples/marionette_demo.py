@@ -47,6 +47,7 @@ from venus_interop.plr.libraries.gsf_ims import GsfIms  # noqa: E402
 from venus_interop.plr.libraries.plate_and_lid import PlateAndLidMovement  # noqa: E402
 from venus_interop.plr.libraries.tip_count import TipCount, TipCounters  # noqa: E402
 from venus_interop.plr.libraries.tip_handling_96 import TipHandling96  # noqa: E402
+from venus_interop.plr.liquid_classes import VenusLiquidClasses  # noqa: E402
 
 from pylabrobot.hamilton.star.device import RECORDING_STAR, STARDevice  # noqa: E402
 from pylabrobot.resources import set_tip_tracking, set_volume_tracking  # noqa: E402
@@ -76,9 +77,9 @@ class Marionette:
   TIP_SEQUENCES = ["Tips_1000_Channels", "Tips_300_Channels", "Tips_50_Channels", "Tips_1000_Offset_pickup"]
 
   def __init__(self, star: STARDevice, v: VenusDeck, p: Parameters, say=print,
-               counters: Optional[TipCounters] = None):
+               counters: Optional[TipCounters] = None, liquid_classes: Optional[VenusLiquidClasses] = None):
     self.v, self.par, self.say = v, p, say
-    self.gsf = GsfIms(star, v, say)
+    self.gsf = GsfIms(star, v, say, liquid_classes=liquid_classes)
     self.plm = PlateAndLidMovement(star, v, say=say)
     self.c96 = Common96HeadSubMethods(star, v, say)
     self.tips = TipCount(v, counters or TipCounters())
@@ -201,7 +202,7 @@ TRACE = "Marionette protease.gradient plate prep.v5.condensed.md"
 
 
 async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.Path,
-               tip_counters: Optional[pathlib.Path] = None) -> None:
+               tip_counters: Optional[pathlib.Path] = None, liquid_classes: Optional[pathlib.Path] = None) -> None:
   logging.disable(logging.WARNING)
   warnings.simplefilter("ignore")
   set_volume_tracking(True)
@@ -225,7 +226,8 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.P
     await viewer.wait_for_browser()
     await asyncio.sleep(1.0)
 
-  method = Marionette(star, v, p, counters=TipCounters(tip_counters))
+  method = Marionette(star, v, p, counters=TipCounters(tip_counters),
+                      liquid_classes=VenusLiquidClasses.from_json(liquid_classes) if liquid_classes else None)
   await method.run()
   report(v, method.media)
   if view:
@@ -240,6 +242,9 @@ if __name__ == "__main__":
                   help="the method's trace; the corpus's sibling analysis/traces/the method's .condensed.md when not given")
   ap.add_argument("--view", action="store_true")
   ap.add_argument("--plate", type=int, default=3, help="plate number, 2-5 (TMP from 3 on)")
+  ap.add_argument("--liquid-classes", type=pathlib.Path,
+                  help="the method's liquid classes as JSON (tools/liquid_classes.py on NIST's Config/ML_STARLiquids.mdb); "
+                       "PLR's STAR table when not given, which lacks the GSF-IMS FastMixing classes")
   ap.add_argument("--tip-counters", type=pathlib.Path,
                   help="a JSON file of Venus tip counters, read at the start and written at the end, as "
                        "the method's TipCount::Read2/Write2: the racks carry over between runs")
@@ -247,4 +252,4 @@ if __name__ == "__main__":
   a = ap.parse_args()
   trace = a.trace or a.corpus.parent / "analysis" / "traces" / TRACE
   asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate), trace,
-                   a.tip_counters))
+                   a.tip_counters, a.liquid_classes))

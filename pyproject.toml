@@ -9,6 +9,7 @@ dependencies = []
 plr = ["pylabrobot @ git+https://github.com/PyLabRobot/pylabrobot.git@0f03af330d0db0032b650bd8171fcf4dccb6ff9e"]
 models = ["trimesh", "manifold3d", "numpy", "scipy", "shapely", "networkx", "rtree"]
 test = ["pytest"]
+liquids = ["access-parser"]  # tools/liquid_classes.py: Venus liquid-class databases (Access)
 
 [build-system]
 requires = ["setuptools>=64"]

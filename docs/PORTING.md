@@ -116,6 +116,17 @@ port is described as matching Venus.
 8. **Run the method's demo end to end** on the simulator (`examples/`), checking the volumes it
    should produce.
 
+## Liquid classes
+
+A step names its liquid class; the class lives in Venus's database (`Config\ML_STARLiquids.mdb`), the
+method's own (a kit or repository ships one) or the install's. Read it once with
+`tools/liquid_classes.py DB --out classes.json` (`pip install .[liquids]`) and give the port
+`VenusLiquidClasses.from_json(...)`: it gives PLR classes by Venus name (a name the database lacks
+falls back to PLR's STAR table) and the Venus codes libraries decide by (tip type, dispense mode).
+`--check-plr` compares every class the database shares with PLR's table; Hamilton's stock classes
+agree exactly. Methods' own classes differ from any default (NIST's FastMixing classes mix at
+500 uL/s), so a port should not run without its method's database.
+
 ## Extending the interpreter
 
 The interpreter stops where Venus calls a compiled service: the deck-layout object, the

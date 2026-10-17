@@ -16,7 +16,7 @@ The mapping to PLR (`plr_arguments`):
              position above the surface (aspirate)
 What PLR takes no argument for (the cLLD sensitivity level, Venus's dispense modes) stays in
 `Pipetting` for the comparison, not in the call. Mix flow rate: the steps leave it to the liquid
-class; MIX_FLOW until classes are read.
+class (its aspirate or dispense mix flow rate); MIX_FLOW where no class is known.
 """
 from __future__ import annotations
 
@@ -59,8 +59,9 @@ class Pipetting:
       mix_position=self.mix_position if mixing else 0.0)
 
 
-def plr_arguments(step: Pipetting, n: int, aspirate: bool) -> dict[str, Any]:
-  """The STAR aspirate / dispense keyword arguments for `n` channels."""
+def plr_arguments(step: Pipetting, n: int, aspirate: bool, mix_flow: Optional[float] = None) -> dict[str, Any]:
+  """The STAR aspirate / dispense keyword arguments for `n` channels; a mix at `mix_flow` (the
+  liquid class's mix flow rate), MIX_FLOW when not given."""
   from pylabrobot.hamilton.star.driver.lld_mode import LLDMode
   from pylabrobot.lib.liquid_handling.mix import Mix
 
@@ -71,7 +72,7 @@ def plr_arguments(step: Pipetting, n: int, aspirate: bool) -> dict[str, Any]:
   else:  # OFF given, not left to PLR: with surface following, its default is CAPACITIVE
     out.update(lld_mode=LLDMode.OFF, liquid_heights=[s.fluid_height] * n)
   if s.mix_cycles:
-    mix = Mix(volume=s.mix_volume, repetitions=s.mix_cycles, flow_rate=MIX_FLOW)
+    mix = Mix(volume=s.mix_volume, repetitions=s.mix_cycles, flow_rate=MIX_FLOW if mix_flow is None else mix_flow)
     if aspirate:
       out.update(pre_mixes=[mix] * n, mix_positions_from_liquid_surface=[s.mix_position] * n)
     else:
@@ -84,7 +85,8 @@ async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   """A Venus Aspirate step on PLR: the wells per channel, the step's settings, the class if known."""
   for observe in OBSERVERS:
     observe("Aspirate", channels, step)
-  kw = plr_arguments(step, len(channels), aspirate=True)
+  kw = plr_arguments(step, len(channels), aspirate=True,
+                     mix_flow=getattr(liquid_class, "aspiration_mix_flow_rate", None))
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
@@ -94,7 +96,8 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
                    **extra):
   for observe in OBSERVERS:
     observe("Dispense", channels, step)
-  kw = plr_arguments(step, len(channels), aspirate=False)
+  kw = plr_arguments(step, len(channels), aspirate=False,
+                     mix_flow=getattr(liquid_class, "dispense_mix_flow_rate", None))
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)

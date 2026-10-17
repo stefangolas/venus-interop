@@ -9,8 +9,8 @@ the pipetting and transport functions every NGS STAR kit method is built on. Por
       by cLLD (height 0) or at a fixed height; tips out if exchanged; both sequences on by the
       channel count. Tips out at the end when not exchanged.
 
-The tip type and dispense mode come from the liquid class in Venus's database: until that is read,
-`liquid_classes` gives them (name -> (tip type, dispense mode)). Dispense modes 2 and 4 ("part",
+The tip type and dispense mode come from the liquid class in Venus's database (`liquid_classes`, a
+VenusLiquidClasses; or a table of them). Dispense modes 2 and 4 ("part",
 multi-dispense) take other functions, not ported yet. Not ported, by design: the report and status
 lines, the volume plausibility dialog, the sequence check dialog, the tip scheduling for the loading
 screen, the sample-tracking mapping file (STCC).
@@ -46,9 +46,11 @@ MIX_POSITION = 1.0  # mm above the surface: the aspirate records' and the cLLD d
 
 
 class NGSStarProcesses:
-  def __init__(self, star, deck, tips: dict[int, str], liquid_classes: dict[str, tuple[int, int]],
-               channels: int = 8, planner: Optional[StarTipTools] = None):
-    """`tips`: tip type -> the tip sequence (the framework's t_seqTips300 / 1000 / 50)."""
+  def __init__(self, star, deck, tips: dict[int, str], liquid_classes, channels: int = 8,
+               planner: Optional[StarTipTools] = None):
+    """`tips`: tip type -> the tip sequence (the framework's t_seqTips300 / 1000 / 50).
+    `liquid_classes`: a VenusLiquidClasses (the kit's database, read by tools/liquid_classes.py),
+    or a table name -> (tip type, dispense mode) with PLR's STAR classes."""
     self.p, self.v, self.tips, self.classes = star.pipettes, deck, tips, liquid_classes
     self.channels = channels
     self.planner = planner or StarTipTools(deck, channels)
@@ -58,8 +60,17 @@ class NGSStarProcesses:
     taken = sq.take(self.v.seq(seq), pattern, counting, use)
     return {ch - 1: item for ch, item in taken.channels.items()}
 
+  def _codes(self, name: str) -> tuple[int, int]:
+    """The class's Venus tip type and dispense mode (_DATA_GetTipTypeAndDispenseModeOfLiquidClass)."""
+    if isinstance(self.classes, dict):
+      return self.classes[name]
+    tip, mode = self.classes.tip_type(name), self.classes.dispense_mode(name)
+    if tip is None:
+      raise KeyError(f"liquid class {name!r} is not in the database")
+    return tip, mode
+
   def _lc(self, name: str):
-    lc = getattr(star_classes, name, None)
+    lc = (getattr(star_classes, name, None) if isinstance(self.classes, dict) else self.classes.get(name))
     if lc is None:
       self.missing_classes.add(name)
     return lc
@@ -69,7 +80,7 @@ class NGSStarProcesses:
       mix_volume_aspiration: float, mix_volume_dispense: float, aspirate_height: float,
       dispense_height: float, tip_exchange: bool, increment_aspiration: bool,
       liquid_following_at_fixed_dispense: bool):
-    tip_type, dispense_mode = self.classes[liquid_class]
+    tip_type, dispense_mode = self._codes(liquid_class)
     if dispense_mode in (2, 4):
       raise NotImplementedError("dispense mode 'part' (multi-dispense) is not ported yet")
     tips, cfg, lc = self.tips[tip_type], TIP_SETTINGS[tip_type], self._lc(liquid_class)

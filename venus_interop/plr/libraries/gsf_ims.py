@@ -49,7 +49,6 @@ SERIES_CLASS = "HighVolumeFilter_Water_FastMixing_DispenseSurface_Empty"  # fixe
 SUBMERGE = 2.0
 CLLD = 5  # the records' cLLD sensitivity ("from labware")
 DISPENSE_HEIGHT = 0.3  # fb45c82b, the dispense not to liquid
-MIX_FLOW = 250.0  # uL/s; the step leaves it to the class: an assumption until classes are read
 
 Volumes = Union[float, Sequence[float]]
 
@@ -57,17 +56,20 @@ Volumes = Union[float, Sequence[float]]
 class GsfIms:
   """The library's entry points, by their Venus names and arguments (sequences by name)."""
 
-  def __init__(self, star, deck: VenusDeck, say=print):
+  def __init__(self, star, deck: VenusDeck, say=print, liquid_classes=None):
+    """`liquid_classes`: a VenusLiquidClasses (the method's database, read by
+    tools/liquid_classes.py); PLR's STAR table alone when None, which lacks the library's
+    FastMixing classes."""
     self.star, self.v, self.say = star, deck, say
     self.p = star.pipettes
-    # Venus classes PLR's table lacks (the FastMixing ones): PLR's default class is used for them
-    # until the liquid-class database is read; every such class is listed here
+    self.classes = liquid_classes
+    # classes neither has: PLR's default is used for them
     self.missing_classes: set[str] = set()
 
   # -- the two steps everything is made of ----------------------------------------------------
 
   def _lc(self, name: str):
-    lc = getattr(star_classes, name, None)
+    lc = self.classes.get(name) if self.classes is not None else getattr(star_classes, name, None)
     if lc is None:
       self.missing_classes.add(name)
     return lc
@@ -232,7 +234,7 @@ def _mix_fields(mix: Optional[Mix]) -> dict:
 
 
 def _mix(cycles, volume) -> Optional[Mix]:
-  return Mix(volume=float(volume), repetitions=int(cycles), flow_rate=MIX_FLOW) if cycles and volume else None
+  return Mix(volume=float(volume), repetitions=int(cycles), flow_rate=steps.MIX_FLOW) if cycles and volume else None
 
 
 def _per_channel(volumes: Volumes, channels: list) -> list:
