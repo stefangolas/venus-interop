@@ -20,7 +20,7 @@ pytest.importorskip("pylabrobot.hamilton.star.driver.lld_mode")
 
 from venus_interop.files import layout  # noqa: E402
 from venus_interop.files.definitions import DEFAULT_VENUS_LABWARE, DefinitionStore  # noqa: E402
-from venus_interop.methods import hsl_eval, protocol, sequences as sq  # noqa: E402
+from port_harness import RecordingChannels, RecordingDeck, assert_same_steps, hsl_run, steps_of  # noqa: E402
 
 NIST = pathlib.Path(os.environ["VENUS_INTEROP_NIST"]) if os.environ.get("VENUS_INTEROP_NIST") else None
 CORPUS = pathlib.Path(os.environ["VENUS_INTEROP_CORPUS"]) if os.environ.get("VENUS_INTEROP_CORPUS") else None
@@ -84,12 +84,6 @@ def hsl_steps(lay):
     'namespace _Method { #include "HSLMECCLib.hs_" }\n'
     f"namespace _Method {{ method main() void {{\n{setup}\n{calls}\n}} }}\n")
   here = NIST / "Methods" / "GSF-IMS Project" / "port_test.hsl"
-  roots = [NIST / "Library", NIST / "Methods"]
-  stps = protocol.load_stps(sorted(here.parent.glob("*.stp")))
-  pre = hsl_eval.Preprocessor(roots, lambda p: p.read_text(encoding="latin-1"))
-  text = pre.expand(here, text=src)
-  parser = hsl_eval.Parser(hsl_eval.lex(text))
-  parser.unit()
   store = DefinitionStore([DEFAULT_VENUS_LABWARE], corpus_index(CORPUS))
   by_id = lay.by_id()
 
@@ -97,85 +91,24 @@ def hsl_steps(lay):
     d = store.get(by_id[lab].file) if lab in by_id else None
     return getattr(d, "properties", {}).get(key) if d is not None else None
 
-  run = hsl_eval.Run(parser, stps, {"x.lay": lay}, answers={"labware_data": labware_data})
-  run.src = text.splitlines()
-  run.run()
-  assert run.stopped is None, run.stopped
-  from venus_interop.plr import steps
-
-  out = []
-  for e in run.events:
-    settings = {}
-    if e.command in ("Aspirate", "Dispense"):
-      settings = steps.plr_arguments(steps.Pipetting.from_record(e.settings), len(e.channels), e.command == "Aspirate")
-      settings["venus"] = steps.Pipetting.from_record(e.settings).effective()
-      vols = [e.volumes.get(c) for c in sorted(e.channels)]
-      if all(isinstance(v, (int, float)) for v in vols):
-        settings["volumes"] = [float(v) for v in vols]
-    out.append((e.command, e.channels, settings))
-  return out
-
-
-class _Deck:
-  def __init__(self, lay):
-    self.items = {s.name: list(s.items) for s in lay.sequences}
-    self.live = {}
-
-  def seq(self, name):
-    if name not in self.live:
-      self.live[name] = sq.Sequence(name, list(self.items[name]))
-    return self.live[name]
-
-  def resolve(self, item):
-    return item
-
-
-class _Channels:
-  def __init__(self):
-    self.events = []
-
-  def _log(self, command, spots, channels, settings=None):
-    self.events.append((command, dict(zip([c + 1 for c in channels], spots)), settings or {}))
-
-  async def pick_up_tips(self, spots, use_channels):
-    self._log("TipPickUp", spots, use_channels)
-
-  async def discard_tips(self, use_channels):
-    self.events.append(("TipEject", {}, {}))
-
-  def _pipette(self, command, wells, vols, use_channels, kw):
-    settings = {k: v for k, v in kw.items() if k not in ("hamilton_liquid_classes", "empty")}
-    settings["venus"] = self.meant.pop(0)
-    settings["volumes"] = [float(v) for v in vols]
-    self._log(command, wells, use_channels, settings)
-
-  async def aspirate(self, wells, vols, use_channels, **kw):
-    self._pipette("Aspirate", wells, vols, use_channels, kw)
-
-  async def dispense(self, wells, vols, use_channels, **kw):
-    self._pipette("Dispense", wells, vols, use_channels, kw)
+  run = hsl_run(src, here, [NIST / "Library", NIST / "Methods"], here.parent.glob("*.stp"), {"x.lay": lay},
+                answers={"labware_data": labware_data})
+  return steps_of(run)
 
 
 def port_steps(lay):
   from venus_interop.plr.libraries import gsf_ims
 
-  from venus_interop.plr import steps
+  with RecordingChannels() as channels:
+    g = gsf_ims.GsfIms(type("Star", (), {"pipettes": channels})(), RecordingDeck(lay))
+    g._class = lambda tips: (gsf_ims.CLASS_BY_TIP[300 if "300" in tips else 1000], None)
+    g._lc = lambda name: None
 
-  channels = _Channels()
-  channels.meant = []
-  steps.OBSERVERS[:] = [lambda command, ch, step: channels.meant.append(step.effective())]
-  g = gsf_ims.GsfIms(type("Star", (), {"pipettes": channels})(), _Deck(lay))
-  g._class = lambda tips: (gsf_ims.CLASS_BY_TIP[300 if "300" in tips else 1000], None)
-  g._lc = lambda name: None
+    async def go():
+      for fn, _, args in CALLS:
+        await getattr(g, fn)(*args)
 
-  async def go():
-    for fn, _, args in CALLS:
-      await getattr(g, fn)(*args)
-
-  try:
     asyncio.run(go())
-  finally:
-    steps.OBSERVERS.clear()
   return channels.events
 
 
@@ -185,8 +118,5 @@ def test_covers_what_it_calls():
 
 def test_port_uses_the_wells_and_tips_the_library_does(lay):
   hsl, port = hsl_steps(lay), port_steps(lay)
-  assert len(hsl) == len(port) == 111
-  for i, (a, b) in enumerate(zip(hsl, port)):
-    if "volumes" not in a[2]:  # an array-bound volume the interpreter leaves unresolved
-      b = (b[0], b[1], {k: v for k, v in b[2].items() if k != "volumes"})
-    assert a == b, f"step {i}: library {a}, port {b}"
+  assert len(hsl) == 111
+  assert_same_steps(hsl, port)
