@@ -1400,7 +1400,10 @@ class Run:
         name = _fmt(args[0])
         seq = args[4] if len(args) > 4 else None
         if isinstance(seq, sq.Sequence) and name in counters:
-          seq.set_current_position(int(counters[name]))
+          if int(counters[name]) > 0:
+            seq.set_current_position(int(counters[name]))
+          else:  # no tips left: the counter reads as no positions
+            seq.set_count(0)
         return 1
       if m in ("writesequenceintoelementcounter", "createelementcounter", "resetelementcounter"):
         return 1

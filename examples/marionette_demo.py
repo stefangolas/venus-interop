@@ -36,7 +36,7 @@ import pathlib
 import sys
 import warnings
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Optional, Sequence
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -45,6 +45,8 @@ from nist_deck import VenusDeck, give_room, install, make_room  # noqa: E402
 from venus_interop.plr.libraries.common_96head import Common96HeadSubMethods  # noqa: E402
 from venus_interop.plr.libraries.gsf_ims import GsfIms  # noqa: E402
 from venus_interop.plr.libraries.plate_and_lid import PlateAndLidMovement  # noqa: E402
+from venus_interop.plr.libraries.tip_count import TipCount, TipCounters  # noqa: E402
+from venus_interop.plr.libraries.tip_handling_96 import TipHandling96  # noqa: E402
 
 from pylabrobot.hamilton.star.device import RECORDING_STAR, STARDevice  # noqa: E402
 from pylabrobot.resources import set_tip_tracking, set_volume_tracking  # noqa: E402
@@ -70,17 +72,27 @@ class Parameters:
 class Marionette:
   """The method's `main`, call for call, on the Python ports of its libraries."""
 
-  def __init__(self, star: STARDevice, v: VenusDeck, p: Parameters, say=print):
+  # main's tip sequences, in the order of GetTipCounters' counters
+  TIP_SEQUENCES = ["Tips_1000_Channels", "Tips_300_Channels", "Tips_50_Channels", "Tips_1000_Offset_pickup"]
+
+  def __init__(self, star: STARDevice, v: VenusDeck, p: Parameters, say=print,
+               counters: Optional[TipCounters] = None):
     self.v, self.par, self.say = v, p, say
     self.gsf = GsfIms(star, v, say)
     self.plm = PlateAndLidMovement(star, v, say=say)
     self.c96 = Common96HeadSubMethods(star, v, say)
+    self.tips = TipCount(v, counters or TipCounters())
 
   async def run(self) -> None:
     p, gsf, plm = self.par, self.gsf, self.plm
     seq = self.v.seq
     T1000, T300, MEDIA = "Tips_1000_Channels", "Tips_300_Channels", "Media_pipette_from_4"
     GRIP = "COREGripTool_OnWaste_1000ul_0001"
+
+    # the tip racks as the last run left them (no counter stored: as the layout has them)
+    counters = TipHandling96().GetTipCounters(1)
+    for tips, counter in zip(self.TIP_SEQUENCES, counters):
+      self.tips.Read2(tips, counter)
 
     await plm.MoveGrowthPlateWithLid("Move_Growth_Plate_Handoff", "Growth_Plate_Handoff_lid",
                                      "Move_Growth_Plate", "Growth_Plate_lid", GRIP, 1, 0)
@@ -152,7 +164,9 @@ class Marionette:
 
     await plm.MoveLid("Lid_parking_Reagent_Stock", "Reagent_Stock_Plate_lid", GRIP, 1, 0)
     await plm.MoveLid("Lid_parking_Growth_Plate", "Growth_Plate_lid", GRIP, 0, 1)
-    await self.c96.Clear96HeadAndArm(None, "clear_96_head_seq")  # after CleanUp, as the method ends
+    for tips, counter in zip(self.TIP_SEQUENCES, counters):  # CleanUp
+      self.tips.Write2(tips, counter)
+    await self.c96.Clear96HeadAndArm(None, "clear_96_head_seq")
     if gsf.missing_classes:
       self.say("liquid classes PLR lacks (its default used): " + ", ".join(sorted(gsf.missing_classes)))
     self.media = media
@@ -186,7 +200,8 @@ def report(v: VenusDeck, media: float) -> None:
 TRACE = "Marionette protease.gradient plate prep.v5.condensed.md"
 
 
-async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.Path) -> None:
+async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.Path,
+               tip_counters: Optional[pathlib.Path] = None) -> None:
   logging.disable(logging.WARNING)
   warnings.simplefilter("ignore")
   set_volume_tracking(True)
@@ -210,7 +225,7 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.P
     await viewer.wait_for_browser()
     await asyncio.sleep(1.0)
 
-  method = Marionette(star, v, p)
+  method = Marionette(star, v, p, counters=TipCounters(tip_counters))
   await method.run()
   report(v, method.media)
   if view:
@@ -225,7 +240,11 @@ if __name__ == "__main__":
                   help="the method's trace; the corpus's sibling analysis/traces/the method's .condensed.md when not given")
   ap.add_argument("--view", action="store_true")
   ap.add_argument("--plate", type=int, default=3, help="plate number, 2-5 (TMP from 3 on)")
+  ap.add_argument("--tip-counters", type=pathlib.Path,
+                  help="a JSON file of Venus tip counters, read at the start and written at the end, as "
+                       "the method's TipCount::Read2/Write2: the racks carry over between runs")
   ap.add_argument("--culture-volume", type=float, default=500.0)
   a = ap.parse_args()
   trace = a.trace or a.corpus.parent / "analysis" / "traces" / TRACE
-  asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate), trace))
+  asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate), trace,
+                   a.tip_counters))
