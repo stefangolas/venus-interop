@@ -47,6 +47,12 @@ are the worked examples, with their checks in `tests/test_gsf_ims_port.py` and
 
    "0 open" therefore means the libraries are done, not the method.
 
+   Calls into libraries the trace leaves unexpanded (hand-written HSL with no Method Editor
+   steps, devices' COM wrappers such as `HSLThermoCytomat::` or `HSLMPELib::`) are counted from
+   `Namespace::Function(` in code lines. Hamilton's own plumbing (`MECC`, `HSLExtensions`, ...) is
+   excluded through `_system_namespaces` in `tools/function_notes.json`; extend that list when a
+   new corpus brings more.
+
 2. **Read the function as it runs.** `tools/trace_method.py --out DIR` writes each method's trace:
    `main` with every library function inlined, arguments bound and device steps shown with their
    settings (`methods.protocol`). Read the `.condensed.md`; the `.trace.md` has everything,

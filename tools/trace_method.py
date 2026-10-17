@@ -17,13 +17,17 @@ test runs it against the HSL: the test's LIBRARY and COVERS, or COVERS_ALSO {nam
 venus_interop/plr/libraries declares the namespace as LIBRARY and defines the entry point), `out`
 or `method` (tools/function_notes.json: not protocol logic, or ported with the method that owns
 it), else `open`. A call inside one already given a status is part of it and is not counted. It
-prints the counts per method, then the open functions by how often they are called.
+prints the counts per method, then the open functions by how often they are called. Calls the trace
+leaves unexpanded (hand-written HSL libraries, devices' COM wrappers) count too, from
+`Namespace::Function(` in its code, except the namespaces in function_notes.json's
+`_system_namespaces`.
 """
 import argparse
 import ast
 import collections
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -93,22 +97,38 @@ def status_of(ns: str, name: str, notes: dict, done: dict, made: dict) -> str:
   return note.get("scope", "open")
 
 
-def calls_of(secs):
-  """(namespace, name, depth) of every call line, the method's own sections with namespace ""."""
+# `Namespace::Function(` written in code: a library the trace does not expand (hand-written HSL,
+# a device's COM wrapper); in `A::B::C(` only A, which the system list usually covers
+_CODE_CALL = re.compile(r"(?<![:\w])([A-Za-z_]\w*)::([A-Za-z_]\w*)\s*\(")
+
+
+def calls_of(secs, system=()):
+  """(namespace, name, depth, expanded) of every call: the trace's call lines (the method's own
+  sections with namespace ""), then `Namespace::Function(` in code lines, the libraries it leaves
+  unexpanded, except the `system` namespaces (Hamilton's plumbing) and disabled steps."""
+  skip = {n.upper() for n in system}
   for _, lines in secs:
     for ln in lines:
       if ln.kind == "call" and isinstance(ln.data, tuple):
-        yield ln.data[0], ln.data[1], ln.depth
+        yield ln.data[0], ln.data[1], ln.depth, True
+      elif ln.kind == "code" and not ln.text.lstrip().startswith("#"):
+        for m in _CODE_CALL.finditer(ln.text):
+          if m.group(1).upper() not in skip and not ln.text[m.end(2):].lstrip().startswith("::"):
+            yield m.group(1).upper(), m.group(2), ln.depth, False
 
 
-def statuses(secs, notes, done, made):
+def statuses(secs, notes, done, made, system=()):
   """(namespace, name, status) of each library call not inside one already given a status.
   The method's own sections are walked through, not counted."""
   stack: list[tuple[int, bool]] = []  # (depth, covers what is below)
-  for ns, name, depth in calls_of(secs):
-    while stack and stack[-1][0] >= depth:
+  for ns, name, depth, expanded in calls_of(secs, system):
+    while stack and stack[-1][0] >= (depth if expanded else depth + 1):
       stack.pop()
     inside = any(c for _, c in stack)
+    if not expanded:  # a leaf: nothing below it in the trace
+      if not inside:
+        yield ns, name, status_of(ns, name, notes, done, made)
+      continue
     if not ns and name.lower() not in {k.split("::", 1)[1].lower() for k in notes if k.startswith("::")}:
       stack.append((depth, inside))  # the method's own section: walk through it
       continue
@@ -127,8 +147,9 @@ def main():
   ap.add_argument("--status", action="store_true")
   a = ap.parse_args()
   sys.stdout.reconfigure(encoding="utf-8")
-  notes = {k: v for k, v in json.loads((ROOT / "tools" / "function_notes.json").read_text(encoding="utf-8")).items()
-           if not k.startswith("_")}
+  raw = json.loads((ROOT / "tools" / "function_notes.json").read_text(encoding="utf-8"))
+  notes = {k: v for k, v in raw.items() if not k.startswith("_")}
+  system = raw.get("_system_namespaces", [])
   done, made = checked(), ports()
   calls = collections.defaultdict(collections.Counter)
   per_method, open_calls = {}, collections.defaultdict(collections.Counter)
@@ -140,11 +161,11 @@ def main():
       (a.out / (path.stem + ".condensed.md")).write_text("\n".join(con), encoding="utf-8")
       print(f"{path.stem}: {len(mf.files)} files, {len(mf.stps)} step records, full {len(full)} lines, "
             f"condensed {len(con)}" + (f"; unresolved includes: {', '.join(mf.missing)}" if mf.missing else ""))
-    for ns, name, _ in calls_of(secs):
+    for ns, name, _, _ in calls_of(secs):
       if ns:
         calls[f"{ns}::{name}"][path.stem] += 1
     counts = collections.Counter()
-    for ns, name, st in statuses(secs, notes, done, made):
+    for ns, name, st in statuses(secs, notes, done, made, system):
       counts[st] += 1
       if st == "open":
         open_calls[f"{ns}::{name}"][path.stem] += 1

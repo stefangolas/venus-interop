@@ -1,5 +1,22 @@
 {
   "_about": "Scope notes for tools/trace_method.py --status, keyed NAMESPACE::Function (or NAMESPACE::* for a whole library). 'scope' is out (not protocol logic: scheduler, dialogs, error recovery, trace output), method (ported with the method that owns it, not as a library) or inline (a Python expression where it is called). Each verdict is from reading the function's code. See docs/PORTING.md.",
+  "_system_namespaces": [
+    "APPSLIB",
+    "FileDirectoryLib",
+    "TRACELEVEL",
+    "MECC",
+    "HSLExtensions",
+    "Util",
+    "HELPER",
+    "StepReturn",
+    "Error",
+    "TraceStatus",
+    "IDE",
+    "IDS",
+    "StringTable",
+    "StringConstants",
+    "TimerLib"
+  ],
   "LABWAREHANDLING::*": {
     "scope": "out",
     "note": "the scheduler's labware request/return file handshake"
