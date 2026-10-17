@@ -6,6 +6,22 @@ call. This file is the workflow; `plr/libraries/gsf_ims.py` and `plr/libraries/p
 are the worked examples, with their checks in `tests/test_gsf_ims_port.py` and
 `tests/test_plate_and_lid_port.py`.
 
+## Why
+
+Labs and companies that automate on Hamilton STARs often have hundreds of Venus methods, and that is
+what keeps them from moving to PyLabRobot. The aim is to make migrating such a collection feasible:
+each method becomes a readable PLR protocol its owners can change, with evidence that its logic
+survived. Running Venus code on PLR unchanged is not the aim.
+
+## What "equivalent" means
+
+A port is checked to make the same protocol decisions as the HSL: which labware, wells and tips each
+step uses, in what order, with the volumes and the step settings the test compares. It does not
+reproduce how Venus executes a step. Motion planning (traverse heights, Z order, channel spacing)
+and pipetting physics (liquid-class correction, how LLD settings become firmware fields) are PLR's
+own. Settings whose meaning is still open (CONVENTIONS §11) are a best reading. Say so wherever a
+port is described as matching Venus.
+
 ## What a port is
 
 - One Python module per Venus library. Entry points keep their **Venus names and arguments**
