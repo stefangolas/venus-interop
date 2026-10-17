@@ -1,6 +1,7 @@
 """What the NIST LMSF demos share: a Venus layout imported into PLR and addressed by its sequences.
 
-Used by `marionette_demo.py` and `dna_extraction_demo.py`. See those for how to run them.
+Used by `marionette_demo.py`, `dna_extraction_demo.py` and `kapa_hyperplus_demo.py`. See those for
+how to run them.
 """
 
 import csv
@@ -22,6 +23,16 @@ from pylabrobot.resources import Coordinate, Resource, ResourceHolder, Trash  # 
 from pylabrobot.resources.hamilton.core_grippers import hamilton_core_gripper_1000ul_5ml_on_waste  # noqa: E402
 
 
+def corpus_index(corpus: pathlib.Path) -> Dict[str, pathlib.Path]:
+  """The corpus's definition files by the relative path layouts name them by."""
+  index = {}
+  with open(corpus / "defs_index.tsv", encoding="utf-8") as f:
+    for name, rel, _ in csv.reader(f, delimiter="\t"):
+      if (corpus / "defs_raw" / name).exists():
+        index[rel] = corpus / "defs_raw" / name
+  return index
+
+
 class VenusDeck:
   """A Venus layout imported into PLR, addressed the way its method addresses it: by sequences.
 
@@ -30,13 +41,11 @@ class VenusDeck:
   on, and `aliases` makes later sequences that name the placeholder resolve to the object.
   """
 
-  def __init__(self, corpus: pathlib.Path, layout_file: str):
-    index = {}
-    with open(corpus / "defs_index.tsv", encoding="utf-8") as f:
-      for name, rel, _ in csv.reader(f, delimiter="\t"):
-        if (corpus / "defs_raw" / name).exists():
-          index[rel] = corpus / "defs_raw" / name
-    self.store = DefinitionStore([DEFAULT_VENUS_LABWARE], index)
+  def __init__(self, corpus: pathlib.Path, layout_file: "str | pathlib.Path",
+               store: Optional[DefinitionStore] = None):
+    """`layout_file` is a name in the corpus's `raw/`, or a path; `store` defaults to the corpus's
+    definitions (`corpus_index`) over the Venus install's."""
+    self.store = store or DefinitionStore([DEFAULT_VENUS_LABWARE], corpus_index(corpus))
     self.layout = venus_layout.read_layout(corpus / "raw" / layout_file)
     self.deck = plr_import.lay_to_plr(self.layout, self.store)
     self.sequences = {s.name: s.items for s in self.layout.sequences}
@@ -79,16 +88,16 @@ class VenusDeck:
 
   def items(self, sequence: str) -> List[Resource]:
     """Each (labware, position) of a sequence, as the PLR well, tip spot or resource."""
-    out = []
-    for lab, pos in self.sequences[sequence]:
-      r = self.resource(lab)
-      if not hasattr(r, "get_item"):
-        out.append(r)
-        continue
-      if lab not in self._names:
-        self._names[lab] = placement.default_positions(self.store.get(self._placements[lab].file))
-      out.append(r.get_item(self._names[lab].index(pos)))
-    return out
+    return [self.at(lab, pos) for lab, pos in self.sequences[sequence]]
+
+  def at(self, lab: str, pos: str) -> Resource:
+    """Labware `lab`'s Venus position `pos`, as the PLR well or tip spot (or `lab` itself)."""
+    r = self.resource(lab)
+    if not hasattr(r, "get_item"):
+      return r
+    if lab not in self._names:
+      self._names[lab] = placement.default_positions(self.store.get(self._placements[lab].file))
+    return r.get_item(self._names[lab].index(pos))
 
   def next_tips(self, sequence: str, n: int) -> list:
     """The next n positions of a tip sequence that hold tips, as the method's tip counters walk it."""
@@ -122,12 +131,14 @@ class VenusDeck:
     return r
 
 
-def install(v: VenusDeck, slide_waste: Optional[str] = None) -> None:
+def install(v: VenusDeck, slide_waste: Optional[str] = None,
+            grip_tools: Optional[str] = "COREGripTool_OnWaste_1000ul_0001") -> None:
   """PLR's tip wastes and grip tools where the layout has its own.
 
   The channels' waste is a strip along the layout's eject positions, as PLR's own STAR deck has it;
-  the 96-head's is the layout's slide waste; the grip tools are PLR's 1000 uL / 5 mL tools on waste,
-  which its CO-RE gripper needs.
+  the 96-head's is the layout's slide waste (or other 96-head waste); the grip tools are PLR's
+  1000 uL / 5 mL tools on waste, which its CO-RE gripper needs, in place of `grip_tools` (None
+  leaves them to the caller).
   """
   waste = v.deck.get_resource("Waste")
   spots = [w.get_location_wrt(waste.parent, "c", "c", "b") for w in waste.get_all_items()]
@@ -141,8 +152,9 @@ def install(v: VenusDeck, slide_waste: Optional[str] = None) -> None:
     box = v.deck.get_resource(slide_waste)
     v.replace(slide_waste, lambda: Trash(v.deck.get_component_name("trash_core96"),
                                          size_x=122.4, size_y=82.6, size_z=box.get_size_z()))
-  v.replace("COREGripTool_OnWaste_1000ul_0001",
-            lambda: hamilton_core_gripper_1000ul_5ml_on_waste(name=v.deck.get_component_name("core_grippers")))
+  if grip_tools is not None:
+    v.replace(grip_tools,
+              lambda: hamilton_core_gripper_1000ul_5ml_on_waste(name=v.deck.get_component_name("core_grippers")))
 
 
 def give_room(wells: Sequence[Resource], volume: float) -> None:
@@ -178,21 +190,33 @@ class Gripper:
     await g.return_tools()
 
   async def to_placeholder(self, thing: Resource, placeholder: str,
-                           into: Optional[Resource] = None) -> Resource:
+                           into: Optional[Resource] = None, iswap=None,
+                           direction: str = "front",
+                           elbows: Sequence[Optional[str]] = (None,)) -> Resource:
     """Move `thing` to where the layout has `placeholder`; later sequences naming it find `thing`.
 
     It goes down exactly where the placeholder stood (its centre-centre-bottom), or `into` a
-    resource that stands for that place (a device's carrier).
+    resource that stands for that place (a device's carrier). With the CO-RE grip tools, or with
+    `iswap` (an `iSWAPTransport`) gripping from `direction`, where the channels do not reach: with
+    the first of `elbows` (elbow stops; None is the planner's choice) whose plan it can reach and
+    that hits nothing.
     """
     where = self.v.spots[placeholder]
     if self.v.deck.has_resource(placeholder):  # a stand-in still there, not the thing itself
       stand_in = self.v.deck.get_resource(placeholder)
       if stand_in is not thing:
         stand_in.parent.unassign_child_resource(stand_in)
-    self.say(f"{thing.name} -> {placeholder}")
+    self.say(f"{thing.name} -> {placeholder}" + (" (iSWAP)" if iswap is not None else ""))
     g = self.star.core_grippers
-    await g.pick_up_tools()
-    await g.pick_up_resource(thing)
+    if iswap is None:
+      await g.pick_up_tools()
+      await g.pick_up_resource(thing)
+      drop = g.drop_resource
+    else:
+      await self._iswap_step(iswap, lambda e: iswap.plan_pick_up(thing, direction=direction, elbow=e), elbows)
+
+      async def drop(to):
+        await self._iswap_step(iswap, lambda e: iswap.plan_drop(to, direction=direction, elbow=e), elbows)
     # Venus stacks parked lids on what stands there (a plate, a waste plate and its lid): PLR will
     # not put a resource on the deck inside another, so it goes down on top of the stack
     for _ in range(5):
@@ -200,7 +224,7 @@ class Gripper:
       if into is None and site is not None and site.resource is None:
         into = site  # the layout's own site, now free: as Venus places it
       try:
-        await g.drop_resource(where if into is None else into)
+        await drop(where if into is None else into)
         break
       except ValueError as refused:
         m = re.search(r"is inside '([^']+)'", str(refused))
@@ -208,13 +232,14 @@ class Gripper:
           raise
         inside = self.v.deck.get_resource(m.group(1))
         if isinstance(inside, ResourceHolder) and inside.resource is None:
-          await g.drop_resource(inside)  # an empty carrier site: it goes into the site
+          await drop(inside)  # an empty carrier site: it goes into the site
           break
         top = inside.get_location_wrt(self.v.deck, "c", "c", "t").z
         where = Coordinate(where.x, where.y, max(where.z, top + 0.1))
     else:
       raise RuntimeError(f"no free spot for {thing.name} at {placeholder}")
-    await g.return_tools()
+    if iswap is None:
+      await g.return_tools()
     self.v.aliases[placeholder] = thing
     # its lid answers to the destination's lid's name too
     placed = self.v._placements.get(placeholder)
@@ -222,6 +247,24 @@ class Gripper:
     if placed is not None and placed.lid is not None and lid is not None:
       self.v.aliases[placed.lid.id] = lid
     return thing
+
+  @staticmethod
+  async def _iswap_step(iswap, plan_for, elbows: Sequence[Optional[str]]) -> None:
+    """Carry out the first plan, over `elbows`, the arm can reach and that hits nothing."""
+    why = []
+    for elbow in elbows:
+      try:
+        plan = plan_for(elbow)
+      except ValueError as refused:
+        why.append(f"elbow {elbow}: {refused}")
+        continue
+      hits = iswap.collisions(plan) if iswap.check_collisions else []
+      if hits:
+        why.append(f"elbow {elbow}: hits {', '.join(sorted({h.obstacle.name for h in hits}))}")
+        continue
+      await iswap.execute(plan)
+      return
+    raise ValueError("no elbow stop clears: " + "; ".join(why))
 
   async def onto(self, thing: Resource, target: Resource) -> None:
     self.say(f"{thing.name} -> onto {target.name}")
