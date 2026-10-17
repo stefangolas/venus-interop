@@ -42,6 +42,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from nist_deck import VenusDeck, give_room, install, make_room  # noqa: E402
 
+from venus_interop.plr.libraries.common_96head import Common96HeadSubMethods  # noqa: E402
 from venus_interop.plr.libraries.gsf_ims import GsfIms  # noqa: E402
 from venus_interop.plr.libraries.plate_and_lid import PlateAndLidMovement  # noqa: E402
 
@@ -73,6 +74,7 @@ class Marionette:
     self.v, self.par, self.say = v, p, say
     self.gsf = GsfIms(star, v, say)
     self.plm = PlateAndLidMovement(star, v, say=say)
+    self.c96 = Common96HeadSubMethods(star, v, say)
 
   async def run(self) -> None:
     p, gsf, plm = self.par, self.gsf, self.plm
@@ -150,6 +152,7 @@ class Marionette:
 
     await plm.MoveLid("Lid_parking_Reagent_Stock", "Reagent_Stock_Plate_lid", GRIP, 1, 0)
     await plm.MoveLid("Lid_parking_Growth_Plate", "Growth_Plate_lid", GRIP, 0, 1)
+    await self.c96.Clear96HeadAndArm(None, "clear_96_head_seq")  # after CleanUp, as the method ends
     if gsf.missing_classes:
       self.say("liquid classes PLR lacks (its default used): " + ", ".join(sorted(gsf.missing_classes)))
     self.media = media

@@ -13,7 +13,7 @@ data plumbing dropped, settings collapsed).
 start before porting a library.
 
 `--status` walks each method's call tree and gives every library call a status: `checked` (a port
-test runs it against the HSL: the test's LIBRARY and COVERS), `ported` (a module in
+test runs it against the HSL: the test's LIBRARY and COVERS, or COVERS_ALSO {namespace: [...]}), `ported` (a module in
 venus_interop/plr/libraries declares the namespace as LIBRARY and defines the entry point), `out`
 or `method` (tools/function_notes.json: not protocol logic, or ported with the method that owns
 it), else `open`. A call inside one already given a status is part of it and is not counted. It
@@ -78,6 +78,8 @@ def checked() -> dict[str, set[str]]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     ns, covers = _literal(tree, "LIBRARY"), _literal(tree, "COVERS")
     if ns and covers:
+      out[ns] |= {c.lower() for c in covers}
+    for ns, covers in (_literal(tree, "COVERS_ALSO") or {}).items():  # a test of more than one library
       out[ns] |= {c.lower() for c in covers}
   return out
 

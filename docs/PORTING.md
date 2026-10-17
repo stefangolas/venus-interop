@@ -40,7 +40,12 @@ are the worked examples, with their checks in `tests/test_gsf_ims_port.py` and
 
    A call inside a covered one counts as part of it. Then it lists the open functions by how
    often they are called: that is the work queue. Count from these, not by grepping a trace: the
-   condensed trace drops calls.
+   condensed trace drops calls. `--status` sees library function calls only; it does not see:
+   - PTL smart steps (folded into single steps);
+   - device steps of other instruments (MPE², heater-shakers);
+   - the method's own code.
+
+   "0 open" therefore means the libraries are done, not the method.
 
 2. **Read the function as it runs.** `tools/trace_method.py --out DIR` writes each method's trace:
    `main` with every library function inlined, arguments bound and device steps shown with their
@@ -116,6 +121,10 @@ needs, and no more:
 - **State the library keeps between calls.** Grip tools stay mounted until a move ejects them; a
   front channel set once is reused. Venus draws the CO-RE grip tools' front channel from the clock
   (`GetNewFrontChannel`); a port takes it as an argument, and tests call `SetFrontChannel` first.
+- **The same name in two libraries.** `Move96HeadToFront` is in both Common96HeadSubMethods (it
+  moves to a sequence) and the culture-processing Move96HeadAndArm (raw firmware, head up and
+  forward). Calls resolve by namespace, so give each library its own module with its own `LIBRARY`.
+  A test of two libraries lists the second in `COVERS_ALSO = {"<NAMESPACE>": [...]}`.
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.
