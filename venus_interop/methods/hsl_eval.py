@@ -99,6 +99,7 @@ class Device:
     self.name = name
     self.sequences = sequences  # lower-case name -> Sequence
     self.originals = {k: v.copy() for k, v in sequences.items()}  # as the layout has them
+    self.labware: set[str] = set()  # labware ids on the layout, lower case
 
 
 class Opaque:
@@ -715,6 +716,7 @@ class Run:
     self.static: dict[tuple, dict[str, Cell]] = {}
     self.everywhere: dict[str, Cell] = {}  # `global` declarations
     self.src: list[str] = []  # the preprocessed source, for messages
+    self.err = Opaque("error")
     self.dicts: dict[int, dict] = {}
 
   # -- setup --------------------------------------------------------------------------------
@@ -765,7 +767,10 @@ class Run:
         seqs[s.name.lower()] = sq.Sequence(s.name, list(s.items))
     else:
       self.notes.append(f"device {dev_name}: layout {lay_name!r} not given; its sequences are unknown")
-    return Device(dev_name, seqs)
+    dev = Device(dev_name, seqs)
+    if lay is not None:
+      dev.labware = {p.id.lower() for p in lay.labware}
+    return dev
 
   def run(self, entry: str = "main") -> "Run":
     try:
@@ -1021,6 +1026,8 @@ class Run:
       low = e[1].lower().split("::")[-1]
       if low in CONSTANTS:
         return CONSTANTS[low]
+      if low == "err":  # the built-in error object: a run raises no error inside onerror
+        return self.err
       return Unknown(f"name {e[1]}")
     if kind == "assign":
       v = self.eval(e[2], env, line)
@@ -1218,6 +1225,14 @@ class Run:
       return sq.align(pairs, bool(_num(v[0])))
     if low == "isdbnull":
       return 0
+    if low in ("floor", "ceiling", "abs", "sqrt", "exp", "log", "log10", "sin", "cos", "tan", "atan"):
+      v = _num(vals()[0])
+      if not isinstance(v, (int, float)):
+        return Unknown(f"{name} of a non-number")
+      f = {"floor": math.floor, "ceiling": math.ceil, "abs": abs, "sqrt": math.sqrt, "exp": math.exp,
+           "log": math.log, "log10": math.log10, "sin": math.sin, "cos": math.cos, "tan": math.tan,
+           "atan": math.atan}[low]
+      return _clean(f(v))
     if low == "getvectordbtrackerobject":
       o = Opaque("object")
       o.progid = "Hamilton.HxVectorDbTracker"
@@ -1269,7 +1284,15 @@ class Run:
       if m == "getcfgvaluewithkey":
         return self.answers.get(f"cfg.{_fmt(args[0])}", 0)
       if m == "getlabwaredata":
-        return 0  # leaves the property values empty: the labware properties are not read
+        # (labware id, keys[], values[]): from answers["labware_data"](labware id, key), the
+        # caller's reading of the labware definitions; empty where it has nothing
+        lookup = self.answers.get("labware_data")
+        if lookup and len(args) > 2 and isinstance(args[1], HArray) and isinstance(args[2], HArray):
+          vals = [lookup(str(args[0]), str(k)) for k in args[1].items]
+          args[2].items = ["" if v is None else v for v in vals]
+        return 0
+      if m == "isvalidlabwareforcurrentdecklayout":
+        return int(str(args[0]).lower() in obj.labware)
       if m == "getinstrumentname":
         return obj.name
       return Unknown(f"device.{method}")
@@ -1284,9 +1307,11 @@ class Run:
         return 1
       if obj.kind == "dialog":
         return self.answers.get(f"dialog.{method}", 1)
-      if obj.kind == "error":
-        if m in ("getid", "getdescription", "getdata"):
-          return Unknown("error object")
+      if obj.kind == "error":  # no error is ever pending in a run
+        if m == "getid":
+          return 0
+        if m in ("getdescription", "getdata"):
+          return ""
         return 0
       return Unknown(f"{obj.kind}.{method}")
     return Unknown(f"{type(obj).__name__}.{method}")
