@@ -1,6 +1,6 @@
 # Working on venus-interop
 
-Notes for anyone, human or agent, changing this repository. Read [SPEC.md](SPEC.md) for the architecture and [docs/CONVENTIONS.md](docs/CONVENTIONS.md) for the rules the code implements.
+Notes for anyone, human or agent, changing this repository. Read [SPEC.md](SPEC.md) for the architecture and [docs/CONVENTIONS.md](docs/CONVENTIONS.md) for the rules the code implements. To port a Venus library or translate a method, follow [docs/PORTING.md](docs/PORTING.md).
 
 ## Ground rules
 

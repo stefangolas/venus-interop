@@ -1718,6 +1718,9 @@ class Run:
     command = rec.step_name
     if command in ("ZSwapGetPlate", "ZSwapPlacePlate"):
       return self._transport_step(rec, command, guid, name, top, env, line)
+    if command in ("Head96Move", "MoveToPosition", "FirmwareCommand") or (
+        command == "Head96TipEject" and not top.get("SequenceObject")):
+      return self._move_step(rec, command, guid, name, top, env, line)
     seq_raw = top.get("SequenceObject", "")
     if not seq_raw or command in ("GetPlate", "PutPlate", "MovePlate",
                                    "Initialize", "LoadCarrier", "UnloadCarrier", "FirmwareCommand"):
@@ -1771,6 +1774,27 @@ class Run:
         settings[key] = self._setting(rec, value, env)
     self._event(command, guid, name, seq, {1: item} if item else {}, {}, seq.cur, 0, 0, "", env,
                 settings=settings)
+    return self._success(name, command, {})
+
+  MOVE_SETTINGS = ("MoveType", "MoveDirection", "MoveAbsDistance", "MoveRelDistance", "MoveZEndMode",
+                   "UsePickUpPosition", "firmware command string", "firmware parameter string")
+
+  def _move_step(self, rec, command, guid, name, top, env, line):
+    """A move (96-head or channels), firmware command or 96-head eject to a known position: its
+    sequence's current item, not consumed, and its settings bound."""
+    seq, item = None, None
+    if top.get("SequenceObject"):
+      seq = self._binding(rec, top["SequenceObject"], env)
+      if not isinstance(seq, sq.Sequence):
+        raise Stop(f"line {line}: {command} on {top['SequenceObject']}, not a known sequence ({seq!r})")
+      item = seq.current_item()
+    settings = {}
+    for path, key, value in rec.readable():
+      if key in self.MOVE_SETTINGS and key not in settings:
+        v = self._setting(rec, value, env)
+        settings[key] = v.strip('"') if isinstance(v, str) else v
+    self._event(command, guid, name, seq, {1: item} if item else {}, {}, seq.cur if seq else 0, 0, 0, "",
+                env, settings=settings)
     return self._success(name, command, {})
 
   def _setting(self, rec, raw: str, env):
