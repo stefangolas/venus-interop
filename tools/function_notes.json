@@ -1,7 +1,45 @@
 {
-  "_about": "Scope notes for tools/trace_method.py --status, keyed NAMESPACE::Function (or NAMESPACE::* for a whole library). 'scope' is out (not protocol logic: scheduler, dialogs, trace output) or method (ported with the method that owns it, not as a library). See docs/PORTING.md.",
-  "LABWAREHANDLING::*": {"scope": "out", "note": "the scheduler's labware request/return file handshake"},
-  "::RenewOffsetTips": {"scope": "method", "note": "DNA Extraction's own tip-support state"},
-  "COMMON96HEADSUBMETHODS::Eject96HeadTipsAndShake": {"note": "Head96TipEject UsePickUpPosition 2 read as default waste from the help's option order, unverified; the waste-chute shake has no PLR counterpart"},
-  "MOVE96HEADANDARM::Move96HeadAndArm": {"note": "firmware H0ZA za68500 (top of Z travel) and H0YA ya07500 (front, 117.19 mm with PLR's resolution), then arm X 1337.5"}
+  "_about": "Scope notes for tools/trace_method.py --status, keyed NAMESPACE::Function (or NAMESPACE::* for a whole library). 'scope' is out (not protocol logic: scheduler, dialogs, error recovery, trace output), method (ported with the method that owns it, not as a library) or inline (a Python expression where it is called). Each verdict is from reading the function's code. See docs/PORTING.md.",
+  "LABWAREHANDLING::*": {
+    "scope": "out",
+    "note": "the scheduler's labware request/return file handshake"
+  },
+  "::RenewOffsetTips": {
+    "scope": "method",
+    "note": "DNA Extraction's own tip-support state"
+  },
+  "COMMON96HEADSUBMETHODS::Eject96HeadTipsAndShake": {
+    "note": "Head96TipEject UsePickUpPosition 2 read as default waste from the help's option order, unverified; the waste-chute shake has no PLR counterpart"
+  },
+  "MOVE96HEADANDARM::Move96HeadAndArm": {
+    "note": "firmware H0ZA za68500 (top of Z travel) and H0YA ya07500 (front, 117.19 mm with PLR's resolution), then arm X 1337.5"
+  },
+  "MPE_LIBRARY::HandleError": {
+    "scope": "out",
+    "note": "error dialog and manual-recovery loop around MPE2 commands"
+  },
+  "MPE_LIBRARY::ManualMPEErrorRecovery": {
+    "scope": "out",
+    "note": "operator-driven MPE2 error recovery"
+  },
+  "MPE_LIBRARY::UserSelectControlPoints": {
+    "scope": "out",
+    "note": "operator dialog for the MPE2 control points: a parameter in a port"
+  },
+  "EASYPICKII_STEPS::ShowErrorDialog": {
+    "scope": "out",
+    "note": "error message dialog"
+  },
+  "RUNTIMEERRORHANDLING::TransportError": {
+    "scope": "out",
+    "note": "runtime error handling: error files for the scheduler"
+  },
+  "IF_AND_IF_OR::If_And_3_Variables": {
+    "scope": "inline",
+    "note": "a == b and c == d and e == f"
+  },
+  "IF_AND_IF_OR::If_Or_3_Variables": {
+    "scope": "inline",
+    "note": "a == b or c == d or e == f"
+  }
 }

@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT))
 
 from venus_interop.methods import protocol  # noqa: E402
 
-STATUSES = ("checked", "ported", "out", "method", "open")
+STATUSES = ("checked", "ported", "inline", "out", "method", "open")
 
 
 def trace(hsl_path: pathlib.Path, roots):
