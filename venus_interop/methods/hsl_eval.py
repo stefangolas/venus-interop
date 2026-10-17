@@ -1805,7 +1805,7 @@ class Run:
       for k, v in sub:
         if isinstance(v, list) or stp_pars.key_id(k).lstrip("-").isdigit() and stp_pars.key_name(k) == stp_pars.key_id(k):
           continue
-        val = self._setting(rec, str(v).strip('"'), env)
+        val = self._channel_value(rec, str(v).strip('"'), sub, ch, env)
         per.setdefault(stp_pars.key_name(k), []).append(val)
     out: dict[str, Any] = {k: (vs[0] if all(x == vs[0] for x in vs) else vs) for k, vs in per.items()}
     for k in self.STEP_SETTINGS:
@@ -1881,8 +1881,36 @@ class Run:
       raw = d.get("-534183924") or d.get("-534183908")
       if raw is None or ch not in channels:
         continue
-      out[ch] = self._setting(rec, raw.strip('"'), env)  # `<name>` or a bare variable name
+      out[ch] = self._channel_value(rec, raw.strip('"'), sub, ch, env)
     return out
+
+  _SERIES = re.compile(r"^<?([A-Za-z_]\w*)\[\*(\w*)\]>?$")
+
+  def _channel_value(self, rec, raw: str, sub, ch: int, env):
+    """A per-channel value: a literal, a bound variable, or a series of an array (`arr[*]`,
+    `arr[*k]`): the HSL help's "multiple array value", element one to channel one from the start
+    index, the record giving each channel's offset (ArrayAddIndex) and start (ArrayStartIndex)."""
+    m = self._SERIES.match(raw)
+    if m is None:
+      return self._setting(rec, raw, env)
+    name, start_txt = m.group(1), m.group(2)
+    add, start = ch, None
+    for k, v in sub:
+      if isinstance(v, list) and stp_pars.key_name(k).lower() == name.lower():
+        for _kid, entries in v:
+          if isinstance(entries, list):
+            e = {stp_pars.key_name(a).lstrip("3"): b for a, b in entries}
+            add = int(e.get("ArrayAddIndex", add))
+            start = e.get("ArrayStartIndex")
+    if start is None:
+      start = start_txt or 1
+    start = self._setting(rec, str(start), env)
+    c = self._cell(name, env)
+    arr = c.value if c is not None else None
+    if not isinstance(arr, HArray) or not isinstance(start, (int, float)):
+      return Unknown(f"array series {raw}")
+    i = int(start) + add - 2  # one-based start, one-based channel offset
+    return arr.items[i] if 0 <= i < len(arr.items) else Unknown(f"{name}[{i + 1}] past the array's end")
 
   def _move_note(self, top, env) -> str:
     return ", ".join(f"{k}={v}" for k, v in top.items() if "Sequence" in k and v)
