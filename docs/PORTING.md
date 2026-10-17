@@ -125,6 +125,10 @@ needs, and no more:
   moves to a sequence) and the culture-processing Move96HeadAndArm (raw firmware, head up and
   forward). Calls resolve by namespace, so give each library its own module with its own `LIBRARY`.
   A test of two libraries lists the second in `COVERS_ALSO = {"<NAMESPACE>": [...]}`.
+- **State that outlives the run.** Methods read Venus tip counters into their tip sequences at
+  the start (`TipCount::Read2`) and write them back at the end (`Write2`), so the racks carry over
+  between runs. These calls are tagged `[data]` and are easy to skip, but they decide where the
+  first tip comes from. `plr/libraries/tip_count.py` keeps the counters in a JSON file.
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.
