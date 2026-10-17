@@ -16,6 +16,7 @@ from pylabrobot.resources.hamilton import tip_creators
 from pylabrobot.resources.utils import create_ordered_items_2d
 from pylabrobot.resources.well import CrossSectionType
 
+from venus_interop.plr import generate
 from venus_interop.rules import placement as rules
 from venus_interop.files.definitions import Carrier as CarrierDef
 from venus_interop.files.definitions import DefinitionStore, Rack, normalize
@@ -152,8 +153,14 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
     tr = TipRack(name, sx, sy, sz, ordered_items=items)
     tr.metadata[VENUS] = {"tip": how}
     return tr
-  shape = CrossSectionType.CIRCLE if abs(wx - wy) < 1e-9 else CrossSectionType.RECTANGLE
-  items = create_ordered_items_2d(Well, size_z=depth, cross_section_type=shape, **grid)
+  # the cross-section of the container's top segment, as generate.py reads it; a well with unequal
+  # sides is rectangular whatever the segments say
+  ctr = store.ref(rack, "Cntr.1.file")
+  box = ctr is not None and generate.container(ctr).is_box
+  shape = CrossSectionType.CIRCLE if abs(wx - wy) < 1e-9 and not box else CrossSectionType.RECTANGLE
+  # the well stands on Venus's container base, which is the cavity floor: no material below it
+  items = create_ordered_items_2d(Well, size_z=depth, cross_section_type=shape, material_z_thickness=0.0,
+                                  **grid)
   return Plate(name, sx, sy, sz, ordered_items=items)
 
 

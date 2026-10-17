@@ -4,6 +4,7 @@
 |---|---|---|
 | `kapa_deck.py`, `kapa_compare_to_lay.py` | NGS STAR KAPA HyperPlus (`NGS-Protocols/protocols/KAPA_HyperPrep/KAPA_HyperPlus_Deck.lay`) | [docs/notes/VENUS_TO_PLR_kapa.md](../docs/notes/VENUS_TO_PLR_kapa.md) |
 | `kapa_demo.py` | The same deck, running a slice of the protocol: a 96-head bead cleanup and an ODTC run | `--view` plays it in the 3D viewer; headless by default |
+| `marionette_demo.py` | NIST LMSF "Marionette protease gradient plate prep v5", on its own imported deck | The whole method on a simulated STAR: plate and lid moves, media, salicylate, TMP, vancomycin, both serial dilutions; ends checking every well holds the same volume. `--view` plays it in the 3D viewer. Needs the layout corpus (`--corpus`) and the fork's `nist-viz` branch on `PYTHONPATH` |
 | `tc_deck.py` | The tissue-culture STARlet deck | [docs/notes/VENUS_TO_PLR_tissue_culture.md](../docs/notes/VENUS_TO_PLR_tissue_culture.md) |
 
 These are the "physical" counterpart to the converter's faithful decks: one resource per physical object, built from pylabrobot factories. They import from the `plr-viz3d` fork at `fork/viz3d-motion` (multiflex, ODTC, CPAC, heater shakers) and from `plr-viz3d-scratch`, as they did where they were written. Run them in that environment, e.g. with `git archive fork/viz3d-motion pylabrobot` unpacked first on `PYTHONPATH`. They are kept as references, not tested here.
