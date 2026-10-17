@@ -1519,8 +1519,23 @@ class Run:
     if m in ("edit", "edit2"):
       self.notes.append(f"line {line}: {s.name}.{m}: the operator's edit is taken as no change")
       return 0
-    if m in ("getsequenceproperty", "setsequenceproperty", "removesequenceproperty", "setsequencepropertyrange"):
-      return Unknown(f"sequence property via {m}")
+    if m == "setsequenceproperty":
+      s.set_property(int(_num(args[0])), str(args[1]), args[2])
+      return 0
+    if m == "setsequencepropertyrange":
+      s.set_property_range(int(_num(args[0])), int(_num(args[1])), str(args[2]), args[3])
+      return 0
+    if m == "getsequenceproperty":
+      try:
+        return s.get_property(int(_num(args[0])), str(args[1]))
+      except sq.SequenceError as e:
+        raise Stop(f"line {line}: {e}") from None
+    if m == "removesequenceproperty":
+      s.remove_property(int(_num(args[0])), str(args[1]))
+      return 0
+    if m == "removeallsequenceproperties":
+      s.remove_all_properties(int(_num(args[0])))
+      return 0
     return Unknown(f"sequence.{m}")
 
   def _unknown_arg(self, s, m):

@@ -177,3 +177,25 @@ def test_lookup_position():
   assert s.lookup_position("Plate", "", 5, True) == 5
   assert s.lookup_position("Plate", "A1", 96, False) == 1
   assert s.lookup_position("Other", "", 1, True) == 0
+
+
+def test_properties_are_set_per_position_and_a_missing_one_raises():
+  # HSL reference, SetSequenceProperty / GetSequenceProperty: setting creates; getting one not
+  # there throws 'property not found'
+  s = sq.Sequence("s", [("P", "A1"), ("P", "B1")])
+  s.set_property(2, "conc", 1.5)
+  s.set_property_range(1, 2, "strain", "x")
+  assert s.get_property(2, "conc") == 1.5 and s.get_property(1, "strain") == "x"
+  with pytest.raises(sq.SequenceError):
+    s.get_property(1, "conc")
+  s.remove_all_properties(2)
+  with pytest.raises(sq.SequenceError):
+    s.get_property(2, "strain")
+
+
+def test_a_copy_carries_its_own_properties():
+  s = sq.Sequence("s", [("P", "A1")])
+  s.set_property(1, "conc", 1)
+  c = s.copy()
+  c.set_property(1, "conc", 2)
+  assert s.get_property(1, "conc") == 1 and c.get_property(1, "conc") == 2

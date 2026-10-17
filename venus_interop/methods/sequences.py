@@ -44,6 +44,8 @@ class Sequence:
   end: int = -1  # -1: total, set in __post_init__
   max: int = -1
   used: int = 0
+  # per position (1-based): property name -> value (Get/SetSequenceProperty)
+  properties: dict[int, dict[str, object]] = dataclasses.field(default_factory=dict)
 
   def __post_init__(self):
     if self.end < 0:
@@ -58,13 +60,16 @@ class Sequence:
     return len(self.items)
 
   def copy(self, name: Optional[str] = None) -> "Sequence":
-    """`a = b` and `a.CopySequence(b)`: the whole state."""
-    return Sequence(name or self.name, list(self.items), self.cur, self.end, self.max, self.used)
+    """`a = b` and `a.CopySequence(b)`: the whole state. Properties go with it (not documented;
+    unverified)."""
+    return Sequence(name or self.name, list(self.items), self.cur, self.end, self.max, self.used,
+                    {k: dict(v) for k, v in self.properties.items()})
 
   def assign(self, other: "Sequence") -> None:
     """Overwrite this object's state with another's, keeping the object (references see it)."""
     self.items, self.cur, self.end, self.max, self.used = (
       list(other.items), other.cur, other.end, other.max, other.used)
+    self.properties = {k: dict(v) for k, v in other.properties.items()}
 
   # -- element functions (HSL reference) ------------------------------------------------------
 
@@ -102,6 +107,29 @@ class Sequence:
     self.set_count(self.total)
     self.set_current_position(1)
     self.set_max(self.total)
+
+  # -- properties: values kept per position (HSL reference, element functions) -----------------
+
+  def set_property(self, pos: int, name: str, value) -> None:
+    """SetSequenceProperty: a property not there yet is created."""
+    self.properties.setdefault(pos, {})[name] = value
+
+  def set_property_range(self, start: int, end: int, name: str, value) -> None:
+    for pos in range(start, end + 1):
+      self.set_property(pos, name, value)
+
+  def get_property(self, pos: int, name: str):
+    """GetSequenceProperty: one not there raises, as Venus's 'property not found'."""
+    try:
+      return self.properties[pos][name]
+    except KeyError:
+      raise SequenceError(f"{self.name}: property {name!r} not found at position {pos}") from None
+
+  def remove_property(self, pos: int, name: str) -> None:
+    self.properties.get(pos, {}).pop(name, None)
+
+  def remove_all_properties(self, pos: int) -> None:
+    self.properties.pop(pos, None)
 
   def valid(self) -> int:
     """Positions left from the current one to the end; 0 when disabled."""
