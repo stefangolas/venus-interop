@@ -26,16 +26,19 @@ INIT    Initialize; MPE² connect (skipped in the simulator); both heater shaker
 
 01  Remove supernatant                          8 ch, 1000 µL filtered tips
     GRIP Spin Plate lid → waste
-    [if is_pipetting] for each column pair (4→3, 6→5, 8→7), visited TWICE
-                      (each column appears twice in the sequence lists, so there are 6 passes):
+    [if is_pipetting] for each column pair (4→3, 6→5, 8→7): 3 passes
         new tips
         aspirate 1000 µL from the pellet wells (cLLD, liquid following, submerge 3)
           → dispense into the waste wells beside them
         aspirate (3.6 × culture_volume − 1000) µL, aspirate mode 2
           → dispense into the waste wells
         eject
-      (Aspirate mode 2 is probably "aspirate all", which would make the second
-       volume an upper limit. Unverified: the enum is in CONVENTIONS §11.)
+      (Each column appears twice in the sequence lists because every aspirate and
+       dispense step counts 8 positions on: the second aspirate of a pass reaches
+       the same column again. Corrected 2026-10-17; this note first said 6 passes.)
+      (Aspirate mode 2 is used exactly where the method asks for more than the well
+       holds: 300 µL of ~200 resuspended, 900 µL of ~800 lysate. So it reads as
+       "aspirate all", the volume an upper limit. Inferred, not from the enum.)
 
 01A Add P1, resuspend, move to the Lysate Plate   8 ch, 300 µL filtered tips
     GRIP Lysate Plate lid → park (it is on HHS_1); GRIP DNA_Buffers_2 lid → park
@@ -128,7 +131,7 @@ END     MPE² disconnect; HHS terminate; park the head and arm
 **RenewOffsetTips:** 96H picks up whatever is on the offset support and ejects it to the chute with a 10 s shake. It then picks a full 96 from the handoff rack and ejects them onto the offset support. The 24-nozzle steps then pick from that support, three columns at a time, starting from the back (positions 89–96, then 81–88, and so on).
 
 **Control logic that matters**
-- **There's no loop over samples on the 96-head side.** One 24-nozzle stamp handles all 24 samples. Only the 8-channel steps (01, 01A, 08) loop, over 3 or 6 passes.
+- **There's no loop over samples on the 96-head side.** One 24-nozzle stamp handles all 24 samples. Only the 8-channel steps (01, 01A, 08) loop, over 3 passes.
 - **Tip changes:** 8-channel steps take new tips on every pass. The 96H takes a new 24 for every reagent. The offset rack is refilled only when its position counter reaches 0, and that check runs between stages in `main`, not inside them.
 - **Timers overlap with motion:** both shakes, the FP incubation and the elution incubation start a timer, do the plate and lid moves, then wait. The 120 s FP incubation therefore includes the tip eject, the second C0TT and a lid move.
 - **The `is_pipetting=false` mode isn't consistent.** Stage 08 sets `is_pipetting = "true"`, so elution always pipettes. The MPE² steps and every gripper move inside `[if use_iSWAP]` run whatever `is_pipetting` is.

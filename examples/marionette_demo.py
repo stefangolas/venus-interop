@@ -28,27 +28,20 @@ Deviations from the method, and why:
 
 import argparse
 import asyncio
-import csv
 import logging
 import pathlib
 import sys
 import warnings
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Optional, Sequence
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from venus_interop.files import layout as venus_layout  # noqa: E402
-from venus_interop.files.definitions import DEFAULT_VENUS_LABWARE, DefinitionStore  # noqa: E402
-from venus_interop.plr import plr_import  # noqa: E402
-from venus_interop.rules import placement  # noqa: E402
+from nist_deck import Gripper, VenusDeck, chunks, give_room, install, make_room  # noqa: E402
 
 from pylabrobot.hamilton.star.device import RECORDING_STAR, STARDevice  # noqa: E402
 from pylabrobot.lib.liquid_handling.mix import Mix  # noqa: E402
-from pylabrobot.resources import Coordinate, Resource, Trash  # noqa: E402
-from pylabrobot.resources import set_tip_tracking, set_volume_tracking  # noqa: E402
-from pylabrobot.resources.hamilton.core_grippers import hamilton_core_gripper_1000ul_5ml_on_waste  # noqa: E402
+from pylabrobot.resources import Resource, set_tip_tracking, set_volume_tracking  # noqa: E402
 
 LAYOUT = "3ed5809e547e.lay"  # Fitness Selection.Marionette protease.v5.lay
 
@@ -105,102 +98,13 @@ def volumes(p: Parameters) -> Volumes:
   )
 
 
-class VenusDeck:
-  """A Venus layout imported into PLR, addressed the way the method addresses it: by sequences."""
-
-  def __init__(self, corpus: pathlib.Path):
-    index = {}
-    with open(corpus / "defs_index.tsv", encoding="utf-8") as f:
-      for name, rel, _ in csv.reader(f, delimiter="\t"):
-        if (corpus / "defs_raw" / name).exists():
-          index[rel] = corpus / "defs_raw" / name
-    self.store = DefinitionStore([DEFAULT_VENUS_LABWARE], index)
-    self.layout = venus_layout.read_layout(corpus / "raw" / LAYOUT)
-    self.deck = plr_import.lay_to_plr(self.layout, self.store)
-    self.sequences = {s.name: s.items for s in self.layout.sequences}
-    self._placements = self.layout.by_id()
-    self._names: Dict[str, List[str]] = {}
-    self.aliases: Dict[str, Resource] = {}  # a placeholder's name -> the object standing in its place
-    self._tip_positions: Dict[str, int] = {}
-
-  def resource(self, name: str) -> Resource:
-    return self.aliases.get(name) or self.deck.get_resource(name)
-
-  def labware(self, sequence: str) -> Resource:
-    """The labware a one-labware sequence (a move's source or destination) names."""
-    return self.resource(self.sequences[sequence][0][0])
-
-  def items(self, sequence: str) -> List[Resource]:
-    """Each (labware, position) of a sequence, as the PLR well, tip spot or resource."""
-    out = []
-    for lab, pos in self.sequences[sequence]:
-      r = self.resource(lab)
-      if not hasattr(r, "get_item"):
-        out.append(r)
-        continue
-      if lab not in self._names:
-        self._names[lab] = placement.default_positions(self.store.get(self._placements[lab].file))
-      out.append(r.get_item(self._names[lab].index(pos)))
-    return out
-
-  def next_tips(self, sequence: str, n: int) -> list:
-    """The next n positions of a tip sequence that hold tips, as the method's tip counters walk it."""
-    spots = self.items(sequence)
-    i, out = self._tip_positions.get(sequence, 0), []
-    while len(out) < n:
-      if i >= len(spots):
-        raise RuntimeError(f"{sequence} has run out of tips")
-      if spots[i].has_tip():
-        out.append(spots[i])
-      i += 1
-    self._tip_positions[sequence] = i
-    return out
-
-  def take_place_of(self, placeholder_name: str) -> Resource:
-    """Remove the labware Venus places at a destination, and return what it stood on."""
-    placeholder = self.deck.get_resource(placeholder_name)
-    holder = placeholder.parent
-    holder.unassign_child_resource(placeholder)
-    return holder
-
-  def replace(self, imported_name: str, make, at_centre: bool = True) -> Resource:
-    """Put a PLR resource where the layout has an imported box, centred on it."""
-    box = self.deck.get_resource(imported_name)
-    parent, where = box.parent, box.location
-    centre = where + Coordinate(box.get_size_x() / 2, box.get_size_y() / 2, 0)
-    parent.unassign_child_resource(box)
-    r = make()
-    loc = centre - Coordinate(r.get_size_x() / 2, r.get_size_y() / 2, 0) if at_centre else where
-    parent.assign_child_resource(r, location=loc)
-    return r
-
-
-def give_room(wells: Sequence[Resource], volume: float) -> None:
-  """Reservoir positions share one cavity in reality: let each hold `volume` and fill it."""
-  for w in wells:
-    w.max_volume = max(w.max_volume, volume)
-    w.tracker.max_volume = max(w.tracker.max_volume, volume)
-    w.tracker.set_volume(volume)
-
-
-def make_room(wells: Sequence[Resource], volume: float) -> None:
-  for w in wells:
-    w.max_volume = max(w.max_volume, volume)
-    w.tracker.max_volume = max(w.tracker.max_volume, volume)
-
-
-def chunks(items: Sequence, n: int) -> List[list]:
-  if len(items) % n:
-    raise ValueError(f"{len(items)} positions are not a multiple of {n} channels")
-  return [list(items[i:i + n]) for i in range(0, len(items), n)]
-
-
 class Marionette:
   """The method, step by step; `say` reports each one."""
 
   def __init__(self, star: STARDevice, v: VenusDeck, vol: Volumes, say=print):
     self.star, self.v, self.vol, self.say = star, v, vol, say
     self.p = star.pipettes
+    self.g = Gripper(star, v, say)
 
   # -- the shared library's helpers (GSF-IMS.shared_submethods) ------------------------------------
 
@@ -245,23 +149,11 @@ class Marionette:
 
   # -- moves ---------------------------------------------------------------------------------------
 
-  async def grip(self, thing: Resource, to: Resource) -> None:
-    g = self.star.core_grippers
-    await g.pick_up_tools()
-    await g.pick_up_resource(thing)
-    await g.drop_resource(to)
-    await g.return_tools()
-
   async def move_lid_to_park(self, lid_seq: str, park_placeholder: str) -> Resource:
-    lid = self.v.labware(lid_seq)
-    holder = self.v.take_place_of(park_placeholder)
-    self.say(f"lid {lid.name} -> {park_placeholder}")
-    await self.grip(lid, holder)
-    return lid
+    return await self.g.to_placeholder(self.v.labware(lid_seq), park_placeholder)
 
   async def put_lid_back(self, lid: Resource, plate: Resource) -> None:
-    self.say(f"lid {lid.name} -> back on {plate.name}")
-    await self.grip(lid, plate)
+    await self.g.onto(lid, plate)
 
   # -- the method ----------------------------------------------------------------------------------
 
@@ -270,11 +162,7 @@ class Marionette:
     T1000, T300 = "Tips_1000_Channels", "Tips_300_Channels"
 
     # The Growth Plate, with its lid, from the handoff to its position
-    plate = v.labware("Move_Growth_Plate_Handoff")
-    holder = v.take_place_of(v.sequences["Move_Growth_Plate"][0][0])
-    self.say(f"{plate.name} (with lid) -> its pipetting position")
-    await self.grip(plate, holder)
-    v.aliases["Growth_Plate"] = plate
+    plate = await self.g.to_placeholder(v.labware("Move_Growth_Plate_Handoff"), "Growth_Plate")
     gp_lid = await self.move_lid_to_park("Growth_Plate_Handoff_lid", "Lid_parking_Growth_Plate")
     media_lid = await self.move_lid_to_park("Media_source_lid", "Media_trough_lid_parking")
     media_trough = media_lid_plate = v.resource("Media_source")
@@ -334,7 +222,8 @@ def fill(v: VenusDeck, vol: Volumes) -> None:
   give_room(v.items("Media_pipette_from_4"), 30_000.0)
   for seq in ("Sal_stock_1_4", "Sal_stock_2_4", "TMP_stock", "Van_stock_1", "Van_stock_1_4"):
     give_room(v.items(seq), 5_000.0)
-  make_room(v.items("van_gradient_pipette_to") + v.items("sal_grad_pipette_to"), 20_000.0)
+  # the dilution series end in the waste trough; the Growth Plate is not on the deck yet
+  make_room(v.resource("Liquid_waste").get_all_items(), 20_000.0)
 
 
 def report(v: VenusDeck, vol: Volumes) -> None:
@@ -346,28 +235,17 @@ def report(v: VenusDeck, vol: Volumes) -> None:
     print(f"  column {c:2}: {values}")
 
 
-def install(v: VenusDeck) -> None:
-  """PLR's tip waste and grip tools where the layout has its own."""
-  # The tip waste: a strip along the rack's eject positions, as PLR's own STAR deck has it
-  waste = v.deck.get_resource("Waste")
-  spots = [w.get_location_wrt(waste.parent, "c", "c", "b") for w in waste.get_all_items()]
-  ys = [s.y for s in spots]
-  parent = waste.parent
-  parent.unassign_child_resource(waste)
-  parent.assign_child_resource(
-    Trash(v.deck.get_component_name("trash"), size_x=0, size_y=max(ys) - min(ys) + 20, size_z=0),
-    location=Coordinate(spots[0].x, min(ys) - 10, spots[0].z))
-  v.replace("COREGripTool_OnWaste_1000ul_0001",
-            lambda: hamilton_core_gripper_1000ul_5ml_on_waste(name=v.deck.get_component_name("core_grippers")))
+TRACE = "Marionette protease.gradient plate prep.v5.condensed.md"
 
 
-async def main(corpus: pathlib.Path, view: bool, p: Parameters) -> None:
+async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.Path) -> None:
   logging.disable(logging.WARNING)
   warnings.simplefilter("ignore")
   set_volume_tracking(True)
   set_tip_tracking(True)
-  v = VenusDeck(corpus)
+  v = VenusDeck(corpus, LAYOUT)
   install(v)
+  print("not on the deck at the start:", ", ".join(v.clear_absent(trace)))
   vol = volumes(p)
   print(f"volumes: media {vol.media:.1f}, transfer {vol.transfer:.1f}, x{vol.multiplier:.2f}, "
         f"TMP {vol.tmp:.1f}, salicylate starts {[round(x, 1) for x in vol.grad_start_sal]}, "
@@ -398,8 +276,11 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters) -> None:
 if __name__ == "__main__":
   ap = argparse.ArgumentParser()
   ap.add_argument("--corpus", type=pathlib.Path, required=True)
+  ap.add_argument("--trace", type=pathlib.Path,
+                  help="the method's trace; the corpus's sibling analysis/traces/the method's .condensed.md when not given")
   ap.add_argument("--view", action="store_true")
   ap.add_argument("--plate", type=int, default=3, help="plate number, 2-5 (TMP from 3 on)")
   ap.add_argument("--culture-volume", type=float, default=500.0)
   a = ap.parse_args()
-  asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate)))
+  trace = a.trace or a.corpus.parent / "analysis" / "traces" / TRACE
+  asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate), trace))

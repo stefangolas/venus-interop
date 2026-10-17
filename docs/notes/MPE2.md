@@ -131,12 +131,13 @@ From the trace (`DNA Extraction.condensed.md`) and `LMSF_OPERATIONAL_LOGIC.md` �
 
 | Stage | Call | Control points |
 |---|---|---|
-| 04 clear the lysate | to collection (RP under FP) | `pressure,20,240;pressure,65,60;` |
+| 04 clear the lysate | to waste, with the filter plate stacked on the receiving plate declared as one 86.5 mm "filter plate": the lysate collects in the receiving plate under it (inferred from the heights) | `pressure,20,240;pressure,65,60;` |
 | 05 bind | to waste | `pressure,40,60;` |
 | 06 wash 1 | to waste | `pressure,40,60;` |
 | 07 wash 2 + dry | to waste | `pressure,40,60;pressure,65,420;` |
 | 08 elute | to collection (EP under BP) | `pressure,65,420;` |
 
+- **Calls:** stages 04–07 each go through the method's `FilterPlateToWaste` wrapper: `FilterPlatePlaced`, `ProcessFilterToWasteContainer` with the plate returned, `FilterPlateRemoved`, though the plate stays on the unit between washes. Stage 08: `FilterPlatePlaced`, `ClampFilterPlate`, the STAR puts the elution plate in the free integration area, `CollectionPlatePlaced`, `ProcessFilterToCollectionPlate` with the plate left clamped, the STAR takes the elution plate, `CollectionPlateRemoved`, `RetrieveFilterPlate`, the STAR takes the binding plate, `FilterPlateRemoved`.
 - **Deck:** the base `Culture_Processing_STAR_MPE2_Base_Back.tml` (one unit) carries `[MPE]2.rck`; the plates the gripper puts on it are `RP_on_MPE`, `FP_on_MPE`, `Nunc_BP_MPE2` and `Eppendorf_EP_MPE`, all on that template.
 - **Manual recovery path:** dialogs that let the operator re-enter heights and control points, then call `FilterPlatePlaced`, `ProcessFilterToWasteContainer`, `ClampFilterPlate` and `CollectionPlatePlaced` directly.
 
@@ -227,5 +228,6 @@ In the viewer a moving part is a child `Resource` whose `location` the simulator
    - `mpe2_tests.py`: wire encoding against the definition, the control-point parser, the driver's waiting, and the NIST method's sequence on the simulation. Not run against hardware.
    - Unverified: whether status replies that return a structure wrap it in one STRUCTURE fragment, as the driver assumes.
 2. An `MPE2` resource: the integration-area sites, and the liquid bookkeeping (filter plate wells into the collection plate or waste).
+   - **Prototype** (2026-10-17, `examples/mpe2_model.py`, used by `examples/dna_extraction_demo.py --models`): the modeller's animated model (`plr-models/models/hamilton_mpe2_animated.glb`: shuttle, upper and lower lifters, filter and waste carriers; travel and strokes estimated) as a resource whose seven joints follow the simulation's states, with the carriers as `ResourceStack`s the plates ride on. A copy of the GLB nests each carrier under an X node (the viewer drives one axis per node) and moves the model to its bounding-box corner. Its seat goes under the binding plate's Venus position; Venus's own placement of the model (rack corner plus `3D*Offset`) lands within 1.4 mm in X and 0.4 mm in Z of that, 4.4 mm in Y. The liquid moves in the demo, well for well.
 3. Serial: a PPP-framed serial transport under the same HOI session (§2), for COM-connected units like NIST's.
 4. Hardware check: `GetLastCommandResults` after each command to confirm §4's transitions.
