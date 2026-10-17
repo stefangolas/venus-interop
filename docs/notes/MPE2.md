@@ -86,7 +86,9 @@ Types:
 2. maps `pressure`, `flow` and `idle` to the three types (anything else is error 1427);
 3. **divides each value by the manifold's `NumberOfPorts`** before range-checking it per well and sending it.
 
-So the number in a method string is a total for the manifold, not a per-well value. A PLR driver should take per-well values, with a helper that reproduces Venus's division for strings copied from methods.
+`NumberOfPorts` is the manifold's well count, 24, 48 or 96 (the driver lays dispenses out as 6 × 4, 6 × 8 or 12 × 8 from it). So the number in a method string is a total for the manifold, not a per-well value: on a 96-port manifold `pressure,20` sends 0.21 psig per well.
+
+**Completion.** The device acknowledges a command at once and reports its end later, with a `CommandProcessingComplete` event (`ISPEControlCom`); Venus's driver waits on that event, polling a flag every 100 ms. `CompletionStatus` (method 19) reports the same thing on request, with the command's errors, so a driver can poll it instead of subscribing to events. A PLR driver should take per-well values, with a helper that reproduces Venus's division for strings copied from methods.
 
 ## 4. The state machine
 
@@ -154,6 +156,19 @@ Self-contained for whoever builds the model and its animation in the PLR 3D view
 | `[MPE]2.rck` | 45 × 45 × 1 mm labware, one position; model offset X −325.5, Y −56, Z 0 |
 | `STAR_MPE2_Base.tml` | The two-unit base, 67.5 × 497 × 15 mm; model offset X −422.5 |
 
+Measured with `venus_interop.plr.xfile` (mm, Z up, in the model's own frame):
+
+| Mesh | X | Y | Z | Reads as |
+|---|---|---|---|---|
+| whole `[MPE]2.x` | −354.0 … 70.0 | −78.7 … 79.5 | 1.5 … 187.2 | The unit: about 424 × 158 × 187 |
+| `m3` | −354.0 … −81.9 | −78.7 … 79.5 | 3.2 … 187.2 | The main body, off the deck |
+| `m0` | −352.7 … 70.0 | −78.0 … 78.0 | 1.5 … 183.6 | The housing, reaching onto the deck |
+| `m1` | −75.4 … 64.6 | −49.9 … 50.1 | 46.6 … 59.2 | A plate-sized box (140 × 100): the filter plate seat |
+| `m2` | −75.0 … 65.0 | −49.8 … 50.2 | 24.4 … 39.3 | The same below it: the collection plate seat |
+| `[MPE]2 Base.x` | −203.3 … 240.6 | −248.5 … 248.6 | 0 … 8.3 | The base plate, 444 × 497 |
+
+`m1` and `m2` are where the integration area's two plates sit, which places the working stack at the deck end of the unit, under the STAR's reach.
+
 `venus_interop.plr.xfile` (from the scratch `x_to_glb.py`; `docs/notes/HAMILTON_3D_MODELS.md`) reads text `.x`, but it reads no texture coordinates and loads no images: the photo planes come out as flat colour until it does.
 
 ### 6.2 Where it stands (deck coordinates, from the base's sites, relative to the base's origin)
@@ -206,7 +221,11 @@ In the viewer a moving part is a child `Resource` whose `location` the simulator
 
 ## 7. Plan for PyLabRobot
 
-1. `pylabrobot/hamilton/mpe2/`: commands (§3 as `TCPCommand` subclasses), a backend interface, the TCP backend, and a simulator backend that walks §4 with the durations of the control points.
+1. **Done** (2026-10-16, PLR fork, local branch `mpe2` at `e323b06ee`, worktree `C:\Users\stefa\plr-mpe2`): `pylabrobot/hamilton/mpe2/`.
+   - `commands.py`: §3 as `TCPCommand` subclasses, the enums and structs, and `parse_control_points`.
+   - `driver.py`: `MPE2Driver` over HOI/TCP, which waits on `CompletionStatus`; `MPE2SimulationDriver`, which walks §4, refuses commands outside their states, waits the control points' durations (scaled by `time_scale`), and reports every state to observers for an animation.
+   - `mpe2_tests.py`: wire encoding against the definition, the control-point parser, the driver's waiting, and the NIST method's sequence on the simulation. Not run against hardware.
+   - Unverified: whether status replies that return a structure wrap it in one STRUCTURE fragment, as the driver assumes.
 2. An `MPE2` resource: the integration-area sites, and the liquid bookkeeping (filter plate wells into the collection plate or waste).
 3. Serial: a PPP-framed serial transport under the same HOI session (§2), for COM-connected units like NIST's.
 4. Hardware check: `GetLastCommandResults` after each command to confirm §4's transitions.
