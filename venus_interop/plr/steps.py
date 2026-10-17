@@ -25,8 +25,9 @@ from typing import Any, Optional
 
 MIX_FLOW = 250.0  # uL/s
 
-# Called with ("Aspirate" | "Dispense", channels, Pipetting) for every step: how a port test sees the
-# Venus settings a port meant, including those PLR takes no argument for (the cLLD level)
+# Called with ("Aspirate" | "Dispense", channels, Pipetting), or ("CoreGrip", None, CoreGrip), for
+# every step: how a port test sees the Venus settings a port meant, including those PLR takes no
+# argument for (the cLLD level, the plate check)
 OBSERVERS: list = []
 
 
@@ -101,3 +102,34 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
+
+
+@dataclasses.dataclass(frozen=True)
+class CoreGrip:
+  """A Venus CO-RE gripper get (ZSwapGetPlate) and place (ZSwapPlacePlate): what decides the PLR
+  call. Grip force and grip speed are kept for the comparison only: PLR's grip strength runs 0-99
+  where Venus's grip force runs 0-9, and Venus's grip speed has no stated unit (CONVENTIONS §11)."""
+  height: float  # GripperAccessHeight: mm below the top
+  width: float  # grip width, mm across the jaws
+  opening: float  # grip opening before access, mm
+  force: int
+  z_speed: float  # mm/s, getting
+  press: float = 0.0  # plate press, mm, placing
+  x_acceleration: int = 1
+  place_z_speed: float = 75.0  # mm/s, placing
+  check: int = 0  # plate check on place: no PLR counterpart
+
+
+def core_grip_arguments(grip: CoreGrip, pick_offset=None, drop_offset=None) -> tuple[dict, dict]:
+  """(pick_up_resource, drop_resource) keyword arguments for PLR's CO-RE gripper: the jaws stand
+  (opening - width) / 2 off the plate as they come down; offsets in mm (a labware shifted first)."""
+  from pylabrobot.resources import Coordinate
+
+  for observe in OBSERVERS:
+    observe("CoreGrip", None, grip)
+  pick = dict(pickup_distance_from_top=grip.height, resource_size_y=grip.width,
+              y_clearance=round((grip.opening - grip.width) / 2, 4), grip_strength=grip.force,
+              z_speed=grip.z_speed, offset=pick_offset or Coordinate(0, 0, 0))
+  drop = dict(offset=drop_offset or Coordinate(0, 0, 0), press_on_distance=grip.press,
+              x_acceleration_level=grip.x_acceleration, z_speed=grip.place_z_speed)
+  return pick, drop

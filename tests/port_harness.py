@@ -63,6 +63,9 @@ class RecordingDeck:
   def resolve(self, item):
     return item
 
+  def resource(self, name):
+    return name
+
 
 class RecordingChannels:
   """The STAR's channels, recording; `with` it to see the Venus settings the port meant."""
@@ -74,7 +77,8 @@ class RecordingChannels:
 
   def __enter__(self):
     from venus_interop.plr import steps
-    steps.OBSERVERS[:] = [lambda command, channels, step: self.meant.append(step.effective())]
+    steps.OBSERVERS[:] = [lambda command, channels, step: self.meant.append(step.effective())
+                          if command in ("Aspirate", "Dispense") else None]
     return self
 
   def __exit__(self, *exc):

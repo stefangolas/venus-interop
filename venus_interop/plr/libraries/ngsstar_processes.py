@@ -23,7 +23,7 @@ from typing import Optional
 from venus_interop.methods import sequences as sq
 from venus_interop.plr import steps
 from venus_interop.plr.libraries.star_tip_tools import StarTipTools
-from venus_interop.plr.steps import Pipetting
+from venus_interop.plr.steps import CoreGrip, Pipetting
 
 from pylabrobot.hamilton.star.liquid_classes import mapping as star_classes
 
@@ -44,10 +44,26 @@ TIP_SETTINGS = {SVFT: TipSettings(0.5, 2, 0.5), HVFT: TipSettings(2.0, 1, 0.6), 
 LIQUID_FOLLOWING_ABOVE = 1.8  # mm: a fixed-height aspirate follows the liquid above this
 MIX_POSITION = 1.0  # mm above the surface: the aspirate records' and the cLLD dispense records'
 
+ISWAP, CORE_GRIPPER = 1, 2  # the framework's transport tools (t_intTransportTool)
+# The CO-RE transports' records (_Trp_MIDIwithCOREGripper, _Trp_HSPwithCOREGripper): grip speed
+# 277.8, z speed 128.7 getting; z speed 50, x acceleration 4 placing
+MIDI_GRIP = CoreGrip(height=8, width=79, opening=87, force=9, z_speed=128.7, press=0.3, x_acceleration=4,
+                     place_z_speed=50, check=1)
+HSP_GRIP = CoreGrip(height=5, width=81.3, opening=86, force=8, z_speed=128.7, press=0.3, x_acceleration=4,
+                    place_z_speed=50, check=0)
+# Drops into the waste chutes and onto the stacker: the source and the destination shifted first, in
+# mm (VIRTUALLABWARE::MoveSeq), and back after
+SHIFTS = {
+  "MIDI_Waste": ((-20, 0, 0), (-60, 0, 8)), "MIDI_Waste_CORE": ((-20, 0, 0), (-60, 0, 8)),
+  "HSP_Waste": ((-20, 0, 0), (-60, 0, 0)), "HSP_Waste_CORE": ((-20, 0, 0), (-60, 0, 0)),
+  "HSP_DFP_OnStacker": ((-35, 0, 0), (-35, 0, 0)),
+}
+
 
 class NGSStarProcesses:
   def __init__(self, star, deck, tips: dict[int, str], liquid_classes, channels: int = 8,
-               planner: Optional[StarTipTools] = None):
+               planner: Optional[StarTipTools] = None, gripper=None, transport_tool: int = CORE_GRIPPER,
+               front_channel: int = 7, say=print):
     """`tips`: tip type -> the tip sequence (the framework's t_seqTips300 / 1000 / 50).
     `liquid_classes`: a VenusLiquidClasses (the kit's database, read by tools/liquid_classes.py),
     or a table name -> (tip type, dispense mode) with PLR's STAR classes."""
@@ -55,6 +71,9 @@ class NGSStarProcesses:
     self.channels = channels
     self.planner = planner or StarTipTools(deck, channels)
     self.missing_classes: set[str] = set()
+    self.star, self.say = star, say
+    self._gripper, self.transport_tool = gripper, transport_tool
+    self.front_channel = front_channel  # t_intFrontChannelCORETransport: 1 = back ... 8 = front
 
   def _take(self, seq: str, pattern: str, counting: int, use: int) -> dict:
     taken = sq.take(self.v.seq(seq), pattern, counting, use)
@@ -125,3 +144,53 @@ class NGSStarProcesses:
     if not tip_exchange and loop:
       await self.p.discard_tips(use_channels=held)
 
+  # -- transports ------------------------------------------------------------------------------
+
+  def _gripper_(self):
+    if self._gripper is None:
+      from venus_interop.plr.venus_deck import Gripper
+      self._gripper = Gripper(self.star, self.v, self.say)
+    return self._gripper
+
+  async def _transport(self, source: str, destination: str, grip: CoreGrip, park: bool, barcode_track):
+    from pylabrobot.resources import Coordinate
+
+    from venus_interop.plr import steps
+
+    if self.transport_tool != CORE_GRIPPER:
+      raise NotImplementedError("the iSWAP transports are not ported yet (Avenio uses the CO-RE gripper)")
+    src_lab, dst_lab = self.v.seq(source).current_item()[0], self.v.seq(destination).current_item()[0]
+    if barcode_track and int(barcode_track) > 0:
+      self.say(f"{src_lab}: barcode read at the autoload not modelled")
+    pick_shift, drop_shift = SHIFTS.get(dst_lab, ((0, 0, 0), (0, 0, 0)))
+    pick, drop = steps.core_grip_arguments(grip, Coordinate(*pick_shift), Coordinate(*drop_shift))
+    plate = self.v.resource(src_lab)
+    await self._gripper_().to_placeholder(plate, dst_lab, front_channel=self.front_channel - 1, eject=bool(park),
+                                          grip=pick, release=drop)
+    return "" if not barcode_track else "No barcode reading activated"
+
+  async def Trp_MIDI(self, ML_STAR, source: str, destination: str, track_to_read_barcode=0, park_after_move=1,
+                     read_barcode=None, grip_mode_iswap=4):
+    """A MIDI plate by the CO-RE gripper: grip 8 mm below the top for a MIDI source (15 otherwise);
+    force 6 on the barcode path; no plate check onto the heater-shakers HHS4/HHS5 or the waste,
+    and no press onto HHS4/HHS5."""
+    import dataclasses
+
+    src_lab = self.v.seq(source).current_item()[0]
+    dst_lab = self.v.seq(destination).current_item()[0]
+    grip = dataclasses.replace(
+      MIDI_GRIP, height=8 if "MIDI" in src_lab else 15,
+      force=6 if track_to_read_barcode and int(track_to_read_barcode) > 0 else MIDI_GRIP.force,
+      check=0 if dst_lab in ("HHS4_MIDI", "HHS5_MIDI", "MIDI_Waste", "MIDI_Waste_CORE") else 1,
+      press=0 if dst_lab in ("HHS4_MIDI", "HHS5_MIDI") else MIDI_GRIP.press)
+    return await self._transport(source, destination, grip, park_after_move, track_to_read_barcode)
+
+  async def Trp_HSP(self, ML_STAR, source: str, destination: str, track_to_read_barcode=0, park_after_move=1,
+                    read_barcode=None, grip_mode_iswap=4):
+    """A hard-shell PCR plate by the CO-RE gripper; the plate check only onto `HSP_CPAC` (the kit's
+    CPAC position is `HSP_onCPAC`, so in Avenio it stays off, as in Venus)."""
+    import dataclasses
+
+    dst_lab = self.v.seq(destination).current_item()[0]
+    grip = dataclasses.replace(HSP_GRIP, check=1 if dst_lab == "HSP_CPAC" else 0)
+    return await self._transport(source, destination, grip, park_after_move, track_to_read_barcode)

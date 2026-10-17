@@ -1188,6 +1188,15 @@ class Run:
         self._event("LabwareShift", "", getattr(_dev, "name", "?"), None, {}, {}, 0, 0, "", "", env,
                     settings={"labware": lab, "x": x, "y": y, "z": z, "r": r})
         return 1
+      if low.endswith("virtuallabware::moveseq"):
+        # Hamilton's VirtualLabware: the sequence's current labware moved by a delta on the
+        # deck-layout object, a compiled service: recorded as an event
+        _dev, seq, x, y, z = [self._value_of(a, env) for a in arg_exprs]
+        item = seq.current_item() if isinstance(seq, sq.Sequence) else None
+        self._event("LabwareShift", "", getattr(_dev, "name", "?"), None, {}, {}, 0, 0, "", "", env,
+                    settings={"labware": item[0] if item else Unknown("labware of the sequence"),
+                              "x": x, "y": y, "z": z, "r": 0})
+        return 0
       f = self._lookup_func(name, ns)
       if f is not None:
         return self._call(f, arg_exprs, self._args(arg_exprs, env), env, line)
