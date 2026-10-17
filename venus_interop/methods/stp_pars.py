@@ -97,7 +97,10 @@ def parse(items: list[str]) -> Node:
         continue
       key = tok
       pos += 1
-      if pos < len(items) and not items[pos].startswith("(") and items[pos] != ")":
+      # a typed key (`1…`, `3…`) always has a value, which may itself start with "(":
+      # package manifests hold names like "(x86)-HAMILTON-Methods-…"
+      typed = _split(key)[0] != ""
+      if pos < len(items) and (typed or (not items[pos].startswith("(") and items[pos] != ")")):
         out.append((key, items[pos]))
         pos += 1
       else:

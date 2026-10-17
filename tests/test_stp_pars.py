@@ -50,6 +50,16 @@ def test_parse_tree():
   assert ("1LiquidName", '"HighVolumeFilter_Water_FastMixing_DispenseSurface_Empty"') in ch3
 
 
+def test_typed_value_starting_with_paren():
+  # an Allen Institute package manifest names a bookmark "(x86)-HAMILTON-Methods-…"
+  items = ["(542", "1-347734010", "(x86)-HAMILTON-Methods-Scan", "3-347734011", "537",
+           "(-347734008", ")", ")", "(531", "1-347734010", "", ")"]
+  tree = stp_pars.parse(items)
+  assert [k for k, v in tree] == ["542", "531"]
+  assert tree[0][1][0] == ("1-347734010", "(x86)-HAMILTON-Methods-Scan")
+  assert tree[0][1][2] == ("-347734008", [])
+
+
 def test_key_names_and_prefixes():
   assert stp_pars.key_name("1-534183924") == "aspirate volume"
   assert stp_pars.key_name("5-534183918") == "max height difference"
