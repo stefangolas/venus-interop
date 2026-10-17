@@ -24,6 +24,8 @@ from pylabrobot.resources import Coordinate
 
 from venus_interop.plr.venus_deck import Gripper, VenusDeck
 
+LIBRARY = "PLATEANDLIDMOVEMENT"  # the Venus namespace ported
+
 
 @dataclasses.dataclass(frozen=True)
 class Grip:

@@ -1,0 +1,7 @@
+{
+  "_about": "Scope notes for tools/trace_method.py --status, keyed NAMESPACE::Function (or NAMESPACE::* for a whole library). 'scope' is out (not protocol logic: scheduler, dialogs, trace output) or method (ported with the method that owns it, not as a library). See docs/PORTING.md.",
+  "LABWAREHANDLING::*": {"scope": "out", "note": "the scheduler's labware request/return file handshake"},
+  "::RenewOffsetTips": {"scope": "method", "note": "DNA Extraction's own tip-support state"},
+  "COMMON96HEADSUBMETHODS::Eject96HeadTipsAndShake": {"note": "Head96TipEject UsePickUpPosition 2 read as default waste from the help's option order, unverified; the waste-chute shake has no PLR counterpart"},
+  "MOVE96HEADANDARM::Move96HeadAndArm": {"note": "firmware H0ZA za68500 (top of Z travel) and H0YA ya07500 (front, 117.19 mm with PLR's resolution), then arm X 1337.5"}
+}

@@ -28,7 +28,19 @@ are the worked examples, with their checks in `tests/test_gsf_ims_port.py` and
 
    ```
    python tools/trace_method.py --roots <Library> <Methods> --calls METHOD.hsl [...]
+   python tools/trace_method.py --roots <Library> <Methods> --status METHOD.hsl [...]
    ```
+
+   `--status` shows what the ports already cover. It walks each method's call tree and marks
+   every library call:
+   - `checked`: a port test runs it against the HSL;
+   - `ported`: ported, not yet checked;
+   - `out` or `method`: scope notes in `tools/function_notes.json`;
+   - `open`: still to do.
+
+   A call inside a covered one counts as part of it. Then it lists the open functions by how
+   often they are called: that is the work queue. Count from these, not by grepping a trace: the
+   condensed trace drops calls.
 
 2. **Read the function as it runs.** `tools/trace_method.py --out DIR` writes each method's trace:
    `main` with every library function inlined, arguments bound and device steps shown with their
@@ -61,6 +73,9 @@ are the worked examples, with their checks in `tests/test_gsf_ims_port.py` and
    every step: command, (labware, position) per channel, and the settings that matter. Copy one of
    the two tests. The HSL side is a small `main` that `#include`s the library and calls it; the port
    side gets a recording stand-in for the PLR device.
+
+   Declare in the test what it checks, `LIBRARY = "<NAMESPACE>"` and `COVERS = [...]` (literals:
+   `--status` reads them without importing), and declare `LIBRARY` in the port module.
 
 7. **Make sure the test can fail.** Change one table entry or one argument's wiring in the port
    and see the test catch it.

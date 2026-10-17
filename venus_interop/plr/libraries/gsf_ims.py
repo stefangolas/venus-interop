@@ -38,6 +38,8 @@ from pylabrobot.hamilton.star.driver.lld_mode import LLDMode
 from pylabrobot.hamilton.star.liquid_classes import mapping as star_classes
 from pylabrobot.lib.liquid_handling.mix import Mix
 
+LIBRARY = "GSF_IMS_SHARED_SUBMETHODS"  # the Venus namespace ported
+
 CLASS_BY_TIP = {  # aspirate_w_err_handling: STAR_TIP_TOOLS::GetTipType 1 / 5
   300: "StandardVolumeFilter_Water_FastMixing_DispenseSurface_Empty",
   1000: "HighVolumeFilter_Water_FastMixing_DispenseSurface_Empty",

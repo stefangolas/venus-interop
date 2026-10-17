@@ -25,6 +25,11 @@ CORPUS = pathlib.Path(os.environ["VENUS_INTEROP_CORPUS"]) if os.environ.get("VEN
 pytestmark = pytest.mark.skipif(NIST is None or CORPUS is None,
                                 reason="VENUS_INTEROP_NIST and VENUS_INTEROP_CORPUS not set")
 
+# What this test checks against the HSL (read by tools/trace_method.py --status)
+LIBRARY = "GSF_IMS_SHARED_SUBMETHODS"
+COVERS = ["add_reagent_replace_tips", "add_reagent_reuse_tips", "add_reagents_reuse_tips_vol_arr",
+          "pipette_cells_from_tubes", "pipette_dil_series", "pipette_media", "pipette_media_volume_arr",
+          "simple_aspirate", "simple_dispense", "tip_eject", "tip_pickup"]
 ARRAYS = {"VOLS4": [10, 0, 30, 40], "VOLS4B": [15, 25, 35, 45]}
 # (function, arguments as the HSL call writes them, as the port takes them)
 CALLS = [
@@ -145,6 +150,10 @@ def port_steps(lay):
 
   asyncio.run(go())
   return channels.events
+
+
+def test_covers_what_it_calls():
+  assert sorted(COVERS) == sorted({fn for fn, _, _ in CALLS})
 
 
 def test_port_uses_the_wells_and_tips_the_library_does(lay):

@@ -24,6 +24,16 @@ CORPUS = pathlib.Path(os.environ["VENUS_INTEROP_CORPUS"]) if os.environ.get("VEN
 pytestmark = pytest.mark.skipif(NIST is None or CORPUS is None,
                                 reason="VENUS_INTEROP_NIST and VENUS_INTEROP_CORPUS not set")
 
+# What this test checks against the HSL (read by tools/trace_method.py --status)
+LIBRARY = "PLATEANDLIDMOVEMENT"
+COVERS = ["MoveAbegeneFromThermoShakeNoTap", "MoveAbgenePlateFromThermoShake", "MoveAbgenePlateWithLid",
+          "MoveAgarPlateFromThermoShake", "MoveAgarPlateWithLid", "MoveAgilent86mLSingleResWithLid",
+          "MoveAgilentFPwithLid", "MoveBindPlateNoLid", "MoveBindPlateWithLid", "MoveCytometryPlateWithLid",
+          "MoveEppendorf350uLElutionPlateWithLid", "MoveEppendorf500uLElutePlateWithLid",
+          "MoveEppendorfDWPNoLidNoTap", "MoveEppendorfDWPWithLid", "MoveGreinerPlateWithLid",
+          "MoveGrowthPlateFromThermoShake", "MoveGrowthPlateWithLid", "MoveGrowthPlateWithLidNoTap",
+          "MoveLid", "MoveLidNoTap", "MoveN3BufferWithLid", "MoveNuncOmniTrayWithLid",
+          "MoveSupportPlateNoLid", "MoveSupportPlateNoLidNoTap", "SetFrontChannel"]
 GRIP = "COREGripTool_OnWaste_1000ul_0001"
 PLATE = ("Move_Growth_Plate_Handoff", "Growth_Plate_Handoff_lid", "Move_Growth_Plate", "Growth_Plate_lid")
 BARE = ("Move_Growth_Plate", "Growth_Plate_waste")
@@ -149,6 +159,10 @@ def port_moves(lay):
   for move, check in zip(gripper.moves, checks):
     move["check_on_put"] = check
   return gripper.moves
+
+
+def test_covers_what_it_calls():
+  assert sorted(COVERS) == sorted({fn for fn, _, _ in _calls()})
 
 
 def test_port_moves_what_the_library_moves_as_it_does(lay):

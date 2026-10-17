@@ -367,7 +367,7 @@ class Line:
   kind: str  # heading | call | device | setting | code
   role: str  # robot / equipment / data / config / ui / lab / method / ptl / error / ""
   text: str
-  data: object = None  # structured source of the line (an ErrorPolicy), for views
+  data: object = None  # structured source, for views: an ErrorPolicy; (namespace, name) of a call
 
 
 # Device settings the condensed view keeps; the full trace keeps everything.
@@ -637,7 +637,7 @@ class Tracer:
         key = ("", name.lower())
         if key in seen or self._too_deep(depth, name, out):
           return False
-        out.append(Line(depth, "call", "method", f"{prefix}{name}({', '.join(args)})"))
+        out.append(Line(depth, "call", "method", f"{prefix}{name}({', '.join(args)})", ("", name)))
         self._walk(self.sections[name], out, depth + 1, seen + (key,))
         return True
     if fn is None or fn.name.startswith("_"):
@@ -651,7 +651,7 @@ class Tracer:
     names = [a.name for a in fn.args]
     bound = ", ".join(f"{names[i]} = {args[i]}" for i in range(min(len(args), len(names))))
     role = role_of(flib.namespace) or "lab"
-    out.append(Line(depth, "call", role, f"{prefix}{fn.name}({bound})"))
+    out.append(Line(depth, "call", role, f"{prefix}{fn.name}({bound})", (flib.namespace, fn.name)))
     if len(args) != len(names):
       out.append(Line(depth + 1, "code", "",
                       f"# note: {len(args)} arguments passed, {flib.name} defines {fn.name} with "
