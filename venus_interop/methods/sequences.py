@@ -97,6 +97,12 @@ class Sequence:
   def set_used(self, n: int) -> None:
     self.used = n
 
+  def reset(self) -> None:
+    """HSLSeqLib's SeqResetSequenceIndexes: end and max to total, the current position to 1."""
+    self.set_count(self.total)
+    self.set_current_position(1)
+    self.set_max(self.total)
+
   def valid(self) -> int:
     """Positions left from the current one to the end; 0 when disabled."""
     return self.end - self.cur + 1 if self.cur > 0 else 0

@@ -1,8 +1,10 @@
 """NIST LMSF "Marionette protease gradient plate prep v5" on a simulated STAR, for the 3D viewer.
 
-The method's operational logic (docs/notes/LMSF_OPERATIONAL_LOGIC.md section 2) on its own deck: the
-layout is imported with `plr_import.lay_to_plr`, and every step names its wells by the layout's
-sequences, as the method does, so the plate map is the layout's and not retyped here.
+The method's `main`, call for call, on Python ports of its two libraries (`venus_interop.plr.libraries`:
+GSF-IMS shared submethods, PlateAndLidMovement), on its own deck imported with
+`plr_import.lay_to_plr`. Sequences follow Venus's rules (`methods.sequences`), so every step uses the
+wells and tips the method does; the GSF-IMS port is checked against the HSL library step for step
+(tests/test_gsf_ims_port.py).
 
   python marionette_demo.py --corpus DIR            headless: runs, checks the volumes, prints them
   python marionette_demo.py --corpus DIR --view     serves the viewer and plays the run
@@ -22,8 +24,9 @@ Deviations from the method, and why:
     labware is only a box.
   - Reservoir "wells" are Venus's pipetting positions in one cavity, so the ones used are given
     room for the whole run's liquid.
-  - Liquid classes, dry versus in-liquid dispensing, and the gripper's grip heights are PLR's
-    defaults: the method's are in Venus's liquid-class database, not read yet.
+  - Liquid classes: the libraries' own by name where PLR has them; the FastMixing ones it lacks are
+    listed at the end of a run and PLR's default is used, until Venus's liquid-class database is read.
+  - The 1 mm "tap" of PlateAndLidMovement's plate moves is not drawn: PLR puts a plate on its site.
 """
 
 import argparse
@@ -33,15 +36,17 @@ import pathlib
 import sys
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Sequence
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from nist_deck import Gripper, VenusDeck, chunks, give_room, install, make_room  # noqa: E402
+from nist_deck import VenusDeck, give_room, install, make_room  # noqa: E402
+
+from venus_interop.plr.libraries.gsf_ims import GsfIms  # noqa: E402
+from venus_interop.plr.libraries.plate_and_lid import PlateAndLidMovement  # noqa: E402
 
 from pylabrobot.hamilton.star.device import RECORDING_STAR, STARDevice  # noqa: E402
-from pylabrobot.lib.liquid_handling.mix import Mix  # noqa: E402
-from pylabrobot.resources import Resource, set_tip_tracking, set_volume_tracking  # noqa: E402
+from pylabrobot.resources import set_tip_tracking, set_volume_tracking  # noqa: E402
 
 LAYOUT = "3ed5809e547e.lay"  # Fitness Selection.Marionette protease.v5.lay
 
@@ -58,178 +63,118 @@ class Parameters:
   dilution_series_factor: float = 2.0
   sal_stock_conc: Sequence[float] = (1750.0, 2500.0)  # stocks 1 and 2, in the units of the maxima
   sal_grad_max_conc: Sequence[float] = (35.0, 50.0)  # the method's defaults
-
-
-@dataclass
-class Volumes:
-  """The method's volume model, as `main` computes it."""
-
-  media: float
-  transfer: float  # dil_series_transf_vol
-  multiplier: float  # dil_series_multiplier
-  with_tmp: bool
-  tmp: float
-  grad_start_tmp: float
-  van_grad_add_sal: float
-  van_grad_start_add_sal: float
-  grad_start_media: float
-  van: float
-  grad_start_van: float
-  grad_start_sal: Sequence[float]
-
-
-def volumes(p: Parameters) -> Volumes:
-  culture = min(max(p.culture_volume, 200.0), 500.0)
-  m = p.dilution_series_factor / (p.dilution_series_factor - 1.0)
-  media = culture - culture / p.dilution_factor
-  first_tmp_plate = 3
-  with_tmp = p.plate_number >= first_tmp_plate
-  inducer_ref = culture if p.plate_number < first_tmp_plate else media
-  tmp_ref = media if p.plate_number > first_tmp_plate else culture
-  tmp = tmp_ref / p.sal_tmp_stock_dilution if with_tmp else 0.0
-  van_grad_add_sal = inducer_ref / p.sal_tmp_stock_dilution
-  van = inducer_ref / p.van_stock_dilution
-  start_dilution = [s / g for s, g in zip(p.sal_stock_conc, p.sal_grad_max_conc)]
-  return Volumes(
-    media=media, transfer=media * m - media, multiplier=m, with_tmp=with_tmp, tmp=tmp,
-    grad_start_tmp=tmp * m, van_grad_add_sal=van_grad_add_sal, van_grad_start_add_sal=van_grad_add_sal * m,
-    grad_start_media=media * m, van=van, grad_start_van=van * m,
-    grad_start_sal=[inducer_ref / d * m for d in start_dilution],
-  )
+  is_pipetting: bool = True
 
 
 class Marionette:
-  """The method, step by step; `say` reports each one."""
+  """The method's `main`, call for call, on the Python ports of its libraries."""
 
-  def __init__(self, star: STARDevice, v: VenusDeck, vol: Volumes, say=print):
-    self.star, self.v, self.vol, self.say = star, v, vol, say
-    self.p = star.pipettes
-    self.g = Gripper(star, v, say)
-
-  # -- the shared library's helpers (GSF-IMS.shared_submethods) ------------------------------------
-
-  async def tip_pickup(self, tips: str, n: int) -> None:
-    await self.p.pick_up_tips(self.v.next_tips(tips, n), use_channels=list(range(n)))
-
-  async def tip_eject(self, n: int) -> None:
-    await self.p.discard_tips(use_channels=list(range(n)))
-
-  async def transfer(self, source, targets, volume: float, n: int, mix: Optional[Mix] = None) -> None:
-    ch = list(range(n))
-    await self.p.aspirate(source, [volume] * n, use_channels=ch,
-                          pre_mixes=[mix] * n if mix else None)
-    await self.p.dispense(targets, [volume] * n, use_channels=ch)
-
-  async def pipette_media(self, asp: str, disp: str, volume: float, pre_wet: bool, n: int) -> None:
-    source = self.v.items(asp)
-    if pre_wet:
-      await self.transfer(source, source, volume, n)
-    for targets in chunks(self.v.items(disp), n):
-      await self.transfer(source, targets, volume, n)
-
-  async def add_reagent_reuse_tips(self, asp: str, disp: str, volume: float, pre_wet: bool, n: int) -> None:
-    await self.pipette_media(asp, disp, volume, pre_wet, n)
-
-  async def add_reagent_replace_tips(self, asp: str, disp: str, volume: float, tips: str, n: int) -> None:
-    source = self.v.items(asp)
-    for targets in chunks(self.v.items(disp), n):
-      await self.tip_pickup(tips, n)
-      await self.transfer(source, targets, volume, n)
-      await self.tip_eject(n)
-
-  async def pipette_dil_series(self, from_seq: str, to_seq: str, volume: float, tips: str, n: int) -> None:
-    sources, targets = chunks(self.v.items(from_seq), n), chunks(self.v.items(to_seq), n)
-    if len(sources) != len(targets):
-      raise ValueError(f"{from_seq} and {to_seq} differ in length")
-    await self.tip_pickup(tips, n)
-    mix = Mix(volume=volume, repetitions=2, flow_rate=250.0)
-    for source, target in zip(sources, targets):
-      await self.transfer(source, target, volume, n, mix=mix)
-    await self.tip_eject(n)
-
-  # -- moves ---------------------------------------------------------------------------------------
-
-  async def move_lid_to_park(self, lid_seq: str, park_placeholder: str) -> Resource:
-    return await self.g.to_placeholder(self.v.labware(lid_seq), park_placeholder)
-
-  async def put_lid_back(self, lid: Resource, plate: Resource) -> None:
-    await self.g.onto(lid, plate)
-
-  # -- the method ----------------------------------------------------------------------------------
+  def __init__(self, star: STARDevice, v: VenusDeck, p: Parameters, say=print):
+    self.v, self.par, self.say = v, p, say
+    self.gsf = GsfIms(star, v, say)
+    self.plm = PlateAndLidMovement(star, v, say=say)
 
   async def run(self) -> None:
-    v, vol = self.v, self.vol
-    T1000, T300 = "Tips_1000_Channels", "Tips_300_Channels"
+    p, gsf, plm = self.par, self.gsf, self.plm
+    seq = self.v.seq
+    T1000, T300, MEDIA = "Tips_1000_Channels", "Tips_300_Channels", "Media_pipette_from_4"
+    GRIP = "COREGripTool_OnWaste_1000ul_0001"
 
-    # The Growth Plate, with its lid, from the handoff to its position
-    plate = await self.g.to_placeholder(v.labware("Move_Growth_Plate_Handoff"), "Growth_Plate")
-    gp_lid = await self.move_lid_to_park("Growth_Plate_Handoff_lid", "Lid_parking_Growth_Plate")
-    media_lid = await self.move_lid_to_park("Media_source_lid", "Media_trough_lid_parking")
-    media_trough = media_lid_plate = v.resource("Media_source")
+    await plm.MoveGrowthPlateWithLid("Move_Growth_Plate_Handoff", "Growth_Plate_Handoff_lid",
+                                     "Move_Growth_Plate", "Growth_Plate_lid", GRIP, 1, 0)
+    await plm.MoveLid("Growth_Plate_lid", "Lid_parking_Growth_Plate", GRIP, 0, 0)
+    await plm.MoveLid("Media_source_lid", "Lid_parking_Media_trough", GRIP, 0, 1)
 
-    self.say("media")
-    await self.tip_pickup(T1000, 4)
-    media = "Media_pipette_from_4"
-    await self.pipette_media(media, "regular_wells_with_tmp_sal_grad", vol.media - vol.tmp, True, 4)
-    await self.pipette_media(media, "regular_wells_with_tmp_van_grad",
-                             vol.media - vol.van_grad_add_sal - vol.tmp, False, 4)
-    await self.pipette_media(media, "sal_1_grad_start",
-                             vol.grad_start_media - vol.grad_start_sal[0] - vol.grad_start_tmp, False, 4)
-    await self.pipette_media(media, "sal_2_grad_start",
-                             vol.grad_start_media - vol.grad_start_sal[1] - vol.grad_start_tmp, False, 4)
-    await self.pipette_media(media, "van_grad_start_wells_with_tmp",
-                             vol.grad_start_media - vol.grad_start_van - vol.van_grad_start_add_sal
-                             - vol.grad_start_tmp, False, 4)
-    await self.pipette_media(media, "regular_wells_no_tmp_no_van", vol.media, False, 4)
-    await self.pipette_media(media, "regular_wells_no_tmp_with_van", vol.media - vol.van, False, 4)
-    await self.tip_eject(4)
+    # main's volume model
+    culture = min(max(p.culture_volume, 200.0), 500.0)  # GetParams clamps it
+    m = p.dilution_series_factor / (p.dilution_series_factor - 1.0)
+    cell = culture / p.dilution_factor
+    media = culture - cell
+    transfer = media * m - media
+    first_tmp_plate = 3
+    with_tmp = p.plate_number >= first_tmp_plate
+    inducer_ref = culture if p.plate_number < first_tmp_plate else media
+    tmp_ref = media if p.plate_number > first_tmp_plate else culture
+    tmp = tmp_ref / p.sal_tmp_stock_dilution if with_tmp else 0.0
+    grad_start_tmp = tmp * m
+    van_grad_add_sal = inducer_ref / p.sal_tmp_stock_dilution
+    van_grad_start_add_sal = van_grad_add_sal * m
+    grad_start_media = media * m
+    van = inducer_ref / p.van_stock_dilution
+    grad_start_van = van * m
+    sal_1, sal_2 = (inducer_ref / (s / g) * m for s, g in zip(p.sal_stock_conc, p.sal_grad_max_conc))
+    self.say(f"volumes: media {media:.1f}, transfer {transfer:.1f}, TMP {tmp:.1f}, "
+             f"salicylate starts {sal_1:.1f} {sal_2:.1f}, vancomycin {van:.1f} / start {grad_start_van:.1f}")
 
-    await self.put_lid_back(media_lid, media_lid_plate)
-    stock_lid = await self.move_lid_to_park("Reagent_Stock_Plate_lid", "Reagent_Stock_lid_parking")
-    stock_plate = v.resource("Reagent_Stock_Plate")
+    if p.is_pipetting:
+      await gsf.tip_pickup(T1000, 4)
+      await gsf.pipette_media(MEDIA, "regular_wells_with_tmp_sal_grad", media - tmp, 1, T1000, 4)
+      await gsf.pipette_media(MEDIA, "regular_wells_with_tmp_van_grad", media - van_grad_add_sal - tmp, 0, T1000, 4)
+      await gsf.pipette_media(MEDIA, "sal_1_grad_start", grad_start_media - sal_1 - grad_start_tmp, 0, T1000, 4)
+      await gsf.pipette_media(MEDIA, "sal_2_grad_start", grad_start_media - sal_2 - grad_start_tmp, 0, T1000, 4)
+      await gsf.pipette_media(MEDIA, "van_grad_start_wells_with_tmp",
+                              grad_start_media - grad_start_van - van_grad_start_add_sal - grad_start_tmp, 0, T1000, 4)
+      await gsf.pipette_media(MEDIA, "regular_wells_no_tmp_no_van", media, 0, T1000, 4)
+      await gsf.pipette_media(MEDIA, "regular_wells_no_tmp_with_van", media - van, 0, T1000, 4)
+      await gsf.tip_eject(4)
+      for name in ("regular_wells_with_tmp_sal_grad", "regular_wells_with_tmp_van_grad", "sal_1_grad_start",
+                   "sal_2_grad_start", "van_grad_start_wells_with_tmp", "regular_wells_no_tmp_with_van"):
+        seq(name).reset()
 
-    for k, stock in ((0, "Sal_stock_1_4"), (1, "Sal_stock_2_4")):
-      self.say(f"salicylate stock {k + 1}")
-      await self.tip_pickup(T300, 4)
-      await self.add_reagent_reuse_tips(stock, f"sal_{k + 1}_grad_start", vol.grad_start_sal[k], True, 4)
-      await self.add_reagent_reuse_tips(stock, f"van_grad_start_wells_with_sal_{k + 1}",
-                                        vol.van_grad_start_add_sal, False, 4)
-      await self.add_reagent_reuse_tips(stock, f"regular_wells_with_sal_{k + 1}", vol.van_grad_add_sal, False, 4)
-      await self.tip_eject(4)
+    await plm.MoveLid("Lid_parking_Media_trough", "Media_source_lid", GRIP, 1, 0)
+    await plm.MoveLid("Reagent_Stock_Plate_lid", "Lid_parking_Reagent_Stock", GRIP, 0, 1)
 
-    if vol.with_tmp:  # not gated by is_pipetting in the method
-      self.say("TMP")
-      await self.add_reagent_replace_tips("TMP_stock", "regular_wells_with_tmp_sal_grad", vol.tmp, T300, 8)
-      await self.add_reagent_replace_tips("TMP_stock", "regular_wells_with_tmp_van_grad", vol.tmp, T300, 8)
-      await self.add_reagent_replace_tips("TMP_stock", "sal_grad_start_wells_add_tmp", vol.grad_start_tmp, T300, 8)
-      await self.add_reagent_replace_tips("TMP_stock", "van_grad_start_wells_with_tmp", vol.grad_start_tmp, T300, 8)
+    if p.is_pipetting:
+      for k, (stock, start) in enumerate((("Sal_stock_1_4", sal_1), ("Sal_stock_2_4", sal_2)), start=1):
+        await gsf.tip_pickup(T300, 4)
+        await gsf.add_reagent_reuse_tips(stock, f"sal_{k}_grad_start", start, 1, 0, T300, 4)
+        await gsf.add_reagent_reuse_tips(stock, f"van_grad_start_wells_with_sal_{k}", van_grad_start_add_sal, 0, 0, T300, 4)
+        await gsf.add_reagent_reuse_tips(stock, f"regular_wells_with_sal_{k}", van_grad_add_sal, 0, 0, T300, 4)
+        await gsf.tip_eject(4)
 
-    self.say("vancomycin")
-    await self.add_reagent_replace_tips("Van_stock_1", "van_grad_start_wells_with_tmp", vol.grad_start_van, T1000, 8)
-    await self.add_reagent_replace_tips("Van_stock_1_4", "regular_wells_no_tmp_with_van", vol.van, T1000, 4)
+    if with_tmp:  # not gated by is_pipetting in the method
+      await gsf.add_reagent_replace_tips("TMP_stock", "regular_wells_with_tmp_sal_grad", tmp, 0, 0, T300, 8)
+      await gsf.add_reagent_replace_tips("TMP_stock", "regular_wells_with_tmp_van_grad", tmp, 0, 0, T300, 8)
+      await gsf.add_reagent_replace_tips("TMP_stock", "sal_grad_start_wells_add_tmp", grad_start_tmp, 0, 0, T300, 8)
+      await gsf.add_reagent_replace_tips("TMP_stock", "van_grad_start_wells_with_tmp", grad_start_tmp, 0, 0, T300, 8)
+      seq("sal_grad_start_wells_add_tmp").reset()
+      seq("van_grad_start_wells_with_tmp").reset()
 
-    self.say("serial dilutions")  # not gated by is_pipetting in the method
-    await self.pipette_dil_series("van_gradient_pipette_from", "van_gradient_pipette_to", vol.transfer, T1000, 8)
-    await self.pipette_dil_series("sal_grad_pipette_from", "sal_grad_pipette_to", vol.transfer, T1000, 8)
+    if p.is_pipetting:
+      await gsf.add_reagent_replace_tips("Van_stock_1", "van_grad_start_wells_with_tmp", grad_start_van, 0, 0, T1000, 8)
+      await gsf.add_reagent_replace_tips("Van_stock_1_4", "regular_wells_no_tmp_with_van", van, 0, 0, T1000, 4)
 
-    await self.put_lid_back(stock_lid, stock_plate)
-    await self.put_lid_back(gp_lid, plate)
-    del media_trough
+    # not gated by is_pipetting in the method
+    await gsf.pipette_dil_series("van_gradient_pipette_from", "van_gradient_pipette_to", transfer, 2, transfer, T1000, 8)
+    await gsf.pipette_dil_series("sal_grad_pipette_from", "sal_grad_pipette_to", transfer, 2, transfer, T1000, 8)
+
+    await plm.MoveLid("Lid_parking_Reagent_Stock", "Reagent_Stock_Plate_lid", GRIP, 1, 0)
+    await plm.MoveLid("Lid_parking_Growth_Plate", "Growth_Plate_lid", GRIP, 0, 1)
+    if gsf.missing_classes:
+      self.say("liquid classes PLR lacks (its default used): " + ", ".join(sorted(gsf.missing_classes)))
+    self.media = media
 
 
-def fill(v: VenusDeck, vol: Volumes) -> None:
+def fill(v: VenusDeck) -> None:
   """The sources full enough for the run, the wells that take liquid able to hold it."""
   give_room(v.items("Media_pipette_from_4"), 30_000.0)
   for seq in ("Sal_stock_1_4", "Sal_stock_2_4", "TMP_stock", "Van_stock_1", "Van_stock_1_4"):
     give_room(v.items(seq), 5_000.0)
-  # the dilution series end in the waste trough; the Growth Plate is not on the deck yet
-  make_room(v.resource("Liquid_waste").get_all_items(), 20_000.0)
+  # The dilution series end in the waste trough, dispensing to the liquid (cLLD): dry, Venus raises
+  # a Liquid Level error there (repeat once, then the operator), so the trough starts with a heel.
+  # The Growth Plate is not on the deck yet.
+  waste = v.resource("Liquid_waste").get_all_items()
+  give_room(waste, 1_000.0)
+  make_room(waste, 20_000.0)
 
 
-def report(v: VenusDeck, vol: Volumes) -> None:
+def report(v: VenusDeck, media: float) -> None:
   plate = v.resource("Growth_Plate")
   got = [round(w.tracker.get_used_volume(), 1) for w in plate.get_all_items()]
-  print(f"Growth Plate: every well {vol.media:.1f} uL expected; min {min(got)}, max {max(got)}")
+  # A cLLD search hands the well's tracker the volume it measured, read to 0.1 mm, so the wells
+  # dispensed into to the liquid end a few uL either side.
+  print(f"Growth Plate: every well {media:.1f} uL expected, give or take the cLLD reads; "
+        f"min {min(got)}, max {max(got)}")
   by_column = {c + 1: sorted(set(got[c * 8:c * 8 + 8])) for c in range(12)}
   for c, values in by_column.items():
     print(f"  column {c:2}: {values}")
@@ -246,14 +191,10 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.P
   v = VenusDeck(corpus, LAYOUT)
   install(v)
   print("not on the deck at the start:", ", ".join(v.clear_absent(trace)))
-  vol = volumes(p)
-  print(f"volumes: media {vol.media:.1f}, transfer {vol.transfer:.1f}, x{vol.multiplier:.2f}, "
-        f"TMP {vol.tmp:.1f}, salicylate starts {[round(x, 1) for x in vol.grad_start_sal]}, "
-        f"vancomycin {vol.van:.1f} / start {vol.grad_start_van:.1f}")
   star = STARDevice(deck=v.deck, simulation=True, declared_configuration_json=RECORDING_STAR,
                     name="STAR")
   await star.setup()
-  fill(v, vol)
+  fill(v)
 
   if view:
     from pylabrobot.hamilton.star.motion import attach_viewer_motion
@@ -266,8 +207,9 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.P
     await viewer.wait_for_browser()
     await asyncio.sleep(1.0)
 
-  await Marionette(star, v, vol).run()
-  report(v, vol)
+  method = Marionette(star, v, p)
+  await method.run()
+  report(v, method.media)
   if view:
     print("done", flush=True)
     await asyncio.Event().wait()

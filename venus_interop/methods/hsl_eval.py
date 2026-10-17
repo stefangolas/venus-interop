@@ -130,6 +130,7 @@ class StepEvent:
   pattern: str
   stack: tuple[str, ...]  # the function calls it ran under
   note: str = ""
+  settings: dict[str, Any] = dataclasses.field(default_factory=dict)  # a transport step's, bound
 
 
 # -- preprocessing -----------------------------------------------------------------------------
@@ -1171,6 +1172,12 @@ class Run:
       if low.endswith("raiseruntimeerrorex") or low.endswith("error::raiseex") or low.endswith("error::raise"):
         args = [self._value_of(a, env) for a in arg_exprs]
         raise Stop(f"line {line}: the method raises an error ({name}: {', '.join(_fmt(a) for a in args)})")
+      if low.endswith("hsllabwraccess::relativepositionvaluessetforlabwareid"):
+        # Moves a labware on the deck-layout object, a compiled service: recorded as an event
+        _dev, lab, x, y, z, r = [self._value_of(a, env) for a in arg_exprs]
+        self._event("LabwareShift", "", getattr(_dev, "name", "?"), None, {}, {}, 0, 0, "", "", env,
+                    settings={"labware": lab, "x": x, "y": y, "z": z, "r": r})
+        return 1
       f = self._lookup_func(name, ns)
       if f is not None:
         return self._call(f, arg_exprs, self._args(arg_exprs, env), env, line)
@@ -1295,6 +1302,10 @@ class Run:
         return int(str(args[0]).lower() in obj.labware)
       if m == "getinstrumentname":
         return obj.name
+      if m == "getlabwareposition":  # (labware id, values[]): x, y, z, r on the deck, not modelled
+        if len(args) > 1 and isinstance(args[1], HArray):
+          args[1].items = [Unknown(f"position of {args[0]}") for _ in range(4)]
+        return 0
       return Unknown(f"device.{method}")
     if isinstance(obj, (int, float)):
       return self._string_element(str(obj), m, args, obj_expr, env)
@@ -1705,8 +1716,10 @@ class Run:
       if path == "" and key not in top:
         top[key] = value
     command = rec.step_name
+    if command in ("ZSwapGetPlate", "ZSwapPlacePlate"):
+      return self._transport_step(rec, command, guid, name, top, env, line)
     seq_raw = top.get("SequenceObject", "")
-    if not seq_raw or command in ("GetPlate", "PutPlate", "MovePlate", "ZSwapGetPlate", "ZSwapPlacePlate",
+    if not seq_raw or command in ("GetPlate", "PutPlate", "MovePlate",
                                    "Initialize", "LoadCarrier", "UnloadCarrier", "FirmwareCommand"):
       self._event(command, guid, name, None, {}, {}, 0, 0, "", "", env, note=self._move_note(top, env))
       return self._success(name, command, {})
@@ -1739,6 +1752,36 @@ class Run:
     self._event(command, guid, name, seq, taken.channels, vols, taken.first, taken.used, counting, pat_s, env)
     return self._success(name, command, taken.channels)
 
+  # A CO-RE gripper step's settings, by the names `_transport_step` records them under
+  TRANSPORT_SETTINGS = ("GripperAccessHeight", "ZSwapPlateCheck", "ToolUpperChannel", "ToolEject",
+                        "grip width", "grip force", "grip speed", "grip opening", "z speed",
+                        "x acceleration", "plate press")
+
+  def _transport_step(self, rec, command, guid, name, top, env, line):
+    """A CO-RE gripper get or place: the plate (`PlateObject`) or lid (`CapObject`) sequence's
+    current item, not consumed (the library's steps count manually), and the settings bound."""
+    raw = top.get("PlateObject") or top.get("CapObject", "")
+    seq = self._binding(rec, raw, env)
+    if not isinstance(seq, sq.Sequence):
+      raise Stop(f"line {line}: {command} on {raw}, which is not a known sequence ({seq!r})")
+    item = seq.current_item()
+    settings = {}
+    for path, key, value in rec.readable():
+      if path in ("", "/gripper") and key in self.TRANSPORT_SETTINGS and key not in settings:
+        settings[key] = self._setting(rec, value, env)
+    self._event(command, guid, name, seq, {1: item} if item else {}, {}, seq.cur, 0, 0, "", env,
+                settings=settings)
+    return self._success(name, command, {})
+
+  def _setting(self, rec, raw: str, env):
+    """A record value, where a bare name a variable holds (as the `/gripper` block keeps them) is
+    that variable's value."""
+    if re.fullmatch(r"[A-Za-z_]\w*", raw or ""):
+      c = self._cell(raw, env)
+      if c is not None:
+        return c.value
+    return self._binding(rec, raw, env)
+
   def _volumes(self, rec: stp_pars.Record, channels, env) -> dict[int, Any]:
     out: dict[int, Any] = {}
     tree = rec.tree
@@ -1762,10 +1805,11 @@ class Run:
   def _move_note(self, top, env) -> str:
     return ", ".join(f"{k}={v}" for k, v in top.items() if "Sequence" in k and v)
 
-  def _event(self, command, guid, dev, seq, channels, vols, first, used, counting, pattern, env, note=""):
+  def _event(self, command, guid, dev, seq, channels, vols, first, used, counting, pattern, env, note="",
+             settings=None):
     self.events.append(StepEvent(len(self.events) + 1, command, guid, dev, seq.name if seq else "",
                                  dict(channels), vols, first, used, counting, pattern,
-                                 tuple(self.stack), note))
+                                 tuple(self.stack), note, settings or {}))
 
   @staticmethod
   def _success(dev, command, channels) -> HArray:

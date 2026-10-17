@@ -130,6 +130,38 @@ def _container_size(rack: Rack, store: DefinitionStore) -> tuple[float, float, f
   return pitch, pitch, rack.dim[2]
 
 
+def _volume_functions(geometry) -> dict:
+  """A well's volume-of-height and height-of-volume from its .ctr segments (each segment's
+  EqnOfVol over the depth within it), as PLR's well functions.
+
+  PLR serializes a function as its code and closure and rebuilds it with other globals, so these
+  use only built-ins and keep plain data in their closures: (floor, top, equation) per segment. The
+  height inverts the volume by bisection; a volume past the brim reads as the brim."""
+  segs = tuple((s.z0, s.z1, s.eqn) for s in geometry.segments)
+  depth = float(geometry.depth)
+
+  def volume_from_height(h):
+    total = 0.0
+    for z0, z1, eqn in segs:
+      total += eval(eqn, {"__builtins__": {}}, {"h": min(max(h - z0, 0.0), z1 - z0)})  # noqa: S307
+    return total
+
+  def height_from_volume(v):
+    lo, hi = 0.0, depth
+    for _ in range(60):
+      mid = (lo + hi) / 2
+      filled = 0.0
+      for z0, z1, eqn in segs:
+        filled += eval(eqn, {"__builtins__": {}}, {"h": min(max(mid - z0, 0.0), z1 - z0)})  # noqa: S307
+      if filled < v:
+        lo = mid
+      else:
+        hi = mid
+    return (lo + hi) / 2
+
+  return dict(compute_volume_from_height=volume_from_height, compute_height_from_volume=height_from_volume)
+
+
 def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
   sx, sy, sz = rack.dim
   rows, cols = rack.rows, rack.columns
@@ -156,11 +188,17 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
   # the cross-section of the container's top segment, as generate.py reads it; a well with unequal
   # sides is rectangular whatever the segments say
   ctr = store.ref(rack, "Cntr.1.file")
-  box = ctr is not None and generate.container(ctr).is_box
+  geometry = generate.container(ctr) if ctr is not None else None
+  box = geometry is not None and geometry.is_box
   shape = CrossSectionType.CIRCLE if abs(wx - wy) < 1e-9 and not box else CrossSectionType.RECTANGLE
+  # volume and height from the container's own segments (their EqnOfVol), so a liquid surface found
+  # or set converts as Venus converts it (PLR's cLLD needs them); none when the .ctr has no segments
+  volume_fns = {}
+  if geometry is not None and geometry.segments and all(generate._EQN.match(s.eqn) for s in geometry.segments):
+    volume_fns = _volume_functions(geometry)
   # the well stands on Venus's container base, which is the cavity floor: no material below it
   items = create_ordered_items_2d(Well, size_z=depth, cross_section_type=shape, material_z_thickness=0.0,
-                                  **grid)
+                                  **volume_fns, **grid)
   return Plate(name, sx, sy, sz, ordered_items=items)
 
 
