@@ -21,11 +21,11 @@ import dataclasses
 from typing import Optional
 
 from venus_interop.methods import sequences as sq
+from venus_interop.plr import steps
 from venus_interop.plr.libraries.star_tip_tools import StarTipTools
+from venus_interop.plr.steps import Pipetting
 
-from pylabrobot.hamilton.star.driver.lld_mode import LLDMode
 from pylabrobot.hamilton.star.liquid_classes import mapping as star_classes
-from pylabrobot.lib.liquid_handling.mix import Mix
 
 LIBRARY = "NGSSTARPROCESSES"  # the Venus namespace ported
 
@@ -34,15 +34,15 @@ SVFT, HVFT, LVFT = 1, 5, 23  # Venus tip types: 300 uL, 1000 uL, 50 uL filter ti
 
 @dataclasses.dataclass(frozen=True)
 class TipSettings:
-  """What the library's step records set differently per tip type."""
-  aspirate_submerge: float  # mm below the surface, aspirating by cLLD
-  dispense_submerge: float  # mm below the surface, dispensing by cLLD
-  dispense_clld: int  # the dispense's cLLD sensitivity (PLR takes none per call)
+  """What the library's cLLD step records set differently per tip type."""
+  aspirate_submerge: float  # mm below the surface found
+  dispense_clld: int  # cLLD sensitivity
+  dispense_submerge: float
 
 
-TIP_SETTINGS = {SVFT: TipSettings(0.5, 0.5, 2), HVFT: TipSettings(2.0, 0.6, 1), LVFT: TipSettings(0.5, 0.5, 1)}
+TIP_SETTINGS = {SVFT: TipSettings(0.5, 2, 0.5), HVFT: TipSettings(2.0, 1, 0.6), LVFT: TipSettings(0.5, 1, 0.5)}
 LIQUID_FOLLOWING_ABOVE = 1.8  # mm: a fixed-height aspirate follows the liquid above this
-MIX_FLOW = 250.0  # uL/s; the steps leave it to the class: an assumption until classes are read
+MIX_POSITION = 1.0  # mm above the surface: the aspirate records' and the cLLD dispense records'
 
 
 class NGSStarProcesses:
@@ -83,26 +83,25 @@ class NGSStarProcesses:
         spots = self._take(tips, pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
         held = sorted(spots)
         await self.p.pick_up_tips([self.v.resolve(spots[c]) for c in held], use_channels=held)
+      mix_a = mix_cycles if mix_volume_aspiration else 0
+      aspirate = (Pipetting(1, cfg.aspirate_submerge, liquid_following=True, mix_cycles=mix_a,
+                            mix_volume=mix_volume_aspiration, mix_position=MIX_POSITION)
+                  if aspirate_height == 0 else
+                  Pipetting(0, fluid_height=aspirate_height, liquid_following=aspirate_height > LIQUID_FOLLOWING_ABOVE,
+                            mix_cycles=mix_a, mix_volume=mix_volume_aspiration, mix_position=MIX_POSITION))
+      mix_d = mix_cycles if mix_volume_dispense else 0
+      dispense_step = (Pipetting(cfg.dispense_clld, cfg.dispense_submerge, liquid_following=True,
+                                 mix_cycles=mix_d, mix_volume=mix_volume_dispense, mix_position=MIX_POSITION)
+                       if dispense_height == 0 else
+                       Pipetting(0, fluid_height=dispense_height,
+                                 liquid_following=bool(liquid_following_at_fixed_dispense),
+                                 mix_cycles=mix_d, mix_volume=mix_volume_dispense))
       wells = self._take(aspiration, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
       ch = sorted(wells)
-      mix = _mix(mix_cycles, mix_volume_aspiration)
-      where = (dict(lld_mode=LLDMode.CAPACITIVE, immersion_depths=[cfg.aspirate_submerge] * len(ch),
-                    auto_surface_following=True) if aspirate_height == 0 else
-               dict(liquid_heights=[aspirate_height] * len(ch),
-                    auto_surface_following=aspirate_height > LIQUID_FOLLOWING_ABOVE))
-      await self.p.aspirate([self.v.resolve(wells[c]) for c in ch], [volume] * len(ch), use_channels=ch,
-                            hamilton_liquid_classes=[lc] * len(ch) if lc else None,
-                            pre_mixes=[mix] * len(ch) if mix else None, **where)
+      await steps.aspirate(self.p, [self.v.resolve(wells[c]) for c in ch], [volume] * len(ch), ch, aspirate, lc)
       wells = self._take(dispense, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
       ch = sorted(wells)
-      mix = _mix(mix_cycles, mix_volume_dispense)
-      where = (dict(lld_mode=LLDMode.CAPACITIVE, immersion_depths=[cfg.dispense_submerge] * len(ch),
-                    auto_surface_following=True) if dispense_height == 0 else
-               dict(liquid_heights=[dispense_height] * len(ch),
-                    auto_surface_following=bool(liquid_following_at_fixed_dispense)))
-      await self.p.dispense([self.v.resolve(wells[c]) for c in ch], [volume] * len(ch), use_channels=ch,
-                            hamilton_liquid_classes=[lc] * len(ch) if lc else None,
-                            post_mixes=[mix] * len(ch) if mix else None, **where)
+      await steps.dispense(self.p, [self.v.resolve(wells[c]) for c in ch], [volume] * len(ch), ch, dispense_step, lc)
       if tip_exchange:
         await self.p.discard_tips(use_channels=held)
       if increment_aspiration:
@@ -115,6 +114,3 @@ class NGSStarProcesses:
     if not tip_exchange and loop:
       await self.p.discard_tips(use_channels=held)
 
-
-def _mix(cycles, volume) -> Optional[Mix]:
-  return Mix(volume=float(volume), repetitions=int(cycles), flow_rate=MIX_FLOW) if cycles and volume else None

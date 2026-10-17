@@ -1,0 +1,100 @@
+"""Venus pipetting step settings, and how they become PyLabRobot STAR arguments: one place for every
+port.
+
+A Venus Aspirate or Dispense step's record (`.stp`) holds, per channel, what decides where the tip
+goes: cLLD sensitivity (0: off), the submerge depth below the surface found, the fluid height above
+the container bottom (with cLLD off), liquid following, and the mix. `Pipetting` keeps those; a port
+builds one per step from the record's values, and the port tests build the same from the record as
+the HSL interpreter binds it (`Pipetting.from_record`), so a port's settings are checked against
+the record, not only its wells.
+
+The mapping to PLR (`plr_arguments`):
+  cLLD on    lld_mode capacitive, immersion depth = submerge, surface following = liquid following
+  cLLD off   lld_mode OFF (given: PLR's default under surface following is capacitive),
+             liquid height = fluid height, surface following = liquid following
+  mix        a pre-mix (aspirate) or post-mix (dispense) of the cycles and volume, at the mix
+             position above the surface (aspirate)
+What PLR takes no argument for (the cLLD sensitivity level, Venus's dispense modes) stays in
+`Pipetting` for the comparison, not in the call. Mix flow rate: the steps leave it to the liquid
+class; MIX_FLOW until classes are read.
+"""
+from __future__ import annotations
+
+import dataclasses
+from typing import Any, Optional
+
+MIX_FLOW = 250.0  # uL/s
+
+# Called with ("Aspirate" | "Dispense", channels, Pipetting) for every step: how a port test sees the
+# Venus settings a port meant, including those PLR takes no argument for (the cLLD level)
+OBSERVERS: list = []
+
+
+@dataclasses.dataclass(frozen=True)
+class Pipetting:
+  clld: int  # cLLD sensitivity, 0 = off
+  submerge: float = 0.0  # mm below the surface found (cLLD on)
+  fluid_height: float = 0.0  # mm above the bottom (cLLD off)
+  liquid_following: bool = False
+  mix_cycles: int = 0
+  mix_volume: float = 0.0
+  mix_position: float = 0.0  # mm above the surface (aspirate)
+
+  @classmethod
+  def from_record(cls, s: dict[str, Any]) -> "Pipetting":
+    """From a step's settings as the HSL interpreter records them (names as stp_pars gives them)."""
+    return cls(clld=int(s.get("cLLD sensitivity", 0) or 0), submerge=float(s.get("submerge depth", 0) or 0),
+               fluid_height=float(s.get("fluid height", 0) or 0),
+               liquid_following=bool(int(s.get("LiquidFollowing", 0) or 0)),
+               mix_cycles=int(s.get("mix cycles", 0) or 0), mix_volume=float(s.get("mix volume", 0) or 0),
+               mix_position=float(s.get("mix position", 0) or 0))
+
+  def effective(self) -> "Pipetting":
+    """Only what takes effect: the submerge depth with cLLD on, the fluid height with it off, the
+    mix's volume and position with cycles. Two steps that pipette alike compare equal."""
+    mixing = self.mix_cycles > 0 and self.mix_volume > 0
+    return dataclasses.replace(
+      self, submerge=self.submerge if self.clld else 0.0, fluid_height=0.0 if self.clld else self.fluid_height,
+      mix_cycles=self.mix_cycles if mixing else 0, mix_volume=self.mix_volume if mixing else 0.0,
+      mix_position=self.mix_position if mixing else 0.0)
+
+
+def plr_arguments(step: Pipetting, n: int, aspirate: bool) -> dict[str, Any]:
+  """The STAR aspirate / dispense keyword arguments for `n` channels."""
+  from pylabrobot.hamilton.star.driver.lld_mode import LLDMode
+  from pylabrobot.lib.liquid_handling.mix import Mix
+
+  s = step.effective()
+  out: dict[str, Any] = {"auto_surface_following": s.liquid_following}
+  if s.clld:
+    out.update(lld_mode=LLDMode.CAPACITIVE, immersion_depths=[s.submerge] * n)
+  else:  # OFF given, not left to PLR: with surface following, its default is CAPACITIVE
+    out.update(lld_mode=LLDMode.OFF, liquid_heights=[s.fluid_height] * n)
+  if s.mix_cycles:
+    mix = Mix(volume=s.mix_volume, repetitions=s.mix_cycles, flow_rate=MIX_FLOW)
+    if aspirate:
+      out.update(pre_mixes=[mix] * n, mix_positions_from_liquid_surface=[s.mix_position] * n)
+    else:
+      out.update(post_mixes=[mix] * n)
+  return out
+
+
+async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_class: Optional[Any] = None,
+                   **extra):
+  """A Venus Aspirate step on PLR: the wells per channel, the step's settings, the class if known."""
+  for observe in OBSERVERS:
+    observe("Aspirate", channels, step)
+  kw = plr_arguments(step, len(channels), aspirate=True)
+  if liquid_class is not None:
+    kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
+  await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
+
+
+async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_class: Optional[Any] = None,
+                   **extra):
+  for observe in OBSERVERS:
+    observe("Dispense", channels, step)
+  kw = plr_arguments(step, len(channels), aspirate=False)
+  if liquid_class is not None:
+    kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
+  await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)

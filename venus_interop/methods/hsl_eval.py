@@ -1780,8 +1780,38 @@ class Run:
         return self._success(name, command, {})
       taken = sq.take(seq, pat_s[:16], int(counting), int(use))
     vols = self._volumes(rec, taken.channels, env)
-    self._event(command, guid, name, seq, taken.channels, vols, taken.first, taken.used, counting, pat_s, env)
+    settings = self._channel_settings(rec, taken.channels, top, env)
+    self._event(command, guid, name, seq, taken.channels, vols, taken.first, taken.used, counting, pat_s, env,
+                settings=settings)
     return self._success(name, command, taken.channels)
+
+  # Top-level settings of a pipetting step worth recording beside its per-channel ones
+  STEP_SETTINGS = ("TipType", "DispenseMode", "SameLiquid", "SideTouchMode")
+
+  def _channel_settings(self, rec: stp_pars.Record, channels, top, env) -> dict[str, Any]:
+    """A pipetting step's settings, bound: the per-channel block's for the channels it used, one
+    value where they agree and a list (channel order) where they do not, plus STEP_SETTINGS."""
+    per: dict[str, list] = {}
+    block = next((v for k, v in rec.tree if stp_pars.key_id(k) == "-534183936" and isinstance(v, list)), None)
+    for ch_key, sub in block or []:
+      if not isinstance(sub, list):
+        continue
+      try:
+        ch = int(stp_pars.key_id(ch_key))
+      except ValueError:
+        continue
+      if ch not in channels:
+        continue
+      for k, v in sub:
+        if isinstance(v, list) or stp_pars.key_id(k).lstrip("-").isdigit() and stp_pars.key_name(k) == stp_pars.key_id(k):
+          continue
+        val = self._setting(rec, str(v).strip('"'), env)
+        per.setdefault(stp_pars.key_name(k), []).append(val)
+    out: dict[str, Any] = {k: (vs[0] if all(x == vs[0] for x in vs) else vs) for k, vs in per.items()}
+    for k in self.STEP_SETTINGS:
+      if k in top:
+        out[k] = self._setting(rec, top[k], env)
+    return out
 
   # A CO-RE gripper step's settings, by the names `_transport_step` records them under
   TRANSPORT_SETTINGS = ("GripperAccessHeight", "ZSwapPlateCheck", "ToolUpperChannel", "ToolEject",
@@ -1851,7 +1881,7 @@ class Run:
       raw = d.get("-534183924") or d.get("-534183908")
       if raw is None or ch not in channels:
         continue
-      out[ch] = self._binding(rec, raw.strip('"'), env)
+      out[ch] = self._setting(rec, raw.strip('"'), env)  # `<name>` or a bare variable name
     return out
 
   def _move_note(self, top, env) -> str:

@@ -3,8 +3,10 @@
 PIP_ReagentsFromTubeOrTroughOrPlateToPlate runs on Roche Avenio CGP's layout in the HSL interpreter
 and in the port, for each tip type and the branches that matter (tips exchanged or kept, the
 aspiration sequence advanced or not, cLLD or fixed heights, a last slice narrower than the
-channels). Every step must use the same tips and wells per channel, and the same cLLD or
-fixed-height step record.
+channels). Every step must use the same tips and wells per channel, the same cLLD or fixed-height
+step record, and the same settings: the record's, as the interpreter binds them, through
+`venus_interop.plr.steps` against the PLR arguments the port passes (volumes, cLLD and immersion or
+fixed height, surface following, mixes), and the record's liquid class.
 
 What Venus does through compiled services is modelled on both sides alike: the liquid class's tip
 type and dispense mode (a table), the tip planner (STAR Tip Tools, unit-tested on its own in
@@ -26,6 +28,7 @@ pytest.importorskip("pylabrobot.hamilton.star.driver.lld_mode")
 
 from venus_interop.files import layout  # noqa: E402
 from venus_interop.methods import hsl_eval, protocol, sequences as sq  # noqa: E402
+from pylabrobot.hamilton.star.driver.lld_mode import LLDMode  # noqa: E402
 
 NGS = pathlib.Path(os.environ["VENUS_INTEROP_NGS"]) if os.environ.get("VENUS_INTEROP_NGS") else None
 LIBS = [pathlib.Path(p) for p in os.environ.get("VENUS_INTEROP_HAMILTON_LIBS", "").split(os.pathsep) if p]
@@ -47,6 +50,7 @@ CALLS = [
   (12, "RGT_Beads", "HSP_Pipette", 15, "LC50", 2, 10, 10, 3.0, 0, 0, 0, 0),
   (24, "HSP_onCPAC", "HSP_Pipette2", 50, "LC1000", 0, 0, 0, 1.5, 2.0, 1, 1, 1),
   (16, "RGT_Tris", "HSP_Pipette", 30, "LC300", 3, 0, 25, 0, 1.0, 1, 0, 0),
+  (16, "RGT_Te_Buffer", "HSP_Pipette2", 100, "LC1000", 2, 80, 0, 0, 0, 0, 0, 0),
 ]
 
 
@@ -116,15 +120,21 @@ def hsl_steps(avenio, lay, call):
   run.src = text.splitlines()
   run.run()
   assert run.stopped is None, run.stopped
-  out = []
+  from venus_interop.plr import steps
+
+  out, classes = [], []
   for e in run.events:
-    variant = ""
-    if e.command == "Aspirate":
-      variant = "lld" if e.guid[:8] in LLD_ASPIRATES else "fixed"
-    elif e.command == "Dispense":
-      variant = "lld" if e.guid[:8] in LLD_DISPENSES else "fixed"
-    out.append((e.command, dict(e.channels) if e.command != "TipEject" else {}, variant))
-  return out
+    variant, settings = "", {}
+    if e.command in ("Aspirate", "Dispense"):
+      variant = "lld" if e.guid[:8] in (LLD_ASPIRATES if e.command == "Aspirate" else LLD_DISPENSES) else "fixed"
+      ch = sorted(e.channels)
+      settings = steps.plr_arguments(steps.Pipetting.from_record(e.settings), len(ch), e.command == "Aspirate")
+      settings["volumes"] = [float(e.volumes[c]) for c in ch]
+      settings["venus"] = steps.Pipetting.from_record(e.settings).effective()
+      if e.command == "Aspirate":
+        classes.append(e.settings["LiquidName"])
+    out.append((e.command, dict(e.channels) if e.command != "TipEject" else {}, variant, settings))
+  return out, classes
 
 
 class _Channels:
@@ -132,18 +142,22 @@ class _Channels:
     self.events = []
 
   async def pick_up_tips(self, spots, use_channels):
-    self.events.append(("TipPickUp", dict(zip([c + 1 for c in use_channels], spots)), ""))
+    self.events.append(("TipPickUp", dict(zip([c + 1 for c in use_channels], spots)), "", {}))
+
+  def _pipette(self, command, wells, vols, use_channels, kw):
+    settings = {k: v for k, v in kw.items() if k != "hamilton_liquid_classes"}
+    settings["volumes"] = [float(v) for v in vols]
+    self.events.append((command, dict(zip([c + 1 for c in use_channels], wells)),
+                        "lld" if kw.get("lld_mode") not in (None, LLDMode.OFF) else "fixed", settings))
 
   async def aspirate(self, wells, vols, use_channels, **kw):
-    self.events.append(("Aspirate", dict(zip([c + 1 for c in use_channels], wells)),
-                        "lld" if kw.get("lld_mode") else "fixed"))
+    self._pipette("Aspirate", wells, vols, use_channels, kw)
 
   async def dispense(self, wells, vols, use_channels, **kw):
-    self.events.append(("Dispense", dict(zip([c + 1 for c in use_channels], wells)),
-                        "lld" if kw.get("lld_mode") else "fixed"))
+    self._pipette("Dispense", wells, vols, use_channels, kw)
 
   async def discard_tips(self, use_channels):
-    self.events.append(("TipEject", {}, ""))
+    self.events.append(("TipEject", {}, "", {}))
 
 
 class _Deck:
@@ -161,13 +175,24 @@ def port_steps(lay, call):
   from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
 
   n, asp, disp, vol, lc, cyc, mva, mvd, ha, hd, ex, inc, lf = call
+  from venus_interop.plr import steps
+
   deck, ch = _Deck(lay), _Channels()
+  meant = []
+  steps.OBSERVERS[:] = [lambda command, channels, step: meant.append(step.effective())]
   deck.seq(disp).set_count(n)
   procs = NGSStarProcesses(type("Star", (), {"pipettes": ch})(), deck, TIPS, CLASSES, planner=_planner(deck.live))
-  procs._lc = lambda name: None
-  asyncio.run(procs.PIP_ReagentsFromTubeOrTroughOrPlateToPlate(None, asp, disp, vol, lc, cyc, mva, mvd, ha, hd,
-                                                                 ex, inc, lf))
-  return ch.events
+  classes = []
+  procs._lc = lambda name: classes.append(name)  # the class asked for; none given to the recorder
+  try:
+    asyncio.run(procs.PIP_ReagentsFromTubeOrTroughOrPlateToPlate(None, asp, disp, vol, lc, cyc, mva, mvd, ha, hd,
+                                                                   ex, inc, lf))
+  finally:
+    steps.OBSERVERS.clear()
+  for e in ch.events:  # the Venus settings the port meant, in step order
+    if e[0] in ("Aspirate", "Dispense"):
+      e[3]["venus"] = meant.pop(0)
+  return ch.events, classes
 
 
 def test_covers_what_it_calls():
@@ -176,7 +201,8 @@ def test_covers_what_it_calls():
 
 @pytest.mark.parametrize("call", CALLS, ids=[f"{c[4]}-{c[2]}-n{c[0]}" for c in CALLS])
 def test_port_pipettes_as_the_library_does(avenio, lay, call):
-  hsl, port = hsl_steps(avenio, lay, call), port_steps(lay, call)
+  (hsl, hsl_classes), (port, port_classes) = hsl_steps(avenio, lay, call), port_steps(lay, call)
   assert len(hsl) == len(port) and len(hsl) > 3
   for i, (a, b) in enumerate(zip(hsl, port)):
     assert a == b, f"step {i}: library {a}, port {b}"
+  assert set(hsl_classes) == set(port_classes) == {call[4]}

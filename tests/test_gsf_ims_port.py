@@ -2,7 +2,9 @@
 
 Both run the same calls on the Marionette layout's sequences: the library in the HSL interpreter
 (its device steps resolved through the library's .stp records), the port with its PLR channel
-calls recorded. Every step must use the same (labware, position) on every channel.
+calls recorded. Every step must use the same (labware, position) on every channel, and every
+aspirate and dispense the record's settings: as the interpreter binds them, through
+`venus_interop.plr.steps`, against the PLR arguments the port passes and the Venus settings it means.
 
 Needs VENUS_INTEROP_NIST (the NIST lmsf_hamilton repository copy), VENUS_INTEROP_CORPUS (for the
 layout, 3ed5809e547e.lay, and labware definitions) and a pylabrobot with the STAR driver's
@@ -99,7 +101,19 @@ def hsl_steps(lay):
   run.src = text.splitlines()
   run.run()
   assert run.stopped is None, run.stopped
-  return [(e.command, e.channels) for e in run.events]
+  from venus_interop.plr import steps
+
+  out = []
+  for e in run.events:
+    settings = {}
+    if e.command in ("Aspirate", "Dispense"):
+      settings = steps.plr_arguments(steps.Pipetting.from_record(e.settings), len(e.channels), e.command == "Aspirate")
+      settings["venus"] = steps.Pipetting.from_record(e.settings).effective()
+      vols = [e.volumes.get(c) for c in sorted(e.channels)]
+      if all(isinstance(v, (int, float)) for v in vols):
+        settings["volumes"] = [float(v) for v in vols]
+    out.append((e.command, e.channels, settings))
+  return out
 
 
 class _Deck:
@@ -120,26 +134,36 @@ class _Channels:
   def __init__(self):
     self.events = []
 
-  def _log(self, command, spots, channels):
-    self.events.append((command, dict(zip([c + 1 for c in channels], spots))))
+  def _log(self, command, spots, channels, settings=None):
+    self.events.append((command, dict(zip([c + 1 for c in channels], spots)), settings or {}))
 
   async def pick_up_tips(self, spots, use_channels):
     self._log("TipPickUp", spots, use_channels)
 
   async def discard_tips(self, use_channels):
-    self.events.append(("TipEject", {}))
+    self.events.append(("TipEject", {}, {}))
+
+  def _pipette(self, command, wells, vols, use_channels, kw):
+    settings = {k: v for k, v in kw.items() if k not in ("hamilton_liquid_classes", "empty")}
+    settings["venus"] = self.meant.pop(0)
+    settings["volumes"] = [float(v) for v in vols]
+    self._log(command, wells, use_channels, settings)
 
   async def aspirate(self, wells, vols, use_channels, **kw):
-    self._log("Aspirate", wells, use_channels)
+    self._pipette("Aspirate", wells, vols, use_channels, kw)
 
   async def dispense(self, wells, vols, use_channels, **kw):
-    self._log("Dispense", wells, use_channels)
+    self._pipette("Dispense", wells, vols, use_channels, kw)
 
 
 def port_steps(lay):
   from venus_interop.plr.libraries import gsf_ims
 
+  from venus_interop.plr import steps
+
   channels = _Channels()
+  channels.meant = []
+  steps.OBSERVERS[:] = [lambda command, ch, step: channels.meant.append(step.effective())]
   g = gsf_ims.GsfIms(type("Star", (), {"pipettes": channels})(), _Deck(lay))
   g._class = lambda tips: (gsf_ims.CLASS_BY_TIP[300 if "300" in tips else 1000], None)
   g._lc = lambda name: None
@@ -148,7 +172,10 @@ def port_steps(lay):
     for fn, _, args in CALLS:
       await getattr(g, fn)(*args)
 
-  asyncio.run(go())
+  try:
+    asyncio.run(go())
+  finally:
+    steps.OBSERVERS.clear()
   return channels.events
 
 
@@ -160,4 +187,6 @@ def test_port_uses_the_wells_and_tips_the_library_does(lay):
   hsl, port = hsl_steps(lay), port_steps(lay)
   assert len(hsl) == len(port) == 111
   for i, (a, b) in enumerate(zip(hsl, port)):
+    if "volumes" not in a[2]:  # an array-bound volume the interpreter leaves unresolved
+      b = (b[0], b[1], {k: v for k, v in b[2].items() if k != "volumes"})
     assert a == b, f"step {i}: library {a}, port {b}"

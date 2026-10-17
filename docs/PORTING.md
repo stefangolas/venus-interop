@@ -104,6 +104,12 @@ port is described as matching Venus.
    Declare in the test what it checks, `LIBRARY = "<NAMESPACE>"` and `COVERS = [...]` (literals:
    `--status` reads them without importing), and declare `LIBRARY` in the port module.
 
+   Pipetting goes through `venus_interop.plr.steps`: a port builds a `Pipetting` (cLLD, submerge,
+   fluid height, liquid following, mix) per step and calls `steps.aspirate` / `steps.dispense`.
+   The test compares, per step, the record's settings as the interpreter binds them
+   (`Pipetting.from_record`) with what the port meant (`steps.OBSERVERS`) and with the PLR
+   arguments it passed (`steps.plr_arguments`). Settings are then checked, not only transcribed.
+
 7. **Make sure the test can fail.** Change one table entry or one argument's wiring in the port
    and see the test catch it.
 
@@ -162,6 +168,10 @@ needs, and no more:
   (pyhamilton bundles STAR Tools; NIST's repository has HSL_MethodHelper). Pass those folders as
   extra roots; a port test takes them from `VENUS_INTEROP_HAMILTON_LIBS` (separated by
   `os.pathsep`). An unresolved include shows in `trace_method.py`'s output.
+- **A recorder accepts anything.** The port tests stand a recorder in for PLR, so an argument PLR
+  would refuse passes them. Run the method's demo on the simulator after changing how a port
+  calls PLR. (PLR's dispense turns cLLD on under surface following unless `lld_mode` is OFF; the
+  test passed, the demo did not.)
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.

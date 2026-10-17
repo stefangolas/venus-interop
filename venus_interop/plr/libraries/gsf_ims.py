@@ -32,9 +32,10 @@ from __future__ import annotations
 from typing import Optional, Sequence, Union
 
 from venus_interop.methods import sequences as sq
+from venus_interop.plr import steps
+from venus_interop.plr.steps import Pipetting
 from venus_interop.plr.venus_deck import VenusDeck
 
-from pylabrobot.hamilton.star.driver.lld_mode import LLDMode
 from pylabrobot.hamilton.star.liquid_classes import mapping as star_classes
 from pylabrobot.lib.liquid_handling.mix import Mix
 
@@ -46,6 +47,7 @@ CLASS_BY_TIP = {  # aspirate_w_err_handling: STAR_TIP_TOOLS::GetTipType 1 / 5
 }
 SERIES_CLASS = "HighVolumeFilter_Water_FastMixing_DispenseSurface_Empty"  # fixed in 05a6e94c, 32abdc77
 SUBMERGE = 2.0
+CLLD = 5  # the records' cLLD sensitivity ("from labware")
 DISPENSE_HEIGHT = 0.3  # fb45c82b, the dispense not to liquid
 MIX_FLOW = 250.0  # uL/s; the step leaves it to the class: an assumption until classes are read
 
@@ -85,29 +87,20 @@ class GsfIms:
     wells = self._take(seq, n, counting)
     ch = sorted(wells)
     name, lc = (class_name, self._lc(class_name)) if class_name else self._class(tips)
-    vols = _per_channel(volumes, ch)
-    await self.p.aspirate(
-      [wells[c] for c in ch], vols, use_channels=ch, lld_mode=LLDMode.CAPACITIVE,
-      immersion_depths=[SUBMERGE] * len(ch), auto_surface_following=True,
-      hamilton_liquid_classes=[lc] * len(ch) if lc else None, pre_mixes=[mix] * len(ch) if mix else None,
-      mix_positions_from_liquid_surface=[mix_position] * len(ch) if mix else None)
+    step = Pipetting(CLLD, SUBMERGE, fluid_height=5.0, liquid_following=True, mix_position=mix_position,
+                     **_mix_fields(mix))
+    await steps.aspirate(self.p, [wells[c] for c in ch], _per_channel(volumes, ch), ch, step, lc)
     self._last_class = lc
 
   async def dispense(self, seq: str, volumes: Volumes, n: int, counting: int, to_liquid: bool,
                      mix: Optional[Mix] = None):
     wells = self._take(seq, n, counting)
     ch = sorted(wells)
-    vols = _per_channel(volumes, ch)
-    lc = [self._last_class] * len(ch) if self._last_class else None
-    if to_liquid:
-      await self.p.dispense([wells[c] for c in ch], vols, use_channels=ch, lld_mode=LLDMode.CAPACITIVE,
-                            immersion_depths=[SUBMERGE] * len(ch), auto_surface_following=True,
-                            hamilton_liquid_classes=lc, post_mixes=[mix] * len(ch) if mix else None,
-                            empty=[True] * len(ch))
-    else:
-      await self.p.dispense([wells[c] for c in ch], vols, use_channels=ch,
-                            liquid_heights=[DISPENSE_HEIGHT] * len(ch), hamilton_liquid_classes=lc,
-                            post_mixes=[mix] * len(ch) if mix else None, empty=[True] * len(ch))
+    step = (Pipetting(CLLD, SUBMERGE, liquid_following=True, mix_position=2.0, **_mix_fields(mix)) if to_liquid
+            else Pipetting(0, SUBMERGE, fluid_height=DISPENSE_HEIGHT, liquid_following=True, mix_position=2.0,
+                           **_mix_fields(mix)))
+    await steps.dispense(self.p, [wells[c] for c in ch], _per_channel(volumes, ch), ch, step, self._last_class,
+                         empty=[True] * len(ch))
 
   # -- tips ------------------------------------------------------------------------------------
 
@@ -232,6 +225,10 @@ class GsfIms:
                             mix_volume, number_channels):
     await self.dispense(disp_seq, p_vol, number_channels, int(disp_seq_counting), bool(disp_to_liquid),
                         mix=_mix(mix_cycles, mix_volume))
+
+
+def _mix_fields(mix: Optional[Mix]) -> dict:
+  return dict(mix_cycles=mix.repetitions, mix_volume=mix.volume) if mix else {}
 
 
 def _mix(cycles, volume) -> Optional[Mix]:
