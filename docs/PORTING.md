@@ -121,6 +121,12 @@ needs, and no more:
   plate move shows up that way.
 - When a call only reads something for a trace, answer it with `Unknown` (as device
   `GetLabwarePosition` does).
+- A whole library function Venus runs through a compiled service (the liquid-class database, the
+  deck object, SQL over temporary files) can be replaced by a Python model:
+  `answers["functions"]["namespace::name"]` (lower case; the namespace's tail will do) is called
+  with the run and the parameters as cells by lower-case name, by-reference ones bound to the
+  caller's. Use the port of that function as its model when there is one: the NGSStar test runs the
+  STAR Tip Tools planner port inside the HSL that way.
 - A step type it does not know yet gets a handler in `Run._device_step`. Transport steps
   (`_transport_step`) and moves (`_move_step`) record their sequence's current item without
   consuming it, plus their bound settings.
@@ -151,6 +157,11 @@ needs, and no more:
   the start (`TipCount::Read2`) and write them back at the end (`Write2`), so the racks carry over
   between runs. These calls are tagged `[data]` and are easy to skip, but they decide where the
   first tip comes from. `plr/libraries/tip_count.py` keeps the counters in a JSON file.
+- **Libraries missing from the Venus install.** Kit methods include libraries that a given Venus
+  install lacks (`STAR Tools\`, `HSL_MethodHelper.hsl`). Copies often sit in other method packages
+  (pyhamilton bundles STAR Tools; NIST's repository has HSL_MethodHelper). Pass those folders as
+  extra roots; a port test takes them from `VENUS_INTEROP_HAMILTON_LIBS` (separated by
+  `os.pathsep`). An unresolved include shows in `trace_method.py`'s output.
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.

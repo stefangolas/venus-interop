@@ -875,6 +875,16 @@ class Run:
           locs[fname] = Cell(v)
       else:
         locs[fname] = Cell(self._default(ftype) if not is_array else HArray(kind=ftype))
+    # A function Venus runs through a compiled service (the liquid-class database, the deck object,
+    # SQL over files) can be replaced by a Python model: answers["functions"]["ns::name"] (lower
+    # case; the namespace's tail will do), called with this run and the parameters as cells by
+    # lower-case name (by-reference ones bound to the caller's); what it returns is the call's value.
+    full = f"{f.ns}::{f.name}".lower()
+    model = next((m for k, m in self.answers.get("functions", {}).items()
+                  if full == k or full.endswith("::" + k)), None)  # the namespace's tail will do
+    if model is not None:
+      self.notes.append(f"line {line}: {f.ns}::{f.name} run by its Python model")
+      return model(self, {k.lower(): c for k, c in locs.items()})
     self.stack.append(f.name)
     try:
       self._block(f.body, (locs, f.ns), new_scope=False)

@@ -15,7 +15,11 @@
     "IDS",
     "StringTable",
     "StringConstants",
-    "TimerLib"
+    "TimerLib",
+    "TRACE",
+    "BOOLEON",
+    "DIALOGS",
+    "Util2"
   ],
   "LABWAREHANDLING::*": {
     "scope": "out",
