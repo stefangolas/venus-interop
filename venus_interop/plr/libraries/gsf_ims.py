@@ -84,28 +84,37 @@ class GsfIms:
     name = CLASS_BY_TIP.get(int(volume), CLASS_BY_TIP[1000])
     return name, self._lc(name)
 
+  def _wells(self, items):
+    return [self.v.resolve(it) for it in items]
+
   def _take(self, seq: str, n: int, counting: int) -> dict:
     taken = sq.take(self.v.seq(seq), "1" * n + "0" * (8 - n), counting)
     return {ch - 1: self.v.resolve(item) for ch, item in taken.channels.items()}
 
-  async def aspirate(self, seq: str, volumes: Volumes, n: int, counting: int, tips: str,
-                     mix: Optional[Mix] = None, mix_position: float = 2.0, class_name: str = ""):
+  async def aspirate(self, seq: str, volumes: Volumes, n: int, counting: int, tips: str, **kw):
     wells = self._take(seq, n, counting)
-    ch = sorted(wells)
+    await self.aspirate_wells([wells[c] for c in sorted(wells)], volumes, tips, **kw)
+
+  async def dispense(self, seq: str, volumes: Volumes, n: int, counting: int, to_liquid: bool, **kw):
+    wells = self._take(seq, n, counting)
+    await self.dispense_wells([wells[c] for c in sorted(wells)], volumes, to_liquid, **kw)
+
+  async def aspirate_wells(self, wells, volumes: Volumes, tips: str, mix: Optional[Mix] = None,
+                           mix_position: float = 2.0, class_name: str = ""):
+    """Channel i from wells[i]."""
+    ch = list(range(len(wells)))
     name, lc = (class_name, self._lc(class_name)) if class_name else self._class(tips)
     step = Pipetting(CLLD, SUBMERGE, fluid_height=5.0, liquid_following=True, mix_position=mix_position,
                      **_mix_fields(mix))
-    await steps.aspirate(self.p, [wells[c] for c in ch], _per_channel(volumes, ch), ch, step, lc)
+    await steps.aspirate(self.p, wells, _per_channel(volumes, ch), ch, step, lc)
     self._last_class = lc
 
-  async def dispense(self, seq: str, volumes: Volumes, n: int, counting: int, to_liquid: bool,
-                     mix: Optional[Mix] = None):
-    wells = self._take(seq, n, counting)
-    ch = sorted(wells)
+  async def dispense_wells(self, wells, volumes: Volumes, to_liquid: bool, mix: Optional[Mix] = None):
+    ch = list(range(len(wells)))
     step = (Pipetting(CLLD, SUBMERGE, liquid_following=True, mix_position=2.0, **_mix_fields(mix)) if to_liquid
             else Pipetting(0, SUBMERGE, fluid_height=DISPENSE_HEIGHT, liquid_following=True, mix_position=2.0,
                            **_mix_fields(mix)))
-    await steps.dispense(self.p, [wells[c] for c in ch], _per_channel(volumes, ch), ch, step, self._last_class,
+    await steps.dispense(self.p, wells, _per_channel(volumes, ch), ch, step, self._last_class,
                          empty=[True] * len(ch))
 
   # -- tips ------------------------------------------------------------------------------------
@@ -126,17 +135,6 @@ class GsfIms:
     if a != n or d % a:
       raise SubmethodError(f"GSF-IMS: {asp} has {a} positions for {n} channels, {disp} has {d}")
 
-  async def _over(self, disp: str, body):
-    """The editor's loop over a sequence: from position 1 until it is complete, max aligned to
-    what is left, then reset (SetMax(total), SetCurrentPosition(1))."""
-    s = self.v.seq(disp)
-    s.set_current_position(1)
-    while s.cur > 0:
-      sq.align([(s, 1)])
-      await body()
-    s.set_max(s.total)
-    s.set_current_position(1)
-
   async def fill(self, asp: str, disp: str, volumes: Volumes, tips: str, n: int, *,
                  prewet: bool = False, own_tips: bool = False, new_tips_each: bool = False,
                  to_liquid: bool = False, mix_after: Optional[Mix] = None,
@@ -153,24 +151,19 @@ class GsfIms:
       top = max(volumes) if per_slice else volumes
       await self.aspirate(asp, top, n, sq.MANUAL, tips, class_name=class_name)
       await self.dispense(asp, top, n, sq.MANUAL, to_liquid=True)
-    slice_no = 0
-
-    async def body():
-      nonlocal slice_no
-      vols = volumes[slice_no] if per_slice else volumes
-      slice_no += 1
-      if skip_zero and not vols:
-        self.v.seq(disp).increment(n)  # SeqIncrement(disp_seq, number_channels)
-        return
+    d = self.v.seq(disp)
+    d.set_current_position(1)  # the editor's loop over the destination: from position 1
+    for i, (targets, sources) in enumerate(sq.batches(n, d, self.v.seq(asp))):
+      vols = volumes[i] if per_slice else volumes
+      if skip_zero and not vols:  # the slice skipped (SeqIncrement(disp_seq, number_channels))
+        continue
       if new_tips_each:
         await self.tip_pickup(tips, n)
-      await self.aspirate(asp, vols, n, sq.MANUAL, tips, mix=mix_before, mix_position=mix_position,
-                          class_name=class_name)
-      await self.dispense(disp, vols, n, sq.AUTOMATIC, to_liquid=to_liquid, mix=mix_after)
+      await self.aspirate_wells(self._wells(sources), vols, tips, mix=mix_before, mix_position=mix_position,
+                                class_name=class_name)
+      await self.dispense_wells(self._wells(targets), vols, to_liquid, mix=mix_after)
       if new_tips_each:
         await self.tip_eject(n)
-
-    await self._over(disp, body)
     if own_tips:
       await self.tip_eject(n)
 
@@ -214,14 +207,10 @@ class GsfIms:
     await self.tip_pickup(tips, n)
     f.set_current_position(1)
     t.set_current_position(1)
-    while f.cur > 0 and t.cur > 0:
-      sq.align([(f, 1), (t, 1)])
-      await self.aspirate(from_seq, p_vol, n, sq.AUTOMATIC, tips, mix=_mix(mix_cycles, mix_volume),
-                          mix_position=3.0, class_name=SERIES_CLASS)
-      await self.dispense(to_seq, p_vol, n, sq.AUTOMATIC, to_liquid=True)
-    for s in (f, t):
-      s.set_max(s.total)
-      s.set_current_position(1)
+    for sources, targets in sq.batches(n, f, t, advance=(True,)):
+      await self.aspirate_wells(self._wells(sources), p_vol, tips, mix=_mix(mix_cycles, mix_volume),
+                                mix_position=3.0, class_name=SERIES_CLASS)
+      await self.dispense_wells(self._wells(targets), p_vol, to_liquid=True)
     await self.tip_eject(n)
 
   async def simple_aspirate(self, asp_seq, asp_seq_counting, p_vol, tips, number_channels):
