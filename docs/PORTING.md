@@ -237,6 +237,7 @@ Ported libraries, each `plr/libraries/<module>.py` with `LIBRARY` = its Venus na
 | `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer, CO-RE plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
 | `star_tip_tools` | Hamilton STAR Tip Tools (tip planner, counters) + HelperLibrary | unit tests; the planner runs inside the NGSStar port test |
 | `ngsstar_loading` | Hamilton NGSStarLoading: volumes per sample, containers and their volumes, the RunData / Mastermix_Prep sheets, labware per process | `test_ngsstar_loading_port.py` (Avenio's own calls, 1/8/24/96 samples) |
+| `ngsstar_prep` | Hamilton NGSStarPrep: heater shakers, CPAC, ODTC on PLR's drivers (an ODTC method run in the background while the method pipettes) | `test_ngsstar_prep_port.py` (Avenio's own calls, both HHS configurations) |
 
 ## Translating a method
 
@@ -280,6 +281,7 @@ What each needed that the earlier ones had not built (keep a line per port):
 | Liquid classes | The `.mdb` reader |
 | Marionette, GROQ-Seq methods | `sequences.loop`; worklists; listed-position racks in the importer; the abort and source-defect policy |
 | NGSStarLoading | Excel workbooks read and written with SQL (`Run.workbooks`, SQLite); `Scripting.FileSystemObject`; HSL value types kept (a float operand gives a float; `Floor(x, hslTrue)`), since libraries branch on `GetType`; unassigned variables as integer 0 (CONVENTIONS §11) |
+| NGSStarPrep | Device drivers answered by recording models, compared with recording PLR devices in one vocabulary; PLR's ODTC backend: `upload_method_set`, `execute_method` (venus-plr) |
 
 ## Inputs
 
