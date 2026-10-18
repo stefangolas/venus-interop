@@ -198,7 +198,8 @@ class Gripper:
     `iswap` (an `iSWAPTransport`) gripping from `direction`, where the channels do not reach: with
     the first of `elbows` (elbow stops; None is the planner's choice) whose plan it can reach and
     that hits nothing. `grip` and `release` are passed to the CO-RE gripper's pick-up and drop
-    (a library's grip height, width, force, speeds, plate press); `front_channel` to its tool
+    (a library's grip height, width, force, speeds, plate press), `grip` to the iSWAP's pick-up plan
+    (its height below the top, width, opening margin, strength); `front_channel` to its tool
     pick-up, unless the tools are still on from a move that kept them; `eject` False keeps them on
     after this one (a library's eject_gripper 0).
     """
@@ -217,7 +218,8 @@ class Gripper:
       async def drop(to):
         await g.drop_resource(to, **(release or {}))
     else:
-      await self._iswap_step(iswap, lambda e: iswap.plan_pick_up(thing, direction=direction, elbow=e), elbows)
+      await self._iswap_step(iswap, lambda e: iswap.plan_pick_up(thing, direction=direction, elbow=e, **(grip or {})),
+                             elbows)
 
       async def drop(to):
         await self._iswap_step(iswap, lambda e: iswap.plan_drop(to, direction=direction, elbow=e), elbows)

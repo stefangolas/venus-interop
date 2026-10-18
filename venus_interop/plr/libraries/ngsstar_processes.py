@@ -24,7 +24,7 @@ from typing import Optional
 from venus_interop.methods import sequences as sq
 from venus_interop.plr import steps
 from venus_interop.plr.libraries.star_tip_tools import StarTipTools
-from venus_interop.plr.steps import CoreGrip, Pipetting
+from venus_interop.plr.steps import CoreGrip, IswapGrip, Pipetting
 
 from pylabrobot.hamilton.star.liquid_classes import mapping as star_classes
 
@@ -52,6 +52,11 @@ MIDI_GRIP = CoreGrip(height=8, width=79, opening=87, force=9, z_speed=128.7, pre
                      place_z_speed=50, check=1)
 HSP_GRIP = CoreGrip(height=5, width=81.3, opening=86, force=8, z_speed=128.7, press=0.3, x_acceleration=4,
                     place_z_speed=50, check=0)
+# Trp_HSPFromAndToODTCwithiSWAP's GetPlate records: the short side, 5 mm below the top
+ODTC_GRIP = IswapGrip(height=5, width=82.2, opening=85, force=5)
+# The elbow stops tried, in order (Venus leaves it to the arm): the right first, as the KAPA demo
+# found on the same deck (the others sweep the arm over the 96-head waste behind the ODTC)
+ODTC_ELBOWS = ("right", None, "front", "left")
 # Drops into the waste chutes and onto the stacker: the source and the destination shifted first, in
 # mm (VIRTUALLABWARE::MoveSeq), and back after
 SHIFTS = {
@@ -65,7 +70,7 @@ class NGSStarProcesses:
   def __init__(self, star, deck, tips: dict[int, str], liquid_classes, channels: int = 8,
                planner: Optional[StarTipTools] = None, gripper=None, transport_tool: int = CORE_GRIPPER,
                front_channel: int = 7, say=print, tip_counters: Optional[dict[int, str]] = None,
-               time_scale: float = 0.0, sleep=None, clock=None):
+               time_scale: float = 0.0, sleep=None, clock=None, iswap=None, clinical_starlet: bool = False):
     """`tips`: tip type -> the tip sequence (the framework's t_seqTips300 / 1000 / 50).
     `liquid_classes`: a VenusLiquidClasses (the kit's database, read by tools/liquid_classes.py),
     or a table name -> (tip type, dispense mode) with PLR's STAR classes."""
@@ -75,6 +80,8 @@ class NGSStarProcesses:
     self.missing_classes: set[str] = set()
     self.star, self.say = star, say
     self._gripper, self.transport_tool = gripper, transport_tool
+    self._iswap = iswap  # an iSWAPTransport; made from the STAR's iSWAP when first needed
+    self.clinical_starlet = clinical_starlet  # t_blnClinicalNGSStarlet
     self.front_channel = front_channel  # t_intFrontChannelCORETransport: 1 = back ... 8 = front
     # tip type -> the framework's tip counter name (t_strTipCounterNameTip50 / 300 / 1000)
     self.tip_counters = tip_counters or {}
@@ -234,6 +241,31 @@ class NGSStarProcesses:
     dst_lab = self.v.seq(destination).current_item()[0]
     grip = dataclasses.replace(HSP_GRIP, check=1 if dst_lab == "HSP_CPAC" else 0)
     return await self._transport(source, destination, grip, park_after_move, track_to_read_barcode)
+
+  async def Trp_HSPFromAndToODTCwithiSWAP(self, ML_STAR, source, destination, track_to_read_barcode=0,
+                                          park_after_move=0, read_barcode=None):
+    """A hard-shell PCR plate into or out of the ODTC by the iSWAP: the short side, 5 mm below the
+    top (from the left instead, inverted, on a Clinical NGS STARlet unless it comes from the ODTC);
+    then the arm parked, or only its Z homed (`R0ZI`: up to the top of its travel here)."""
+    import dataclasses
+
+    src_lab = self.v.seq(source).current_item()[0]
+    dst_lab = self.v.seq(destination).current_item()[0]
+    grip = dataclasses.replace(ODTC_GRIP, inverse=self.clinical_starlet and src_lab != "HSP_ODTC")
+    if track_to_read_barcode and int(track_to_read_barcode) > 0:
+      self.say(f"{src_lab}: barcode read at the autoload not modelled")
+    if self._iswap is None:
+      from pylabrobot.hamilton.star.driver.features.iswap_transport import iSWAPTransport
+      self._iswap = iSWAPTransport(self.star.iswap)
+    await self._gripper_().to_placeholder(self.v.resource(src_lab), dst_lab, iswap=self._iswap,
+                                          direction=grip.direction, elbows=ODTC_ELBOWS,
+                                          grip=steps.iswap_grip_arguments(grip))
+    if park_after_move:
+      await self.star.iswap.park(traverse_height=280.0)
+    else:
+      await self.star.iswap.elbow_move_to_safe_z_height()
+    # left out of the port so far, and in scope: the run report line ("Transport plate using iSWAP ...")
+    return "" if track_to_read_barcode and int(track_to_read_barcode) > 0 else "No barcode reading activated"
 
   # -- sequences ------------------------------------------------------------------------------
 

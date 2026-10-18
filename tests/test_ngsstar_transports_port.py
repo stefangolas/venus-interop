@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(NGS is None or not LIBS,
 
 # What this test checks against the HSL (read by tools/trace_method.py --status)
 LIBRARY = "NGSSTARPROCESSES"
-COVERS = ["Trp_HSP", "Trp_MIDI"]
+COVERS = ["Trp_HSP", "Trp_MIDI", "Trp_HSPFromAndToODTCwithiSWAP"]
 
 # (function, source, destination, park)
 CALLS = [
@@ -122,7 +122,7 @@ def port_moves(lay):
 
 
 def test_covers_what_it_calls():
-  assert sorted(COVERS) == sorted({fn for fn, *_ in CALLS})
+  assert sorted(COVERS) == sorted({fn for fn, *_ in CALLS} | {"Trp_HSPFromAndToODTCwithiSWAP"})
 
 
 def test_port_moves_plates_as_the_library_does(avenio, lay):
@@ -130,3 +130,92 @@ def test_port_moves_plates_as_the_library_does(avenio, lay):
   assert len(hsl) == len(port) == len(CALLS)
   for (fn, a, b, _), x, y in zip(CALLS, hsl, port):
     assert x == y, f"{fn} {a} -> {b}: library {x}, port {y}"
+
+
+# Trp_HSPFromAndToODTCwithiSWAP, as Avenio calls it: (source, destination, park)
+ISWAP_CALLS = [("HSP_Pipette2", "HSP_ODTC", 0), ("HSP_ODTC", "HSP_Pipette2", 1), ("HSP_ODTC", "HSP_Pipette2", 0)]
+
+
+def hsl_iswap_moves(avenio, lay, clinical):
+  N = "NGSSTARPROCESSES::"
+  src = (
+    'namespace _Method { #include "HSLSeqLib.hsl" }\n'
+    'namespace _Method { #include "NGSStarProcesses.hs_" }\n'
+    'global device ML_STAR ("x.lay", "ML_STAR", hslTrue);\n'
+    'variable bc;\n'
+    'namespace _Method { #include "HSLMECCLib.hs_" }\n'
+    "namespace _Method { method main() void {\n"
+    f"{N}t_blnClinicalNGSStarlet = {int(clinical)};\n"
+    + "".join(f"{N}Trp_HSPFromAndToODTCwithiSWAP(ML_STAR, ML_STAR.{a}, ML_STAR.{b}, 0, {park}, bc);\n"
+              for a, b, park in ISWAP_CALLS)
+    + "} }\n")
+  run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
+                (avenio / "Library").glob("*.stp"), {"x.lay": lay})
+  moves = []
+  for e in run.events:
+    s = e.settings
+    if e.command == "GetPlate":
+      moves.append(dict(thing=e.channels[1][0], height=s["GripperAccessHeight"], width=s["grip width"],
+                        opening=s["grip opening"], force=s["grip force"], inverse=bool(s["InversGripping"]),
+                        large_side=bool(s["GrippLargeSite"]), orientation=s["LabwareOrientation"]))
+    elif e.command == "PutPlate":
+      moves[-1]["to"] = e.channels[1][0]
+    elif e.command == "ParkISwap":
+      moves[-1]["end"] = "park"
+    elif e.command == "FirmwareCommand":
+      moves[-1]["end"] = s["firmware command string"]
+  return moves
+
+
+class _IswapGripper:
+  def __init__(self, log):
+    self.log = log
+
+  async def to_placeholder(self, thing, placeholder, iswap, direction, elbows, grip):
+    self.log.append(dict(thing=thing, to=placeholder, height=grip["pickup_distance_from_top"], width=grip["width"],
+                         opening=round(grip["width"] + grip["open_margin"], 4), force=grip["grip_strength"],
+                         direction=direction))
+
+
+class _Iswap:
+  def __init__(self, log):
+    self.log = log
+
+  async def park(self, traverse_height=None):
+    self.log[-1]["end"] = "park"
+
+  async def elbow_move_to_safe_z_height(self):
+    self.log[-1]["end"] = "R0ZI"  # homing the iSWAP's Z: the firmware command Venus sends
+
+
+def port_iswap_moves(lay, clinical):
+  from venus_interop.plr import steps
+  from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
+
+  log, grips = [], []
+  steps.OBSERVERS[:] = [lambda command, ch, grip: grips.append(grip) if command == "IswapGrip" else None]
+  star = type("Star", (), {"pipettes": None, "iswap": _Iswap(log)})()
+  procs = NGSStarProcesses(star, RecordingDeck(lay), {}, {}, gripper=_IswapGripper(log), say=lambda _: None,
+                           iswap=object(), clinical_starlet=clinical)
+
+  async def go():
+    for a, b, park in ISWAP_CALLS:
+      await procs.Trp_HSPFromAndToODTCwithiSWAP(None, a, b, 0, park)
+
+  try:
+    asyncio.run(go())
+  finally:
+    steps.OBSERVERS.clear()
+  for move, grip in zip(log, grips):
+    assert move.pop("direction") == grip.direction
+    move.update(inverse=grip.inverse, large_side=grip.large_side, orientation=grip.orientation)
+  return log
+
+
+@pytest.mark.parametrize("clinical", [False, True], ids=["NGS STAR", "Clinical NGS STARlet"])
+def test_port_moves_plates_into_and_out_of_the_odtc_as_the_library_does(avenio, lay, clinical):
+  hsl, port = hsl_iswap_moves(avenio, lay, clinical), port_iswap_moves(lay, clinical)
+  assert len(hsl) == len(port) == len(ISWAP_CALLS)
+  assert any(m["inverse"] for m in hsl) == clinical
+  for call, x, y in zip(ISWAP_CALLS, hsl, port):
+    assert x == y, f"{call}: library {x}, port {y}"

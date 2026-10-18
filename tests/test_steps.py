@@ -36,3 +36,15 @@ def test_only_what_takes_effect_counts():
   assert Pipetting.from_record({"cLLD sensitivity": 5, "submerge depth": 2, "fluid height": 5, "LiquidFollowing": 1,
                                 "mix cycles": 0, "mix volume": 0, "mix position": 2}) == \
     Pipetting(5, 2.0, 5.0, True, 0, 0.0, 2.0)
+
+
+def test_iswap_grip_directions_follow_pyhamiltons_table():
+  """Venus's (large side, inverted) -> where the wrist is in PLR. Not checkable against the HSL
+  (Venus has no such direction): pinned to pyhamilton's transport table, whose short-side PCR grip
+  (82.5 mm) is "RIGHT" and inverted "LEFT", the large side "FRONT" and inverted "BACK"; and to the
+  KAPA demo, whose ODTC moves on the simulator grip from the right."""
+  from venus_interop.plr.steps import IswapGrip
+
+  grip = lambda large, inverse: IswapGrip(5, 82.2, 85, 5, inverse=inverse, large_side=large)  # noqa: E731
+  assert [grip(False, False).direction, grip(False, True).direction] == ["right", "left"]
+  assert [grip(True, False).direction, grip(True, True).direction] == ["front", "back"]

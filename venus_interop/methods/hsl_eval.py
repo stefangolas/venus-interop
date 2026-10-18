@@ -1831,7 +1831,8 @@ class Run:
       if path == "" and key not in top:
         top[key] = value
     command = rec.step_name
-    if command in ("ZSwapGetPlate", "ZSwapPlacePlate"):
+    iswap_plate = command in ("GetPlate", "PutPlate") and top.get("PlateObject")
+    if command in ("ZSwapGetPlate", "ZSwapPlacePlate") or iswap_plate:
       return self._transport_step(rec, command, guid, name, top, env, line)
     if command in ("Head96Move", "MoveToPosition", "FirmwareCommand") or (
         command == "Head96TipEject" and not top.get("SequenceObject")):
@@ -1903,10 +1904,13 @@ class Run:
   # A CO-RE gripper step's settings, by the names `_transport_step` records them under
   TRANSPORT_SETTINGS = ("GripperAccessHeight", "ZSwapPlateCheck", "ToolUpperChannel", "ToolEject",
                         "grip width", "grip force", "grip speed", "grip opening", "z speed",
-                        "x acceleration", "plate press")
+                        "x acceleration", "plate press",
+                        # the iSWAP's (GetPlate / PutPlate)
+                        "InversGripping", "GrippLargeSite", "LabwareOrientation", "TransportMode",
+                        "lift up height", "retract distance")
 
   def _transport_step(self, rec, command, guid, name, top, env, line):
-    """A CO-RE gripper get or place: the plate (`PlateObject`) or lid (`CapObject`) sequence's
+    """A CO-RE gripper or iSWAP get or place: the plate (`PlateObject`) or lid (`CapObject`) sequence's
     current item, not consumed (the library's steps count manually), and the settings bound."""
     raw = top.get("PlateObject") or top.get("CapObject", "")
     seq = self._binding(rec, raw, env)

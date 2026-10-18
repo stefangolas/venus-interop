@@ -142,3 +142,30 @@ def core_grip_arguments(grip: CoreGrip, pick_offset=None, drop_offset=None) -> t
   drop = dict(offset=drop_offset or Coordinate(0, 0, 0), press_on_distance=grip.press,
               x_acceleration_level=grip.x_acceleration, z_speed=grip.place_z_speed)
   return pick, drop
+
+
+@dataclasses.dataclass(frozen=True)
+class IswapGrip:
+  """A Venus iSWAP get (GetPlate): what decides the PLR plan. The side gripped and from where:
+  the short side (jaws across the plate's width) from the right, the large side from the front,
+  each from the opposite side when inverted (pyhamilton's transport table: its "right" PCR grip
+  is the 82.5 mm short-side one). Orientation is kept for the comparison only."""
+  height: float  # GripperAccessHeight: mm below the top
+  width: float  # grip width, mm across the jaws
+  opening: float  # grip opening, mm
+  force: int  # 0-9, as PLR's iSWAP grip strength
+  inverse: bool = False  # InversGripping
+  large_side: bool = False  # GrippLargeSite
+  orientation: int = 1  # LabwareOrientation
+
+  @property
+  def direction(self) -> str:
+    return ("back" if self.inverse else "front") if self.large_side else ("left" if self.inverse else "right")
+
+
+def iswap_grip_arguments(grip: IswapGrip) -> dict:
+  """The iSWAP pick-up plan's keyword arguments (iSWAPTransport.plan_pick_up)."""
+  for observe in OBSERVERS:
+    observe("IswapGrip", None, grip)
+  return dict(pickup_distance_from_top=grip.height, width=grip.width,
+              open_margin=round(grip.opening - grip.width, 4), grip_strength=grip.force)
