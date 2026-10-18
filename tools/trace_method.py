@@ -14,9 +14,11 @@ start before porting a library.
 
 `--status` walks each method's call tree and gives every library call a status: `checked` (a port
 test runs it against the HSL: the test's LIBRARY and COVERS, or COVERS_ALSO {namespace: [...]}), `ported` (a module in
-venus_interop/plr/libraries declares the namespace as LIBRARY and defines the entry point), `out`
-or `method` (tools/function_notes.json: not protocol logic, or ported with the method that owns
-it), else `open`. A call inside one already given a status is part of it and is not counted. It
+venus_interop/plr/libraries declares the namespace as LIBRARY and defines the entry point),
+`operator` (an operator dialog: a call to the translation's operator interface), `out` or `method`
+(tools/function_notes.json: not protocol logic, or ported with the method that owns it), else
+`open`. What is `out` is still named, in a comment, where the translation leaves it out. A call
+inside one already given a status is part of it and is not counted. It
 prints the counts per method, then the open functions by how often they are called. Calls the trace
 leaves unexpanded (hand-written HSL libraries, devices' COM wrappers) count too, from
 `Namespace::Function(` in its code, except the namespaces in function_notes.json's
@@ -35,7 +37,7 @@ sys.path.insert(0, str(ROOT))
 
 from venus_interop.methods import protocol  # noqa: E402
 
-STATUSES = ("checked", "ported", "inline", "out", "method", "open")
+STATUSES = ("checked", "ported", "inline", "operator", "out", "method", "open")
 
 
 def trace(hsl_path: pathlib.Path, roots):

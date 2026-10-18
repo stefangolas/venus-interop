@@ -14,9 +14,15 @@ from typing import Any, Iterable, Optional
 from venus_interop.methods import hsl_eval, protocol, sequences as sq
 
 
+DISPLAY_ONLY = {"VectorCustomDialogs::AppendStatusText"}  # status-window texts: nothing reads them
+
+
 def hsl_run(src: str, here: pathlib.Path, roots: Iterable[pathlib.Path], stp_paths: Iterable[pathlib.Path],
-            layouts: dict, answers: Optional[dict] = None) -> hsl_eval.Run:
-  """Preprocess, parse and run `src` (a method's text, as if at `here`); it must run to the end."""
+            layouts: dict, answers: Optional[dict] = None, allow_unresolved: Iterable[str] = ()) -> hsl_eval.Run:
+  """Preprocess, parse and run `src` (a method's text, as if at `here`); it must run to the end and
+  call no function that neither the sources nor the run define (the interpreter would carry on
+  with an unknown value, so a library missing from the roots goes unnoticed), except those in
+  DISPLAY_ONLY and `allow_unresolved`."""
   pre = hsl_eval.Preprocessor(list(roots), lambda p: p.read_text(encoding="latin-1"))
   text = pre.expand(here, text=src)
   parser = hsl_eval.Parser(hsl_eval.lex(text))
@@ -25,6 +31,8 @@ def hsl_run(src: str, here: pathlib.Path, roots: Iterable[pathlib.Path], stp_pat
   run.src = text.splitlines()
   run.run()
   assert run.stopped is None, run.stopped
+  missing = set(run.unresolved) - DISPLAY_ONLY - set(allow_unresolved)
+  assert not missing, f"functions the library calls that nothing defines: {sorted(missing)}"
   return run
 
 

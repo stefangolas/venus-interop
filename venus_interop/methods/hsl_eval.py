@@ -723,6 +723,7 @@ class Run:
     self.answers = answers or {}
     self.events: list[StepEvent] = []
     self.notes: list[str] = []  # assumptions the run made
+    self.unresolved: dict[str, int] = {}  # functions called that neither the source nor the run defines
     self.stopped: Optional[str] = None
     self.globals: dict[str, dict[str, Cell]] = {}  # namespace -> name -> cell
     self.stack: list[str] = []
@@ -1224,6 +1225,8 @@ class Run:
     if low in ("trace", "formattrace", "registerabouthandler", "registerabortHandler".lower(),
                "unregisterabortHandler".lower(), "settimescalefactor"):
       return 0
+    if name.lower() == "stringtable":  # a library's error texts, defined in its language file (…Enu.hs_)
+      return 0
     if low == "translate":
       v = vals()
       return v[0] if v else ""
@@ -1303,6 +1306,7 @@ class Run:
       return Unknown("Shell")
     if low in ("getcurrenttime", "gettime", "getdate"):
       return Unknown("time")
+    self.unresolved[name] = self.unresolved.get(name, 0) + 1
     return Unknown(f"function {name}")
 
   def _element(self, obj, method, args, obj_expr, arg_exprs, env, line):

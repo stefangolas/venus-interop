@@ -44,7 +44,7 @@
     "note": "operator-driven MPE2 error recovery"
   },
   "MPE_LIBRARY::UserSelectControlPoints": {
-    "scope": "out",
+    "scope": "operator",
     "note": "operator dialog for the MPE2 control points: a parameter in a port"
   },
   "EASYPICKII_STEPS::ShowErrorDialog": {
@@ -64,31 +64,27 @@
     "note": "a == b or c == d or e == f"
   },
   "VECTORCUSTOMDIALOGS::*": {
-    "scope": "out",
+    "scope": "operator",
     "note": "operator dialogs and status-window text (a compiled dialog component)"
-  },
-  "NGSSTARPROCESSES::DATA_UpdateInformationIntoReportFile": {
-    "scope": "out",
-    "note": "appends a line to the run's report file"
   },
   "NGSSTARPROCESSES::DATA_SendEmail": {
     "scope": "out",
     "note": "mail alert"
   },
   "NGSSTARLOADING::Display_Error_Dialog": {
-    "scope": "out",
+    "scope": "operator",
     "note": "error dialog, then abort"
   },
   "NGSSTARLOADING::Display_Message_Dialog": {
-    "scope": "out",
+    "scope": "operator",
     "note": "message dialog"
   },
   "NGSSTARLOADING::_CheckBindReturnValueVectorCustomDialogs": {
     "scope": "out",
     "note": "checks a dialog's return"
   },
-  "STCC::GenerateMappingFileV43Ex1": {
+  "DECKVISUALIZE::*": {
     "scope": "out",
-    "note": "writes a mapping file"
+    "note": "Venus's on-screen deck view during the run: PLR's visualizer shows the same from its trackers"
   }
 }

@@ -263,7 +263,17 @@ call. `examples/groq_seq_demo.py` shows the whole pattern:
   that is clearly not the method. Record each in the module docstring, and what only Venus can
   settle in CONVENTIONS §11. Look at what a library check would do before calling something a
   defect: GROQ-Seq's library-stock path stops in GSF-IMS's own channel check, in Venus too.
-- **Skipped as dialogs** (TipCount::Edit2, debugging message boxes): say so in the docstring.
+- **Operator dialogs** become calls to an operator interface at the same place, with the dialog's
+  own text (choices, confirmations, tables, files, pictures); a scripted operator answers them in
+  tests and unattended runs, and an unanswered question is an error. (The earlier demos' `Parameters`
+  are pre-answered dialogs.)
+- **What is left out stays visible** (user, 2026-10-18). Every Venus call the translation doesn't
+  carry over (email alerts, the scheduler's file handshakes, error-recovery dialogs, debugging
+  message boxes, TipCount::Edit2) gets a comment at that place in the translation, naming the call
+  and why it is left out, besides the docstring. `out` in `tools/function_notes.json` is a decision
+  to record there, not to drop silently. The run report and the sample-tracking mapping files
+  (STCC) are in scope: a translation produces them. Venus's deck view is out: PLR's visualizer
+  shows the same.
 
 ## Ports so far
 
