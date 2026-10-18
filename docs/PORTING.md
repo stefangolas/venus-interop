@@ -191,6 +191,14 @@ needs, and no more:
   would refuse passes them. Run the method's demo on the simulator after changing how a port
   calls PLR. (PLR's dispense turns cLLD on under surface following unless `lld_mode` is OFF; the
   test passed, the demo did not.)
+- **Value types are behaviour.** HSL values are variants. Libraries branch on `GetType`
+  (NGSStarLoading's volume texts show an integer-typed volume as 0) and `StrStr` raises on a
+  value with no type. A first run of the loading test showed "[0uL]" because the interpreter had
+  turned 94.0 into 94. When text from the HSL and the port disagree, check the value's type first.
+- **A library's own source can be missing.** NGSStarLoading includes `ArrayTools\`, which is on
+  no machine here. Declare stubs for the missing functions in the test's source and replace them
+  with Python models (`answers["functions"]`). Say that these are models made from the names, not
+  checked against the HSL.
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.
@@ -228,6 +236,7 @@ Ported libraries, each `plr/libraries/<module>.py` with `LIBRARY` = its Venus na
 | `tip_handling_96`, `tip_count` | NIST Tip Handling with 96-Head; Hamilton HSLTipCountingLib Read2/Write2 | `test_tip_counters_port.py` |
 | `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer, CO-RE plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
 | `star_tip_tools` | Hamilton STAR Tip Tools (tip planner, counters) + HelperLibrary | unit tests; the planner runs inside the NGSStar port test |
+| `ngsstar_loading` | Hamilton NGSStarLoading: volumes per sample, containers and their volumes, the RunData / Mastermix_Prep sheets, labware per process | `test_ngsstar_loading_port.py` (Avenio's own calls, 1/8/24/96 samples) |
 
 ## Translating a method
 
@@ -270,6 +279,7 @@ What each needed that the earlier ones had not built (keep a line per port):
 | `plr/steps.py` | Settings capture in the interpreter; settings compared, not only transcribed |
 | Liquid classes | The `.mdb` reader |
 | Marionette, GROQ-Seq methods | `sequences.loop`; worklists; listed-position racks in the importer; the abort and source-defect policy |
+| NGSStarLoading | Excel workbooks read and written with SQL (`Run.workbooks`, SQLite); `Scripting.FileSystemObject`; HSL value types kept (a float operand gives a float; `Floor(x, hslTrue)`), since libraries branch on `GetType`; unassigned variables as integer 0 (CONVENTIONS §11) |
 
 ## Inputs
 

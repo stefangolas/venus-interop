@@ -27,6 +27,7 @@ import io
 import math
 import pathlib
 import re
+import sqlite3
 from typing import Any, Callable, Iterable, Optional
 
 from venus_interop.methods import sequences as sq
@@ -81,11 +82,14 @@ class HArray:
 
 class HFile:
   """An HSL `file` object over the run's virtual files: fields bound to variables (AddField),
-  records read and written as CSV lines."""
+  records read and written as CSV lines; or a sheet of an Excel workbook, `"<file>.xls <Sheet>"`,
+  which Venus opens through Jet's Excel driver and libraries query with SQL (`Run.workbooks`)."""
 
   def __init__(self, run: "Run"):
     self.run = run
     self.fields: list[tuple[str, Cell]] = []
+    self.types: dict[str, str] = {}  # field name (lower) -> hslInteger / hslFloat / hslString tag
+    self.sheet: Optional[tuple[sqlite3.Connection, str]] = None
     self.rows: list[list[str]] = []
     self.pos = 0
     self.path = ""
@@ -696,6 +700,12 @@ def _clean(x):
   return x
 
 
+def _typed(x, *operands):
+  """An arithmetic result: a float operand makes it a float (HSL keeps a variant's float type, so
+  2 * 47.0 is 94.0, not 94: libraries branch on GetType); integers only stay as they were."""
+  return float(x) if any(isinstance(o, float) for o in operands) and isinstance(x, (int, float)) else _clean(x)
+
+
 class Run:
   """One execution of a method. Build with `Run.prepare`, then `run()`."""
 
@@ -707,6 +717,9 @@ class Run:
     self.layouts = layouts  # layout file name (lower) -> files.layout.Layout
     self.files = {k.lower().replace("/", "\\"): v for k, v in (files or {}).items()}
     self.written: dict[str, list[str]] = {}
+    # Excel workbooks a library keeps state in (NGSStarLoading's RunData.xls): file (lower) -> an
+    # in-memory SQLite database, a table per sheet, created when the library first writes the sheet
+    self.workbooks: dict[str, sqlite3.Connection] = {}
     self.answers = answers or {}
     self.events: list[StepEvent] = []
     self.notes: list[str] = []  # assumptions the run made
@@ -749,7 +762,9 @@ class Run:
       return HFile(self)
     if vtype in ("dialog", "timer", "event", "object", "resource", "device"):
       return Opaque(vtype)
-    return 0  # an uninitialised variable reads as 0/empty
+    # an uninitialised variable reads as integer 0: the HSL reference says "undefined", but a
+    # typeless value would make HSLStrLib's StrStr raise (CONVENTIONS §11)
+    return 0
 
   def _construct(self, vtype, args):
     if vtype in ("variable", "string", "char", "short", "long", "float"):
@@ -1128,7 +1143,7 @@ class Run:
         if isinstance(a, str) and isinstance(b, str):
           return a + b
         return f"{_fmt(a)}{_fmt(b)}"
-      return _clean(a + b)
+      return _typed(a + b, a, b)
     na, nb = _num(a), _num(b)
     if op in ("==", "!=", "<", "<=", ">", ">="):
       if isinstance(na, (int, float)) and isinstance(nb, (int, float)):
@@ -1140,17 +1155,17 @@ class Run:
     if not isinstance(na, (int, float)) or not isinstance(nb, (int, float)):
       return Unknown(f"{op} on strings")
     if op == "-":
-      return _clean(na - nb)
+      return _typed(na - nb, na, nb)
     if op == "*":
-      return _clean(na * nb)
+      return _typed(na * nb, na, nb)
     if op == "/":
       if nb == 0:
         raise Stop(f"line {line}: division by zero")
-      return _clean(na / nb)
+      return _typed(na / nb, na, nb)  # integers by integers: unverified (CONVENTIONS §11)
     if op == "%":
-      return _clean(math.fmod(na, nb)) if nb else Unknown("mod by zero")
+      return _typed(math.fmod(na, nb), na, nb) if nb else Unknown("mod by zero")
     if op == "^":
-      return _clean(na ** nb)
+      return _typed(na ** nb, na, nb)
     if op == "&":
       return int(na) & int(nb)
     if op == "|":
@@ -1252,9 +1267,12 @@ class Run:
     if low == "isdbnull":
       return 0
     if low in ("floor", "ceiling", "abs", "sqrt", "exp", "log", "log10", "sin", "cos", "tan", "atan"):
-      v = _num(vals()[0])
+      vs = vals()
+      v = _num(vs[0])
       if not isinstance(v, (int, float)):
         return Unknown(f"{name} of a non-number")
+      if low in ("floor", "ceiling") and len(vs) > 1 and _num(vs[1]):  # Floor(x, hslTrue): as a float
+        return float(math.floor(v) if low == "floor" else math.ceil(v))
       f = {"floor": math.floor, "ceiling": math.ceil, "abs": abs, "sqrt": math.sqrt, "exp": math.exp,
            "log": math.log, "log10": math.log10, "sin": math.sin, "cos": math.cos, "tan": math.tan,
            "atan": math.atan}[low]
@@ -1351,7 +1369,7 @@ class Run:
   MODELLED = {"scripting.dictionary", "msscriptcontrol.scriptcontrol", "hxparamslib.hxpars",
               "hamilton.hxcoreliquidclass", "hamilton.hxcoretiptypes",
               "hamilton.hxservicesgeneralsettings", "hamilton.hxvectordbtracker",
-              "hamilton.hxelementcounter"}
+              "hamilton.hxelementcounter", "scripting.filesystemobject"}
 
   def _object_element(self, o: Opaque, m, args, line, arg_cells=None):
     """Automation objects. Scripting.Dictionary and HxPars (Venus's keyed settings container) are
@@ -1381,6 +1399,18 @@ class Run:
       return 0
     if m == "isnull":
       return int(not o.progid)
+    if pid == "scripting.filesystemobject":
+      # files the run knows: supplied, written, or a workbook it created; folders always exist
+      path = str(args[0]).lower().replace("/", "\\") if args else ""
+      if m == "fileexists":
+        return int(path in self.files or path in self.written or path in self.workbooks)
+      if m in ("folderexists", "createfolder"):
+        return 1
+      if m == "deletefile":
+        for known in (self.files, self.written, self.workbooks):
+          known.pop(path, None)
+        return 1
+      return Unknown(f"Scripting.FileSystemObject.{m}")
     if pid == "hamilton.hxcoreliquidclass":
       if m == "initcoreliquidclass":
         return 0
@@ -1660,14 +1690,21 @@ class Run:
       if not isinstance(cell, Cell):
         cell = Cell(cell)
       f.fields.append((name, cell))
+      f.types[name.lower()] = str(args[2]) if len(args) > 2 else "s"
       return 1
     if m == "removefields":
       f.fields.clear()
+      f.types.clear()
       return 1
     if m == "setdelimiter":
       f.delimiter = str(args[0]) if args else ","
       return 1
     if m == "open":
+      sheet = re.match(r"^(.*\.xlsx?)\s+(\S+)$", str(args[0]), re.I)
+      if sheet:
+        return self._open_sheet(f, sheet.group(1), sheet.group(2), _num(args[1]) if len(args) > 1 else 1,
+                                str(args[2]) if len(args) > 2 else "")
+      f.sheet = None
       path = str(args[0]).lower().replace("/", "\\")
       mode = _num(args[1]) if len(args) > 1 else 1
       f.path, f.mode, f.pos = path, mode, 0
@@ -1695,6 +1732,11 @@ class Run:
       by_name = {h.strip().lower(): i for i, h in enumerate(f.header)}
       for k, (name, cell) in enumerate(f.fields):
         i = int(name) - 1 if name.isdigit() else by_name.get(name.lower(), k)
+        if f.sheet is not None:  # a sheet's cell as the field's type; an empty one 0 or "" (unverified)
+          typ = f.types.get(name.lower(), "s")
+          v = row[i] if i < len(row) else None
+          cell.value = (0 if typ in ("i", "f") else "") if v is None else (_fmt(v) if typ == "s" else v)
+          continue
         cell.value = _num(row[i]) if i < len(row) else ""
       return 1
     if m == "readstring":
@@ -1703,6 +1745,14 @@ class Run:
       row = f.rows[f.pos]
       f.pos += 1
       return f.delimiter.join(row)
+    if m == "writerecord" and f.sheet is not None:
+      conn, table = f.sheet
+      cols = {r[1].lower() for r in conn.execute(f"PRAGMA table_info([{table}])")}
+      named = [(n, c) for n, c in f.fields if n.lower() in cols]
+      conn.execute(f"INSERT INTO [{table}] ({', '.join(f'[{n}]' for n, _ in named)}) VALUES "
+                   f"({', '.join('?' for _ in named)})",
+                   [c.value if isinstance(c.value, (int, float, str)) else _fmt(c.value) for _, c in named])
+      return 1
     if m in ("writerecord", "writestring", "updaterecord"):
       self.written.setdefault(f.path, []).append(
         str(args[0]) if args else ",".join(_fmt(c.value) for _, c in f.fields))
@@ -1711,6 +1761,30 @@ class Run:
       f.pos = 0
       return len(f.rows)
     return Unknown(f"file.{m}")
+
+  def _open_sheet(self, f: HFile, book: str, sheet: str, mode, sql: str):
+    """Open a workbook sheet: write (2) creates it from the fields, read (1) runs `sql` (all rows
+    when none; `[Sheet$]` names the sheet, Jet's way), append (3) adds the records written. Text
+    compares without case, as Jet's does."""
+    conn = self.workbooks.setdefault(book.lower().replace("/", "\\"), sqlite3.connect(":memory:"))
+    table = sheet.rstrip("$")
+    f.sheet, f.mode, f.pos, f.header, f.rows = (conn, table), mode, 0, [], []
+    if mode == 2:
+      kind = {"i": "INTEGER", "f": "REAL"}
+      conn.execute(f"DROP TABLE IF EXISTS [{table}]")
+      conn.execute(f"CREATE TABLE [{table}] ("
+                   + ", ".join(f"[{n}] {kind.get(f.types.get(n.lower()), 'TEXT COLLATE NOCASE')}" for n, _ in f.fields) + ")")
+      return 1
+    if mode == 1:
+      try:
+        cur = conn.execute(re.sub(r"\[(\w+)\$\]", r"[\1]", sql or f"SELECT * FROM [{table}]"))
+      except sqlite3.Error as e:
+        self.notes.append(f"workbook {book} {sheet}: {e}")
+        return 0
+      if cur.description:
+        f.header, f.rows = [d[0] for d in cur.description], [list(r) for r in cur.fetchall()]
+      return 1
+    return 1
 
   def _file_text(self, path: str) -> Optional[str]:
     if path in self.files:
