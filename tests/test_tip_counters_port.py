@@ -81,11 +81,13 @@ class _Deck:
 
 
 def port_state(lay):
-  from venus_interop.plr.libraries.tip_count import TipCount, TipCounters
+  from venus_interop.plr.libraries.tip_count import TipCount, TipCounters, statuses
   from venus_interop.plr.libraries.tip_handling_96 import TipHandling96
 
   deck, counters = _Deck(lay), TipCounters()
-  counters.counters.update(STORED)
+  for name, cur in STORED.items():  # the stored counters, as statuses on the layout's positions
+    seq = next(s for s, c in READS if c == name)
+    counters.write(name, statuses(deck.sequences[seq], cur))
   t96, tc = TipHandling96(), TipCount(deck, counters)
   ret = [tc.Read2(s, c) for s, c in READS]
   return (t96.GetTipCounters(1), t96.GetTipCounters(0), t96.GetTipStatusFile(), ret,
@@ -111,7 +113,21 @@ def test_a_written_counter_carries_over(lay, tmp_path):
 
   deck = _Deck(lay)
   deck.seq("Tips_1000_Channels").set_current_position(42)
-  TipCount(deck, TipCounters(tmp_path / "c.json")).Write2("Tips_1000_Channels", "Tips_for_ch_1000_auto")
+  TipCount(deck, TipCounters(tmp_path / "c.sqlite")).Write2("Tips_1000_Channels", "Tips_for_ch_1000_auto")
   later = _Deck(lay)
-  assert TipCount(later, TipCounters(tmp_path / "c.json")).Read2("Tips_1000_Channels", "Tips_for_ch_1000_auto") == 1
+  assert TipCount(later, TipCounters(tmp_path / "c.sqlite")).Read2("Tips_1000_Channels", "Tips_for_ch_1000_auto") == 1
   assert later.seq("Tips_1000_Channels").cur == 42
+
+
+def test_counters_keep_a_status_per_position_and_simulation_apart(tmp_path):
+  from venus_interop.plr.libraries.tip_count import EMPTY, OCCUPIED, TipCounters, statuses
+
+  items = [("T", str(i)) for i in range(1, 6)]
+  real = TipCounters(tmp_path / "c.sqlite")
+  real.write("c", statuses(items, 3))
+  assert real.read("c") == [(it, EMPTY if i < 2 else OCCUPIED) for i, it in enumerate(items)]
+  sim = TipCounters(tmp_path / "c.sqlite", simulation=True)
+  sim.write("c", statuses(items, 0))  # a simulated run uses the rack up
+  assert TipCounters(tmp_path / "c.sqlite").read("c")[2] == (("T", "3"), OCCUPIED)
+  assert all(status == EMPTY for _, status in sim.read("c"))
+  assert TipCounters(tmp_path / "c.sqlite").read("none") is None

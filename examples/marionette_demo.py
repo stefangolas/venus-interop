@@ -346,7 +346,7 @@ if __name__ == "__main__":
                   help="the method's liquid classes as JSON (tools/liquid_classes.py on NIST's Config/ML_STARLiquids.mdb); "
                        "PLR's STAR table when not given, which lacks the GSF-IMS FastMixing classes")
   ap.add_argument("--tip-counters", type=pathlib.Path,
-                  help="a JSON file of Venus tip counters, read at the start and written at the end, as "
+                  help="a SQLite file of tip counters (Venus element-counter tables), read at the start and written at the end, as "
                        "the method's TipCount::Read2/Write2: the racks carry over between runs")
   ap.add_argument("--culture-volume", type=float, default=500.0)
   ap.add_argument("--plate-map", type=pathlib.Path,

@@ -409,7 +409,7 @@ if __name__ == "__main__":
   ap.add_argument("--liquid-classes", type=pathlib.Path,
                   help="the methods' liquid classes as JSON (tools/liquid_classes.py on NIST's Config/ML_STARLiquids.mdb)")
   ap.add_argument("--tip-counters", type=pathlib.Path,
-                  help="a JSON file of Venus tip counters, read at the start and written at the end")
+                  help="a SQLite file of tip counters (Venus element-counter tables), read at the start and written at the end")
   a = ap.parse_args()
   par = Parameters(culture_volume=a.culture_volume, grad_plate_num=a.grad_plate, is_clonal_test=not a.library,
                    worklist_file=a.plate_map)

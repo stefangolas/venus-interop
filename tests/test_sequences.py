@@ -217,3 +217,14 @@ def test_loop_over_a_sequence_the_body_moves_on():
   for _ in sq.loop(s, rewind=False):
     s.increment(1)
   assert (s.cur, s.max) == (0, 40)
+
+
+def test_position_count_for_current_labware_is_the_reference_example():
+  # HSL reference, GetPositionCountForCurrLabware: current C3 on nun_..._0001 -> 3 (C3, F4, H4)
+  a, b = "nun_96_fl_I_0001", "nun_96_fl_I_0002"
+  s = sq.Sequence("s", [(a, "A1"), (a, "C3"), (a, "F4"), (a, "H4"), (b, "C2"), (b, "C7"), (b, "G8"),
+                        (a, "F10"), (a, "E12")])
+  s.set_current_position(2)
+  assert s.position_count_for_current_labware() == 3
+  s.set_current_position(8)
+  assert s.position_count_for_current_labware() == 2

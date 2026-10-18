@@ -2,9 +2,12 @@
 
 How to turn a Venus method into Python on PLR that keeps its logic: port the **libraries** it calls,
 one module each under `venus_interop/plr/libraries/`, then translate the method's own `main` call for
-call. This file is the workflow; `plr/libraries/gsf_ims.py` and `plr/libraries/plate_and_lid.py`
-are the worked examples, with their checks in `tests/test_gsf_ims_port.py` and
-`tests/test_plate_and_lid_port.py`.
+call. This file is the workflow, the toolkit it uses ([The toolkit](#the-toolkit)), how a method's
+own code is translated ([Translating a method](#translating-a-method)), and what each port so far
+needed ([Ports so far](#ports-so-far)). `plr/libraries/gsf_ims.py` and `plr/libraries/plate_and_lid.py`
+are the clearest worked examples, with their checks in `tests/test_gsf_ims_port.py` and
+`tests/test_plate_and_lid_port.py`; `examples/marionette_demo.py` and `examples/groq_seq_demo.py`
+are the method translations.
 
 ## Why
 
@@ -34,8 +37,9 @@ port is described as matching Venus.
 - The state is where the real logic is: sequence positions, tip counters, tip supports, volumes.
   Sequence state is `methods/sequences.py`. Reuse PLR's trackers and pyhamilton's managed resources
   rather than writing new ones.
-- **Protocol logic only.** Error-recovery branches, operator dialogs, trace and worklist output and
-  the scheduler's file handshake become notes or stubs, not code.
+- **Protocol logic only.** Error-recovery branches, operator dialogs, trace output and the
+  scheduler's file handshake become notes or stubs, not code. Output the method computes, such as a
+  plate map and the worklist written from it, is logic and is translated (Marionette, GROQ-Seq).
 
 ## The workflow
 
@@ -97,9 +101,11 @@ port is described as matching Venus.
 
 6. **Check it against the HSL** with the interpreter, `methods.hsl_eval`. The test runs the same
    calls through the real library and through the port, on a real layout's sequences, and compares
-   every step: command, (labware, position) per channel, and the settings that matter. Copy one of
-   the two tests. The HSL side is a small `main` that `#include`s the library and calls it; the port
-   side gets a recording stand-in for the PLR device.
+   every step: command, (labware, position) per channel, and the settings that matter. Build it on
+   `tests/port_harness.py` (`hsl_run`, `steps_of`, `RecordingDeck`, `RecordingChannels`,
+   `assert_same_steps`); `tests/test_gsf_ims_port.py` is the model. The HSL side is a small `main`
+   that `#include`s the library and calls it; the port side gets the recording stand-ins for the PLR
+   device.
 
    Declare in the test what it checks, `LIBRARY = "<NAMESPACE>"` and `COVERS = [...]` (literals:
    `--status` reads them without importing), and declare `LIBRARY` in the port module.
@@ -173,7 +179,9 @@ needs, and no more:
 - **State that outlives the run.** Methods read Venus tip counters into their tip sequences at
   the start (`TipCount::Read2`) and write them back at the end (`Write2`), so the racks carry over
   between runs. These calls are tagged `[data]` and are easy to skip, but they decide where the
-  first tip comes from. `plr/libraries/tip_count.py` keeps the counters in a JSON file.
+  first tip comes from. `plr/libraries/tip_count.TipCounters` keeps them in SQLite, in Venus's own
+  element-counter tables (a status per position; simulated runs in their own table), shared by
+  TipCount and STAR Tip Tools.
 - **Libraries missing from the Venus install.** Kit methods include libraries that a given Venus
   install lacks (`STAR Tools\`, `HSL_MethodHelper.hsl`). Copies often sit in other method packages
   (pyhamilton bundles STAR Tools; NIST's repository has HSL_MethodHelper). Pass those folders as
@@ -186,6 +194,82 @@ needs, and no more:
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.
+
+## The toolkit
+
+What ports and translations are built from. Each models one documented Venus behaviour; the source is
+in the docstring.
+
+| Where | What | Venus counterpart |
+|---|---|---|
+| `methods/sequences.py` `Sequence` | A sequence's items and `cur`, `end`, `max`, `used`; every element function (`set_current_position`, `increment`, `set_count`, `set_max`, `reset`, `lookup_position`, `position_count_for_current_labware`, add/insert/remove, `copy`/`assign`); position properties (`set_property`, `set_property_range`, `get_property`, which raises "property not found") | Sequence element functions (HSL reference), HSLSeqLib |
+| `methods/sequences.py` `take`, `take_head96` | The positions a pipetting step uses, by channel pattern, channel use and counting | Step help "Sequence counting", "Channel Use" |
+| `methods/sequences.py` `align`, `loop` | AlignSequences / Adjust Sequences; the Method Editor's loop over a sequence (`for _ in sq.loop(seq): ...`; `rewind=False` for a loop written without the final SetCurrentPosition(1)) | Method Editor Loop / Adjust Sequences |
+| `plr/venus_deck.py` `VenusDeck` | A layout imported to PLR and addressed as Venus does: `seq(name)` (live state, one object per name), `items(seq)`, `resolve(item)`, `at(labware, position)`, `labware(seq)`; connected cavities share one tracker; `clear_absent(trace)` takes off what the method brings in later | The deck layout and its sequences |
+| `plr/venus_deck.py` `Gripper` | Plate and lid moves to Venus placeholders: the object goes to the holder the placeholder stood on | CO-RE gripper / iSWAP steps |
+| `plr/steps.py` | `Pipetting` (cLLD, submerge, fluid height, liquid following, mix; `from_record`), `plr_arguments`, `aspirate` / `dispense`, `OBSERVERS` (what a port meant, for tests); `CoreGrip`, `core_grip_arguments` | Aspirate / Dispense / ZSwap step settings |
+| `plr/liquid_classes.py` `VenusLiquidClasses` | PLR liquid classes by Venus name, tip type, dispense mode, from `tools/liquid_classes.py`'s JSON | `ML_STARLiquids.mdb` |
+| `plr/libraries/tip_count.py` `TipCounters` | Tip counters that outlive the run (SQLite) | HxElementCounter |
+| `methods/hsl_eval.py` | The HSL interpreter for checking ports. `answers`: `functions` (a library function replaced by a Python model, e.g. its port), `tip_counters`, `labware_data`, `liquid_classes`, `simulation` | Venus's runtime |
+| `tests/port_harness.py` | `hsl_run`, `steps_of`, `RecordingDeck`, `RecordingChannels`, `assert_same_steps` | – |
+| `examples/nist_deck.py` | For demos: `install` (PLR's wastes and grip tools where the layout has its own), `give_room` / `make_room` (sources and destinations sized for a run; cavities filled as one), `write_worklist`, `print_plate_map` | – |
+| `tools/trace_method.py` | `--out` traces, `--calls` call counts, `--status` coverage and the work queue (verdicts in `tools/function_notes.json`) | – |
+| `tools/stp_dump.py` | A `.stp`'s step records, settings named | Step dialogs |
+
+Ported libraries, each `plr/libraries/<module>.py` with `LIBRARY` = its Venus namespace:
+
+| Module | Venus library | Check |
+|---|---|---|
+| `gsf_ims` | NIST GSF-IMS shared submethods | `test_gsf_ims_port.py` |
+| `plate_and_lid` | NIST PlateAndLidMovement | `test_plate_and_lid_port.py` |
+| `common_96head` | NIST Common96HeadSubMethods | `test_96head_port.py` |
+| `move_96head_and_arm` | NIST culture-processing Move96HeadAndArm | `test_96head_port.py` |
+| `lmsf_utilities` | NIST LMSF_Utilities (sequence properties) | `test_lmsf_utilities_port.py` |
+| `tip_handling_96`, `tip_count` | NIST Tip Handling with 96-Head; Hamilton HSLTipCountingLib Read2/Write2 | `test_tip_counters_port.py` |
+| `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer, CO-RE plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
+| `star_tip_tools` | Hamilton STAR Tip Tools (tip planner, counters) + HelperLibrary | unit tests; the planner runs inside the NGSStar port test |
+
+## Translating a method
+
+A method's `main` and its sections (`GetParams`, `StartUp`, `CalculateOutputs`, ...) become a class
+whose methods keep the sections' names and call the ports in the same order, one Python line per
+call. `examples/groq_seq_demo.py` shows the whole pattern:
+
+- **Parameters** the method reads from a file that isn't there become a `Parameters` dataclass with
+  illustrative defaults, labelled as such, chosen so every volume is one the channels can move.
+- **The start deck:** `VenusDeck.clear_absent(trace)` removes what the method only brings in later;
+  `install` puts PLR's grip tools and wastes in; `fill` gives sources what the run takes (connected
+  cavities as one volume) and wastes a heel where a dispense goes to liquid.
+- **Arithmetic** the method does (volume models, concentrations) is written out as in the method,
+  including its quirks; the demo's report checks each well against that model, so a quirk shows as
+  a number (GROQ-Seq's column 12).
+- **Aborts:** a Venus runtime error ends `main` and runs the abort handler (`RegisterAbortHandler`,
+  usually CleanUp). The demos raise `sequences.SequenceError`, a port's own error
+  (`gsf_ims.SubmethodError` for the library's ErrRaise checks) or a `MethodError`, catch them in
+  `run`, and run CleanUp, as Venus would.
+- **Defects in the method's source** (a property read where none was set, an index from an unset
+  variable, a loop that never dilutes what it reports): translate the method as written, following
+  what Venus documents it does (often: abort), and put the evident fix behind a flag (`--repair`)
+  that is clearly not the method. Record each in the module docstring, and what only Venus can
+  settle in CONVENTIONS §11. Look at what a library check would do before calling something a
+  defect: GROQ-Seq's library-stock path stops in GSF-IMS's own channel check, in Venus too.
+- **Skipped as dialogs** (TipCount::Edit2, debugging message boxes): say so in the docstring.
+
+## Ports so far
+
+What each needed that the earlier ones had not built (keep a line per port):
+
+| Port | New |
+|---|---|
+| GSF-IMS | The interpreter's device steps through `.stp` records; sequences as index rules; the differential test |
+| PlateAndLidMovement | Gripper steps in the interpreter, labware shift (the tap), labware position; gripper eject |
+| Common96HeadSubMethods, Move96HeadAndArm | Move and firmware-command steps |
+| LMSF_Utilities | Sequence position properties |
+| Tip counters | The element counter in the interpreter |
+| NGSStar reagent transfer | Function models (`answers["functions"]`), extra library roots, bare-name binding, the tip planner |
+| `plr/steps.py` | Settings capture in the interpreter; settings compared, not only transcribed |
+| Liquid classes | The `.mdb` reader |
+| Marionette, GROQ-Seq methods | `sequences.loop`; worklists; listed-position racks in the importer; the abort and source-defect policy |
 
 ## Inputs
 

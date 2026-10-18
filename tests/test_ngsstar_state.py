@@ -62,9 +62,9 @@ def test_simulation_skips_the_waits():
 def test_a_rack_carries_over_as_the_tips_left(tmp_path):
   deck = _Deck()
   deck.seq("Tips300").set_current_position(41)  # 40 tips used
-  procs(deck, TipCounters(tmp_path / "c.json")).DATA_TipCounterWrite()
+  procs(deck, TipCounters(tmp_path / "c.sqlite")).DATA_TipCounterWrite()
   later = _Deck()
-  procs(later, TipCounters(tmp_path / "c.json")).DATA_TipCounterRead(required_300=50, tip_types=2)
+  procs(later, TipCounters(tmp_path / "c.sqlite")).DATA_TipCounterRead(required_300=50, tip_types=2)
   s = later.seq("Tips300")
   assert (s.total, s.cur, s.items[0]) == (56, 1, ("T", "41"))
 
@@ -85,5 +85,5 @@ def test_no_counter_stored_reads_the_layout_and_edit_keeps_what_is_left():
   deck.seq("Tips300").set_current_position(11)
   tools.TipCounter_Write(None, "Tips300", "c")
   tools.TipCounter_Edit(None, "Tips300", "c")
-  assert deck.seq("Tips300").total == 86 and tools.counters.counters["c"][0] == ["T", "11"]
+  assert deck.seq("Tips300").total == 86 and tools.counters.read("c")[0] == (("T", "11"), 1)
   assert (LVFT, HVFT) == (23, 5)

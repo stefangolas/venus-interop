@@ -150,19 +150,23 @@ class StarTipTools:
   def TipCounter_Read(self, ML_STAR, tip_sequence: str, tip_counter: str, counters=None):
     """The tip sequence as the counter left it: only the positions still holding tips, from 1; as
     the layout has it when nothing is stored (`counters`: a tip_count.TipCounters)."""
+    from venus_interop.plr.libraries.tip_count import OCCUPIED
+
     counters = counters if counters is not None else self.counters
-    stored = counters.counters.get(tip_counter)
+    stored = counters.read(tip_counter)
     s = self.v.seq(tip_sequence)
-    items = [tuple(i) for i in stored] if isinstance(stored, list) else list(self.v.sequences[tip_sequence])
+    items = ([it for it, status in stored if status == OCCUPIED] if stored is not None
+             else list(self.v.sequences[tip_sequence]))
     s.assign(sq.Sequence(tip_sequence, items))
     return s.total
 
   def TipCounter_Write(self, ML_STAR, tip_sequence: str, tip_counter: str, counters=None):
     """The positions from the current one on (RemoveUsedPositions; none when the rack is used up)."""
+    from venus_interop.plr.libraries.tip_count import OCCUPIED
+
     counters = counters if counters is not None else self.counters
     s = self.v.seq(tip_sequence)
-    counters.counters[tip_counter] = [list(i) for i in (s.items[s.cur - 1:] if s.cur > 0 else [])]
-    counters.save()
+    counters.write(tip_counter, [(tuple(it), OCCUPIED) for it in (s.items[s.cur - 1:] if s.cur > 0 else [])])
 
   def TipCounter_Edit(self, ML_STAR, tip_sequence: str, tip_counter: str, timeout=None, counters=None):
     """Venus shows the operator the tips left to confirm or change (the loading dialog): here the

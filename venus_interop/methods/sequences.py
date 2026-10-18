@@ -138,6 +138,19 @@ class Sequence:
   def current_item(self) -> Optional[Item]:
     return self.items[self.cur - 1] if 0 < self.cur <= self.total else None
 
+  def position_count_for_current_labware(self) -> int:
+    """GetPositionCountForCurrLabware: the positions left, from the current one, on the current
+    position's labware before the sequence moves to another (HSL reference example: A1, C3*, F4,
+    H4 on one plate, then C2 on another, gives 3)."""
+    if self.current_item() is None:
+      return 0
+    lab, n = self.current_item()[0], 0
+    for item in self.items[self.cur - 1:self.end]:
+      if item[0] != lab:
+        break
+      n += 1
+    return n
+
   # -- content ---------------------------------------------------------------------------------
 
   def add(self, labware: str, position: str) -> None:
