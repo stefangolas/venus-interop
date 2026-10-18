@@ -204,6 +204,20 @@ class NGSStarProcesses:
     grip = dataclasses.replace(HSP_GRIP, check=1 if dst_lab == "HSP_CPAC" else 0)
     return await self._transport(source, destination, grip, park_after_move, track_to_read_barcode)
 
+  # -- sequences ------------------------------------------------------------------------------
+
+  def DATA_CreateNewSequencesOrTransportSequences(self, template, position_ids, sequence_type: int,
+                                                  name: str = "created") -> sq.Sequence:
+    """1: the positions `position_ids` on the template's current labware (to pipette); 2: each
+    labware of the template once, at A1 (to transport). From position 1."""
+    t = self.v.seq(template)
+    if int(sequence_type) == 1:
+      lab = (t.current_item() or ("", ""))[0]
+      return sq.Sequence(name, [(lab, str(p)) for p in position_ids])
+    if int(sequence_type) == 2:
+      return sq.Sequence(name, [(lab, "A1") for lab in dict.fromkeys(lab for lab, _ in t.items)])
+    return sq.Sequence(name, [])
+
   # -- incubation timers -----------------------------------------------------------------------
 
   async def DATA_IncubationTimer(self, timer: str, seconds: float, mode: int):

@@ -114,8 +114,11 @@ class VenusDeck:
     """The labware a one-labware sequence (a move's source or destination) names."""
     return self.resource(self.sequences[sequence][0][0])
 
-  def seq(self, name: str) -> sq.Sequence:
-    """The layout sequence `name` as live Venus state: the same object on every call."""
+  def seq(self, name) -> sq.Sequence:
+    """The layout sequence `name` as live Venus state: the same object on every call. A Sequence
+    (one the method built, like Venus's sequence variables) is itself."""
+    if isinstance(name, sq.Sequence):
+      return name
     if name not in self._live:
       self._live[name] = sq.Sequence(name, list(self.sequences[name]))
     return self._live[name]
