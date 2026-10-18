@@ -37,11 +37,11 @@ pytestmark = pytest.mark.skipif(NGS is None or not LIBS,
 
 # What this test checks against the HSL (read by tools/trace_method.py --status)
 LIBRARY = "NGSSTARPROCESSES"
-COVERS = ["PIP_ReagentsFromTubeOrTroughOrPlateToPlate"]
+COVERS = ["PIP_ReagentsFromTubeOrTroughOrPlateToPlate", "PIP_Supernatant_SVFTSingleDispenseFromPlateToLiquidWaste"]
 
 TIPS = {1: "MlStar300ulStandardVolumeTipWithFilter", 5: "MlStar1000ulHighVolumeTipWithFilter", 23: "MlStar50ulTipWithFilter"}
 CLASSES = {"LC300": (1, 0), "LC1000": (5, 0), "LC50": (23, 0)}
-LLD_RECORDS = {"3de044fd", "7438ccf5", "e3697ea4", "39efb96f", "9726387a", "7302ffe4"}  # the others: fixed height
+LLD_RECORDS = {"3de044fd", "7438ccf5", "e3697ea4", "39efb96f", "9726387a", "7302ffe4", "0b2ad228"}  # the others: fixed height
 # (dispense count, aspiration, dispense, volume, class, mix cycles, mix asp, mix disp, asp height,
 #  disp height, tip exchange, increment aspiration, liquid following at a fixed dispense)
 CALLS = [
@@ -84,9 +84,20 @@ def _planner(seqs):
   return StarTipTools(Shim(), 8, xy=xy)
 
 
+def _call(call):
+  """A transfer call's 13 fields; a supernatant call's 5, the rest None."""
+  return (*call, *[None] * (13 - len(call)))
+
+
 def hsl_steps(avenio, lay, call):
-  n, asp, disp, vol, lc, cyc, mva, mvd, ha, hd, ex, inc, lf = call
+  n, asp, disp, vol, lc, cyc, mva, mvd, ha, hd, ex, inc, lf = _call(call)
   N = "NGSSTARPROCESSES::"
+  run_it = (f"ML_STAR.{disp}.SetCount({n});\n"
+            f'{N}PIP_ReagentsFromTubeOrTroughOrPlateToPlate(ML_STAR, ML_STAR.{asp}, ML_STAR.{disp}, {vol}, "{lc}", '
+            f"{cyc}, {mva}, {mvd}, {ha}, {hd}, {ex}, {inc}, {lf});\n" if cyc is not None else
+            f"ML_STAR.{asp}.SetCount({n});\n"
+            f'{N}PIP_Supernatant_SVFTSingleDispenseFromPlateToLiquidWaste(ML_STAR, ML_STAR.{asp}, ML_STAR.{disp}, '
+            f'{vol}, "{lc}");\n')
   src = (
     'namespace _Method { #include "HSLSeqLib.hsl" }\n'
     'namespace _Method { #include "NGSStarProcesses.hs_" }\n'
@@ -95,9 +106,7 @@ def hsl_steps(avenio, lay, call):
     "namespace _Method { method main() void {\n"
     + "".join(f"{N}t_seqTips{k} = ML_STAR.{TIPS[t]};\n" for k, t in (("300", 1), ("1000", 5), ("50", 23)))
     + f"{N}t_intNumberOfAllAvailableChannels = 8;\n{N}t_blnDeactivatePipettingStepsForTransportTests = 0;\n"
-    f"ML_STAR.{disp}.SetCount({n});\n"
-    f'{N}PIP_ReagentsFromTubeOrTroughOrPlateToPlate(ML_STAR, ML_STAR.{asp}, ML_STAR.{disp}, {vol}, "{lc}", {cyc}, '
-    f"{mva}, {mvd}, {ha}, {hd}, {ex}, {inc}, {lf});\n" "} }\n")
+    + run_it + "} }\n")
 
   def tip_type(run, p):
     p["o_inttiptype"].value, p["o_intdispensemode"].value = CLASSES[str(p["i_strliquidclassname"].value)]
@@ -117,7 +126,10 @@ def hsl_steps(avenio, lay, call):
                   "ngsstarprocesses::_data_gettiptypeanddispensemodeofliquidclass": tip_type,
                   "star_tip_tools::optimized1mltippickup": planner,
                   "stcc::resetfiltersequences": nothing, "stcc::addfiltersequence": nothing,
-                  "stcc::generatemappingfilev43ex1": nothing}})
+                  "stcc::generatemappingfilev43ex1": nothing,
+                  # out (no PLR counterpart; commented in the port): asks the instrument its channels
+                  "hslml_star::aspirationmonitoring_1000ulchannel_off": nothing,
+                  "hslml_star::aspirationmonitoring_1000ulchannel_on": nothing}})
   classes = [e.settings["LiquidName"] for e in run.events if e.command == "Aspirate"]
   label = lambda e: ("lld" if e.guid[:8] in LLD_RECORDS else "fixed") if e.command in ("Aspirate", "Dispense") else ""  # noqa: E731
   return steps_of(run, label), classes
@@ -126,21 +138,24 @@ def hsl_steps(avenio, lay, call):
 def port_steps(lay, call):
   from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
 
-  n, asp, disp, vol, lc, cyc, mva, mvd, ha, hd, ex, inc, lf = call
+  n, asp, disp, vol, lc, cyc, mva, mvd, ha, hd, ex, inc, lf = _call(call)
   deck = RecordingDeck(lay)
-  deck.seq(disp).set_count(n)
+  deck.seq(disp if cyc is not None else asp).set_count(n)
   label = lambda command, kw: "lld" if kw.get("lld_mode") not in (None, LLDMode.OFF) else "fixed"  # noqa: E731
   with RecordingChannels(label) as ch:
     procs = NGSStarProcesses(type("Star", (), {"pipettes": ch})(), deck, TIPS, CLASSES, planner=_planner(deck.live))
     classes = []
     procs._lc = lambda name: classes.append(name)  # the class asked for; none given to the recorder
-    asyncio.run(procs.PIP_ReagentsFromTubeOrTroughOrPlateToPlate(None, asp, disp, vol, lc, cyc, mva, mvd, ha, hd,
-                                                                   ex, inc, lf))
+    if cyc is not None:
+      asyncio.run(procs.PIP_ReagentsFromTubeOrTroughOrPlateToPlate(None, asp, disp, vol, lc, cyc, mva, mvd, ha, hd,
+                                                                     ex, inc, lf))
+    else:
+      asyncio.run(procs.PIP_Supernatant_SVFTSingleDispenseFromPlateToLiquidWaste(None, asp, disp, vol, lc))
   return ch.events, classes
 
 
 def test_covers_what_it_calls():
-  assert COVERS == ["PIP_ReagentsFromTubeOrTroughOrPlateToPlate"]
+  assert COVERS[0] == "PIP_ReagentsFromTubeOrTroughOrPlateToPlate"
 
 
 @pytest.mark.parametrize("call", CALLS, ids=[f"{c[4]}-{c[2]}-n{c[0]}" for c in CALLS])
@@ -149,3 +164,24 @@ def test_port_pipettes_as_the_library_does(avenio, lay, call):
   assert len(hsl) > 3
   assert_same_steps(hsl, port)
   assert set(hsl_classes) == set(port_classes) == {call[4]}
+
+
+# supernatant removal: (positions, aspiration, dispense, volume, class); 160 uL: 110 + 50, 290 uL: 250 + 50
+SUPERNATANT = [(24, "MIDI_OnMagnet", "LiquidWaste", 160, "LC300"), (12, "MIDI_OnMagnet", "LiquidWaste", 290, "LC300")]
+
+
+@pytest.mark.parametrize("call", SUPERNATANT, ids=[f"n{c[0]}-{c[3]}uL" for c in SUPERNATANT])
+def test_supernatant_removal_as_the_library_does(avenio, lay, call):
+  (hsl, _), (port, _) = hsl_steps(avenio, lay, call), port_steps(lay, call)
+  assert [e[0] for e in hsl[:5]] == ["TipPickUp", "Aspirate", "Aspirate", "Dispense", "TipEject"]
+  assert_same_steps(hsl, port)
+  first, second = (250.0, 50.0) if call[3] > 280 else (call[3] - 50.0, 50.0)
+  for i, e in enumerate(port):
+    if e[0] == "Dispense":  # the tips drained: what the two draws took
+      assert e[3]["volumes"] == [first + second] * len(e[1]), i
+      assert port[i - 2][3]["volumes"][0] == first and port[i - 1][3]["volumes"][0] == second
+
+
+def test_supernatant_removal_takes_300_uL_tips_only(lay):
+  with pytest.raises(RuntimeError, match="300 uL only"):
+    port_steps(lay, (8, "MIDI_OnMagnet", "LiquidWaste", 100, "LC50"))

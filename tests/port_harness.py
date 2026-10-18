@@ -44,7 +44,10 @@ def pipetting(command: str, settings: dict, volumes: dict, channels) -> dict[str
   out = steps.plr_arguments(step, len(channels), command == "Aspirate")
   out["venus"] = step.effective()
   vols = [volumes.get(c) for c in sorted(channels)]
-  if all(isinstance(v, (int, float)) for v in vols):
+  # "Drain tip in jet mode" (dispense mode 9): the tip emptied, the record's volume 0 (Venus's help);
+  # a port dispenses what its tips hold, which its own test checks
+  drain = command == "Dispense" and int(settings.get("dispense mode", 0) or 0) == 9
+  if all(isinstance(v, (int, float)) for v in vols) and not drain:
     out["volumes"] = [float(v) for v in vols]
   return out
 
@@ -66,7 +69,7 @@ class RecordingDeck:
     self.live = {name: sq.Sequence(name, list(items)) for name, items in self.sequences.items()}
 
   def seq(self, name):
-    return self.live[name]
+    return name if isinstance(name, sq.Sequence) else self.live[name]
 
   def resolve(self, item):
     return item

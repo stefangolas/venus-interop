@@ -14,6 +14,9 @@ The mapping to PLR (`plr_arguments`):
              liquid height = fluid height, surface following = liquid following
   mix        a pre-mix (aspirate) or post-mix (dispense) of the cycles and volume, at the mix
              position above the surface (aspirate)
+  aspirate mode  the firmware's aspiration type: 1 consecutive aspiration (no blow-out air drawn
+             again: none given), 2 aspirate all (no error when the container holds less than
+             asked); 0, 1, 2 read from the order the dialog help lists them (CONVENTIONS §11)
 What PLR takes no argument for (the cLLD sensitivity level, Venus's dispense modes) stays in
 `Pipetting` for the comparison, not in the call. Mix flow rate: the steps leave it to the liquid
 class (its aspirate or dispense mix flow rate); MIX_FLOW where no class is known.
@@ -40,6 +43,7 @@ class Pipetting:
   mix_cycles: int = 0
   mix_volume: float = 0.0
   mix_position: float = 0.0  # mm above the surface (aspirate)
+  aspirate_mode: int = 0  # 0 aspiration, 1 consecutive aspiration, 2 aspirate all
 
   @classmethod
   def from_record(cls, s: dict[str, Any]) -> "Pipetting":
@@ -48,7 +52,8 @@ class Pipetting:
                fluid_height=float(s.get("fluid height", 0) or 0),
                liquid_following=bool(int(s.get("LiquidFollowing", 0) or 0)),
                mix_cycles=int(s.get("mix cycles", 0) or 0), mix_volume=float(s.get("mix volume", 0) or 0),
-               mix_position=float(s.get("mix position", 0) or 0))
+               mix_position=float(s.get("mix position", 0) or 0),
+               aspirate_mode=int(s.get("aspirate mode", 0) or 0))
 
   def effective(self) -> "Pipetting":
     """Only what takes effect: the submerge depth with cLLD on, the fluid height with it off, the
@@ -72,6 +77,10 @@ def plr_arguments(step: Pipetting, n: int, aspirate: bool, mix_flow: Optional[fl
     out.update(lld_mode=LLDMode.CAPACITIVE, immersion_depths=[s.submerge] * n)
   else:  # OFF given, not left to PLR: with surface following, its default is CAPACITIVE
     out.update(lld_mode=LLDMode.OFF, liquid_heights=[s.fluid_height] * n)
+  if aspirate and s.aspirate_mode:
+    out["aspiration_types"] = [s.aspirate_mode] * n
+    if s.aspirate_mode == 1:
+      out["blow_out_air_volumes"] = [0.0] * n
   if s.mix_cycles:
     mix = Mix(volume=s.mix_volume, repetitions=s.mix_cycles, flow_rate=MIX_FLOW if mix_flow is None else mix_flow)
     if aspirate:

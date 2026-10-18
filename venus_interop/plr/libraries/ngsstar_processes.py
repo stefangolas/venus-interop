@@ -153,6 +153,52 @@ class NGSStarProcesses:
     if not tip_exchange and loop:
       await self.p.discard_tips(use_channels=held)
 
+  async def PIP_Supernatant_SVFTSingleDispenseFromPlateToLiquidWaste(self, ML_STAR, aspiration, dispense,
+                                                                      volume: float, liquid_class: str):
+    """The supernatant of each position of `aspiration` into `dispense` (the liquid waste), with
+    300 uL tips, new ones each slice: a draw by cLLD (0.5 mm under the surface, following it) that
+    doesn't fail on less liquid ("aspirate all"), then a consecutive 50 uL from 0.7 mm above the
+    bottom, then the tips drained in jet mode at 15 mm. The first draw is the volume less 50 uL;
+    within 20 uL of the tip's 300 it is 250, so the two take 300 whatever the volume asked (kept
+    as the library has it)."""
+    tip_type, dispense_mode = self._codes(liquid_class)
+    if dispense_mode in (2, 4):  # Venus: an error dialog, then abort
+      raise RuntimeError(f"{liquid_class}: unsupported dispense mode (part volume) for supernatant removal")
+    if tip_type != SVFT:  # Venus: an error dialog, then abort
+      raise RuntimeError(f"{liquid_class}: unsupported tip type {tip_type} for supernatant removal (300 uL only)")
+    # left out: _DATA_PlausibilityCheckVolume (an operator dialog on a volume too large for the tip),
+    # _DATA_ScheduleTips (the tips shown on the loading screen)
+    first, second = (250.0, 50.0) if 300 - volume < 20 else (volume - 50.0, 50.0)
+    draw_all = Pipetting(1, 0.5, liquid_following=True, aspirate_mode=2)
+    off_bottom = Pipetting(0, fluid_height=0.7, aspirate_mode=1)
+    drain = Pipetting(0, fluid_height=15.0)
+    tips, lc = self.tips[SVFT], self._lc(liquid_class)
+    asp, disp, tip_seq = self.v.seq(aspiration), self.v.seq(dispense), self.v.seq(tips)
+    # left out: HSLML_STAR::AspirationMonitoring_1000ulChannel_Off / _On around the loop (Venus's
+    # aspiration monitoring on 1000 uL channels; PLR has no counterpart)
+    while asp.cur > 0:
+      sq.align([(asp, 1), (disp, 1), (tip_seq, 1)])
+      pattern = self.planner.Optimized1mLTipPickup(ML_STAR, tips, aspiration)
+      spots = self._take(tips, pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
+      held = sorted(spots)
+      await self.p.pick_up_tips([self.v.resolve(spots[c]) for c in held], use_channels=held)
+      wells = self._take(asp, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
+      ch = sorted(wells)
+      for step, v in ((draw_all, first), (off_bottom, second)):
+        await steps.aspirate(self.p, [self.v.resolve(wells[c]) for c in ch], [v] * len(ch), ch, step, lc)
+      waste = self._take(disp, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
+      ch = sorted(waste)
+      await steps.dispense(self.p, [self.v.resolve(waste[c]) for c in ch], [first + second] * len(ch), ch, drain, lc)
+      await self.p.discard_tips(use_channels=held)
+      self.DATA_TipCounterWrite(ML_STAR)
+      asp.increment(self.channels)
+    for s in (asp, disp, tip_seq):
+      s.set_max(s.total)
+    asp.set_current_position(1)
+    disp.set_current_position(1)
+    # left out of the port so far, and in scope: the run report line ("Remove supernatant ...") and
+    # the sample-tracking mapping file (SupernatantToWaste_<LabID>_<BC>_<No>)
+
   # -- transports ------------------------------------------------------------------------------
 
   def _gripper_(self):

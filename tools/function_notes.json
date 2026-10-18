@@ -98,5 +98,13 @@
   "NGSSTARLOADING::MultipleChoiceDialog_RetrieveUserSelection": {
     "scope": "operator",
     "note": "the run-setup multiple-choice dialog (choices defined, shown, read back)"
+  },
+  "HSLML_STAR::AspirationMonitoring_1000ulChannel_Off": {
+    "scope": "out",
+    "note": "Venus's aspiration monitoring on 1000 uL channels: no PLR counterpart (commented where a port leaves it out)"
+  },
+  "HSLML_STAR::AspirationMonitoring_1000ulChannel_On": {
+    "scope": "out",
+    "note": "Venus's aspiration monitoring on 1000 uL channels: no PLR counterpart (commented where a port leaves it out)"
   }
 }
