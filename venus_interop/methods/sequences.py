@@ -255,3 +255,19 @@ def align(pairs: list[tuple[Sequence, int]], max_only: bool = True) -> int:
     if not max_only and s.cur > 0:
       s.end = min(s.end, s.cur + n * c - 1)
   return n
+
+
+def loop(seq: Sequence, consumed: int = 1, rewind: bool = True):
+  """The Method Editor's Loop over a sequence, as it writes it: SetCurrentPosition(1); while the
+  current position is valid, AlignSequences(seq, consumed) and the body (which moves the position
+  on itself); then SetMax(total) and, unless `rewind` is False (a loop the editor wrote without
+  it), SetCurrentPosition(1). Yields the pass number, from 1."""
+  seq.set_current_position(1)
+  n = 0
+  while seq.cur > 0:
+    align([(seq, consumed)])
+    n += 1
+    yield n
+  seq.set_max(seq.total)
+  if rewind:
+    seq.set_current_position(1)

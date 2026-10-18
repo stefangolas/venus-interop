@@ -8,6 +8,7 @@ wells and tips the method does; the GSF-IMS port is checked against the HSL libr
 
   python marionette_demo.py --corpus DIR            headless: runs, checks the volumes, prints them
   python marionette_demo.py --corpus DIR --view     serves the viewer and plays the run
+  python marionette_demo.py --corpus DIR --plate-map FILE   also writes the method's worklist CSV
 
 `--corpus` is the layout corpus (`raw/3ed5809e547e.lay` and the definitions it uses). Run on the PLR
 fork's `nist-viz` branch (upstream main + PR 1470's motion and collisions), with it on PYTHONPATH.
@@ -27,10 +28,14 @@ Deviations from the method, and why:
   - Liquid classes: the libraries' own by name where PLR has them; the FastMixing ones it lacks are
     listed at the end of a run and PLR's default is used, until Venus's liquid-class database is read.
   - The 1 mm "tap" of PlateAndLidMovement's plate moves is not drawn: PLR puts a plate on its site.
+  - The worklist (SaveWorklistAndMetadata) goes to `--plate-map`, not to the parameters' path, and
+    without the schema.ini Venus's file object leaves beside it (the method deletes that). Its
+    columns are the method's; the quoting and number format of Venus's CSV writer are not checked.
 """
 
 import argparse
 import asyncio
+import csv
 import logging
 import pathlib
 import sys
@@ -43,7 +48,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from nist_deck import VenusDeck, give_room, install, make_room  # noqa: E402
 
 from venus_interop.plr.libraries.common_96head import Common96HeadSubMethods  # noqa: E402
+from venus_interop.methods import sequences as sq  # noqa: E402
 from venus_interop.plr.libraries.gsf_ims import GsfIms  # noqa: E402
+from venus_interop.plr.libraries.lmsf_utilities import LmsfUtilities  # noqa: E402
 from venus_interop.plr.libraries.plate_and_lid import PlateAndLidMovement  # noqa: E402
 from venus_interop.plr.libraries.tip_count import TipCount, TipCounters  # noqa: E402
 from venus_interop.plr.libraries.tip_handling_96 import TipHandling96  # noqa: E402
@@ -68,6 +75,18 @@ class Parameters:
   sal_stock_conc: Sequence[float] = (1750.0, 2500.0)  # stocks 1 and 2, in the units of the maxima
   sal_grad_max_conc: Sequence[float] = (35.0, 50.0)  # the method's defaults
   is_pipetting: bool = True
+  # the plate map's names and stocks (CalculateOutputs); illustrative, in the method's units
+  strain_1_id: str = "strain_1"
+  plasmid_ids: Sequence[str] = ("plasmid_1", "plasmid_2", "plasmid_3", "plasmid_4")  # 4th "ignore": one plasmid
+  inducer_1_id: str = "van"
+  inducer_1_units: str = "umol/L"
+  inducer_1_stock_conc: float = 10_000.0
+  inducer_2_id: str = "sal"
+  inducer_2_units: str = "umol/L"
+  additive_1_id: str = "TMP"  # the selector
+  additive_1_units: str = "ug/mL"
+  additive_1_stock_conc: float = 5_000.0
+  worklist_file: Optional[pathlib.Path] = None  # the parameters' worklistFile; not written when None
 
 
 class Marionette:
@@ -82,6 +101,7 @@ class Marionette:
     self.gsf = GsfIms(star, v, say, liquid_classes=liquid_classes)
     self.plm = PlateAndLidMovement(star, v, say=say)
     self.c96 = Common96HeadSubMethods(star, v, say)
+    self.util = LmsfUtilities(v)
     self.tips = TipCount(v, counters or TipCounters())
 
   async def run(self) -> None:
@@ -165,12 +185,92 @@ class Marionette:
 
     await plm.MoveLid("Lid_parking_Reagent_Stock", "Reagent_Stock_Plate_lid", GRIP, 1, 0)
     await plm.MoveLid("Lid_parking_Growth_Plate", "Growth_Plate_lid", GRIP, 0, 1)
+    self.CalculateOutputs(with_tmp)
+    self.SaveWorklistAndMetadata()
     for tips, counter in zip(self.TIP_SEQUENCES, counters):  # CleanUp
       self.tips.Write2(tips, counter)
     await self.c96.Clear96HeadAndArm(None, "clear_96_head_seq")
     if gsf.missing_classes:
       self.say("liquid classes PLR lacks (its default used): " + ", ".join(sorted(gsf.missing_classes)))
     self.media = media
+
+  def CalculateOutputs(self, with_tmp: bool) -> None:
+    """The plate map: each Growth Plate well's inducer and selector concentrations, strain and
+    plasmid, as Growth_Plate sequence properties."""
+    p, seq, util = self.par, self.v.seq, self.util
+    plate = seq("Growth_Plate")
+    for name, value in (("inducer_1_conc", 0), ("inducer_1_id", p.inducer_1_id), ("inducer_1_units", p.inducer_1_units),
+                        ("inducer_2_conc", 0), ("inducer_2_id", p.inducer_2_id), ("inducer_2_units", p.inducer_2_units),
+                        ("additive_conc", 0), ("additive_id", p.additive_1_id), ("additive_units", p.additive_1_units)):
+      plate.set_property_range(1, 96, name, value)
+
+    def set_all(name: str, props: dict) -> None:  # SeqSetPropertyRange over the whole sequence, then copied
+      s = seq(name)
+      for prop, value in props.items():
+        s.set_property_range(1, s.total, prop, value)
+      util.SeqCopyPropsFromShortSeq(name, list(props), "Growth_Plate")
+
+    tmp = {"additive_id": p.additive_1_id, "additive_conc": p.additive_1_stock_conc / p.sal_tmp_stock_dilution,
+           "additive_units": p.additive_1_units} if with_tmp else {}
+    set_all("calc_wells_with_tmp", {**tmp, "inducer_2_id": p.inducer_2_id, "inducer_2_units": p.inducer_2_units})
+    for k, stock in enumerate(p.sal_stock_conc, start=1):
+      set_all(f"calc_wells_with_sal_{k}", {"inducer_2_conc": stock / p.sal_tmp_stock_dilution})
+
+    labware = plate.current_item()[0]
+
+    def by_well(s: sq.Sequence, prop: str, value) -> None:  # the current well, then the next
+      util.SeqSetPropertyByWell(labware, s.current_item()[1], "Growth_Plate", prop, value)
+      s.increment(1)
+
+    van = p.inducer_1_stock_conc / p.van_stock_dilution
+    s = seq("regular_wells_no_tmp_with_van")
+    for _ in sq.loop(s):
+      by_well(s, "inducer_1_conc", van)
+    s = seq("van_gradient_calc")  # a column per pass, diluted from one to the next
+    for _ in sq.loop(s):
+      for _ in range(8):
+        by_well(s, "inducer_1_conc", van)
+      van /= p.dilution_series_factor
+    # start: stock / sal_n_grad_start_dilution = stock / (stock / maximum), the gradient's maximum
+    sal_1, sal_2 = p.sal_grad_max_conc
+    s = seq("sal_gradient_calc")  # a column per pass, rows alternating the two stocks
+    for _ in sq.loop(s):
+      for _ in range(4):
+        by_well(s, "inducer_2_conc", sal_1)
+        by_well(s, "inducer_2_conc", sal_2)
+      sal_1, sal_2 = sal_1 / p.dilution_series_factor, sal_2 / p.dilution_series_factor
+
+    plate.set_property_range(1, 96, "strain", p.strain_1_id)
+    if p.plasmid_ids[3] == "ignore":
+      plate.set_property_range(1, 96, "plasmid", p.plasmid_ids[0])
+    else:
+      for k, plasmid in enumerate(p.plasmid_ids, start=1):
+        seq(f"plasmid_{k}").set_property_range(1, 24, "plasmid", plasmid)
+      for k in range(1, 5):
+        util.SeqCopyPropsFromShortSeq(f"plasmid_{k}", ["plasmid"], "Growth_Plate")
+
+  FIELDS = ["position", "well", "row", "column", "inducer1Id", "inducer1Concentration", "inducer1Units",
+            "inducer2Id", "inducer2Concentration", "inducer2Units", "selectorId", "selectorConc",
+            "selectorUnits", "strain", "plasmid"]
+
+  def SaveWorklistAndMetadata(self) -> None:
+    """The worklist: a row per Growth Plate position. Ids and units are the parameters', as the
+    method writes them; concentrations, strain and plasmid are the well's properties."""
+    p, plate = self.par, self.v.seq("Growth_Plate")
+    self.plate_map = []
+    for _ in sq.loop(plate, rewind=False):
+      pos, well = plate.cur, plate.current_item()[1]
+      prop = lambda name: plate.get_property(pos, name)  # noqa: E731
+      self.plate_map.append([pos, well, well[0], int(well[1:]),
+                             p.inducer_1_id, float(prop("inducer_1_conc")), p.inducer_1_units,
+                             p.inducer_2_id, float(prop("inducer_2_conc")), p.inducer_2_units,
+                             p.additive_1_id, float(prop("additive_conc")), p.additive_1_units,
+                             prop("strain"), prop("plasmid")])
+      plate.increment(1)
+    if p.worklist_file:
+      with open(p.worklist_file, "w", newline="") as f:
+        csv.writer(f).writerows([self.FIELDS, *self.plate_map])
+      self.say(f"worklist: {p.worklist_file}")
 
 
 def fill(v: VenusDeck) -> None:
@@ -184,6 +284,17 @@ def fill(v: VenusDeck) -> None:
   waste = v.resource("Liquid_waste").get_all_items()
   give_room(waste, 1_000.0)
   make_room(waste, 20_000.0)
+
+
+def report_plate_map(rows: list) -> None:
+  """The plate map as 8 x 12 grids: inducer 1, inducer 2, selector, plasmid."""
+  col = {name: i for i, name in enumerate(Marionette.FIELDS)}
+  grid = {(r[col["row"]], r[col["column"]]): r for r in rows}
+  for name in ("inducer1Concentration", "inducer2Concentration", "selectorConc", "plasmid"):
+    print(f"plate map, {name}:")
+    for row in "ABCDEFGH":
+      cells = [f"{x:.4g}" if isinstance(x, (int, float)) else x for x in (grid[row, c][col[name]] for c in range(1, 13))]
+      print(f"  {row} " + " ".join(f"{x:>7}" for x in cells))
 
 
 def report(v: VenusDeck, media: float) -> None:
@@ -230,6 +341,7 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.P
                       liquid_classes=VenusLiquidClasses.from_json(liquid_classes) if liquid_classes else None)
   await method.run()
   report(v, method.media)
+  report_plate_map(method.plate_map)
   if view:
     print("done", flush=True)
     await asyncio.Event().wait()
@@ -249,7 +361,10 @@ if __name__ == "__main__":
                   help="a JSON file of Venus tip counters, read at the start and written at the end, as "
                        "the method's TipCount::Read2/Write2: the racks carry over between runs")
   ap.add_argument("--culture-volume", type=float, default=500.0)
+  ap.add_argument("--plate-map", type=pathlib.Path,
+                  help="write the method's worklist (SaveWorklistAndMetadata) here: a CSV row per Growth Plate well")
   a = ap.parse_args()
   trace = a.trace or a.corpus.parent / "analysis" / "traces" / TRACE
-  asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate), trace,
+  asyncio.run(main(a.corpus, a.view, Parameters(culture_volume=a.culture_volume, plate_number=a.plate,
+                                                   worklist_file=a.plate_map), trace,
                    a.tip_counters, a.liquid_classes))

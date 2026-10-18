@@ -199,3 +199,21 @@ def test_a_copy_carries_its_own_properties():
   c = s.copy()
   c.set_property(1, "conc", 2)
   assert s.get_property(1, "conc") == 1 and c.get_property(1, "conc") == 2
+
+
+def test_loop_over_a_sequence_the_body_moves_on():
+  # the Method Editor's Loop: position 1, AlignSequences each pass, then max back to total and
+  # the position to 1; a body taking 8 per pass over 40 positions runs 5 passes
+  s = plate(n=40)
+  seen = []
+  for n in sq.loop(s):
+    assert s.max == s.valid()
+    for _ in range(8):
+      seen.append(s.current_item()[1])
+      s.increment(1)
+  assert n == 5 and len(seen) == 40 and seen[-1] == "H5"
+  assert (s.cur, s.max) == (1, 40)
+  s.set_max(3)
+  for _ in sq.loop(s, rewind=False):
+    s.increment(1)
+  assert (s.cur, s.max) == (0, 40)
