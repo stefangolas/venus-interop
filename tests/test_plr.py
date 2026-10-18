@@ -59,6 +59,23 @@ def test_tiny_geometry():
   assert plate.parent.name == "car_site_1"
 
 
+def test_a_rack_listing_its_positions_gets_a_well_at_each():
+  # rgt_cont_60ml_BC_A00.rck: no Rows/Columns, eight positions listed from the first's centre
+  # (BndryX/Y), a gap between 4 and 5; no container file here, so the wells take the pitch
+  ys = [0, -9, -18, -27, -41.5, -50.5, -59.5, -68.5]
+  rack = Rack("ml_star/reagent/trough.rck", "RECTRACK", {
+    "BndryX": "10", "BndryY": "79.25", "Dim.Dx": "20", "Dim.Dy": "89.9", "Dim.Dz": "65", "HoleCnt": "8",
+    "ConnectedCtr": "1", **{f"{i + 1}.{k}": str(v) for i, y in enumerate(ys) for k, v in (("ID", i + 1), ("X", 0), ("Y", y))}})
+  plate = plr_import.build_rack("trough", rack, DefinitionStore())
+  assert isinstance(plate, Plate) and plate.num_items == 8
+  centres = [plate.get_item(i).get_location_wrt(plate, "c", "c") for i in range(8)]
+  assert [(round(c.x, 4), round(c.y, 4)) for c in centres] == [(10.0, 79.25 + y) for y in ys]
+  assert [w.name for w in plate.get_all_items()] == [f"trough_well_{r}1" for r in "ABCDEFGH"]
+  # a tip rack listing its positions (the CO-RE grip tools) stays a box
+  tools = Rack("ml_star/tools.rck", "RECTRACK", {**rack.fields, "Property.1": "MlStarTipRack", "PropertyValue.1": "14"})
+  assert not isinstance(plr_import.build_rack("tools", tools, DefinitionStore()), ItemizedResource)
+
+
 def test_tiny_round_trip_is_identical():
   lay, store, _ = tiny()
   data = write_layout(lay)

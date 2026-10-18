@@ -1,10 +1,11 @@
 """What the NIST LMSF demos share: PLR's wastes and grip tools on an imported layout, gripper moves
 to Venus placeholders, and volume helpers. The layout itself is `venus_interop.plr.venus_deck`.
 
-Used by `marionette_demo.py`, `dna_extraction_demo.py` and `kapa_hyperplus_demo.py`. See those for
+Used by `marionette_demo.py`, `groq_seq_demo.py`, `dna_extraction_demo.py` and `kapa_hyperplus_demo.py`. See those for
 how to run them.
 """
 
+import csv
 import re
 import pathlib
 import sys
@@ -73,3 +74,21 @@ def chunks(items: Sequence, n: int) -> List[list]:
   if len(items) % n:
     raise ValueError(f"{len(items)} positions are not a multiple of {n} channels")
   return [list(items[i:i + n]) for i in range(0, len(items), n)]
+
+
+def write_worklist(path: pathlib.Path, fields: Sequence[str], rows: Sequence[list]) -> None:
+  """A method's worklist as Venus's CSV file object writes it: a header of the field names, then a
+  row per record (its quoting and number format are not checked against Venus)."""
+  with open(path, "w", newline="") as f:
+    csv.writer(f).writerows([list(fields), *rows])
+
+
+def print_plate_map(fields: Sequence[str], rows: Sequence[list], columns: Sequence[str]) -> None:
+  """Worklist columns as 8 x 12 grids, from rows carrying "row" and "column" fields."""
+  col = {name: i for i, name in enumerate(fields)}
+  grid = {(r[col["row"]], r[col["column"]]): r for r in rows}
+  for name in columns:
+    print(f"plate map, {name}:")
+    for row in "ABCDEFGH":
+      cells = [f"{x:.4g}" if isinstance(x, (int, float)) else x for x in (grid[row, c][col[name]] for c in range(1, 13))]
+      print(f"  {row} " + " ".join(f"{x:>7}" for x in cells))

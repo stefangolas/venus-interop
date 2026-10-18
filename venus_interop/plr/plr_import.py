@@ -165,23 +165,19 @@ def _volume_functions(geometry) -> dict:
 def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
   sx, sy, sz = rack.dim
   rows, cols = rack.rows, rack.columns
-  if not rows or not cols or rack.fields.get("Stagger", "0") not in ("0", ""):
+  listed = not (rows and cols) and not rack.is_tip_rack and rack.positions
+  if not listed and (not rows or not cols or rack.fields.get("Stagger", "0") not in ("0", "")):
     return Resource(name, sx, sy, sz, category="venus_rack")
   wx, wy, depth = _container_size(rack, store)
   bx, by = rack.boundary
-  grid = dict(
-    num_items_x=cols, num_items_y=rows,
-    dx=bx - wx / 2, dy=by - wy / 2, dz=max(rack.num("Cntr.1.base"), 0.0),
-    item_dx=rack.dx if cols > 1 else None, item_dy=rack.dy if rows > 1 else None,
-    name_prefix=name, size_x=wx, size_y=wy,
-  )
+  dz = max(rack.num("Cntr.1.base"), 0.0)
   if rack.is_tip_rack:
     creator, how = _tip_creator(rack, store)
     probe = creator("probe")
     # Venus's container base is the tip's bottom; PLR's tip spot is the seat, a tip length minus the
     # fitting depth higher (CONVENTIONS.md section 5)
-    grid["dz"] = rack.num("Cntr.1.base") + probe.get_size_z() - probe.fitting_depth
-    items = create_ordered_items_2d(TipSpot, make_tip=creator, **grid)
+    items = create_ordered_items_2d(TipSpot, make_tip=creator, **_grid(name, rack, wx, wy,
+                                    rack.num("Cntr.1.base") + probe.get_size_z() - probe.fitting_depth))
     tr = TipRack(name, sx, sy, sz, ordered_items=items)
     tr.metadata[VENUS] = {"tip": how}
     return tr
@@ -197,9 +193,28 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
   if geometry is not None and geometry.segments and all(generate._EQN.match(s.eqn) for s in geometry.segments):
     volume_fns = _volume_functions(geometry)
   # the well stands on Venus's container base, which is the cavity floor: no material below it
-  items = create_ordered_items_2d(Well, size_z=depth, cross_section_type=shape, material_z_thickness=0.0,
-                                  **volume_fns, **grid)
+  well = dict(size_z=depth, cross_section_type=shape, material_z_thickness=0.0, **volume_fns)
+  if listed:
+    # positions listed one by one, in Venus's order: named by column (X) and row (Y, back first)
+    xs = sorted({x for x, _ in rack.positions})
+    ys = sorted({y for _, y in rack.positions}, reverse=True)
+    items = {}
+    for x, y in rack.positions:
+      key = f"{chr(ord('A') + ys.index(y))}{xs.index(x) + 1}"
+      items[key] = Well(f"{name}_well_{key}", size_x=wx, size_y=wy, **well)
+      items[key].location = Coordinate(round(bx + x - wx / 2, 4), round(by + y - wy / 2, 4), dz)
+    return Plate(name, sx, sy, sz, ordered_items=items)
+  items = create_ordered_items_2d(Well, **well, **_grid(name, rack, wx, wy, dz))
   return Plate(name, sx, sy, sz, ordered_items=items)
+
+
+def _grid(name: str, rack: Rack, wx: float, wy: float, dz: float) -> dict:
+  """`create_ordered_items_2d`'s grid for a Rows x Columns rack."""
+  bx, by = rack.boundary
+  cols, rows = rack.columns, rack.rows
+  return dict(num_items_x=cols, num_items_y=rows, dx=bx - wx / 2, dy=by - wy / 2, dz=dz,
+              item_dx=rack.dx if cols > 1 else None, item_dy=rack.dy if rows > 1 else None,
+              name_prefix=name, size_x=wx, size_y=wy)
 
 
 def build_carrier(name: str, carrier: CarrierDef) -> Carrier:

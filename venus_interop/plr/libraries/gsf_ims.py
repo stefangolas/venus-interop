@@ -46,6 +46,10 @@ CLASS_BY_TIP = {  # aspirate_w_err_handling: STAR_TIP_TOOLS::GetTipType 1 / 5
   1000: "HighVolumeFilter_Water_FastMixing_DispenseSurface_Empty",
 }
 SERIES_CLASS = "HighVolumeFilter_Water_FastMixing_DispenseSurface_Empty"  # fixed in 05a6e94c, 32abdc77
+
+
+class SubmethodError(ValueError):
+  """The library's own checks failing (its ErrRaise): Venus aborts the method."""
 SUBMERGE = 2.0
 CLLD = 5  # the records' cLLD sensitivity ("from labware")
 DISPENSE_HEIGHT = 0.3  # fb45c82b, the dispense not to liquid
@@ -120,7 +124,7 @@ class GsfIms:
     """check_seq_lengths_and_channels: n source positions; the destination a multiple of n."""
     a, d = self.v.seq(asp).total, self.v.seq(disp).total
     if a != n or d % a:
-      raise ValueError(f"GSF-IMS: {asp} has {a} positions for {n} channels, {disp} has {d}")
+      raise SubmethodError(f"GSF-IMS: {asp} has {a} positions for {n} channels, {disp} has {d}")
 
   async def _over(self, disp: str, body):
     """The editor's loop over a sequence: from position 1 until it is complete, max aligned to
@@ -142,7 +146,7 @@ class GsfIms:
     self._check(asp, disp, n)
     per_slice = isinstance(volumes, (list, tuple))
     if per_slice and len(volumes) * n != self.v.seq(disp).total:
-      raise ValueError(f"GSF-IMS: {len(volumes)} volumes for {disp}'s {self.v.seq(disp).total} positions / {n}")
+      raise SubmethodError(f"GSF-IMS: {len(volumes)} volumes for {disp}'s {self.v.seq(disp).total} positions / {n}")
     if own_tips:
       await self.tip_pickup(tips, n)
     if prewet:
@@ -205,7 +209,7 @@ class GsfIms:
     """Slice i of from_seq into slice i of to_seq, mixing the source first, on one set of tips."""
     f, t = self.v.seq(from_seq), self.v.seq(to_seq)
     if f.total != t.total:
-      raise ValueError(f"GSF-IMS: {from_seq} has {f.total} positions, {to_seq} {t.total}")
+      raise SubmethodError(f"GSF-IMS: {from_seq} has {f.total} positions, {to_seq} {t.total}")
     n = number_channels
     await self.tip_pickup(tips, n)
     f.set_current_position(1)

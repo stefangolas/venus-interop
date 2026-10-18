@@ -35,7 +35,6 @@ Deviations from the method, and why:
 
 import argparse
 import asyncio
-import csv
 import logging
 import pathlib
 import sys
@@ -45,7 +44,7 @@ from typing import Optional, Sequence
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from nist_deck import VenusDeck, give_room, install, make_room  # noqa: E402
+from nist_deck import VenusDeck, give_room, install, make_room, print_plate_map, write_worklist  # noqa: E402
 
 from venus_interop.plr.libraries.common_96head import Common96HeadSubMethods  # noqa: E402
 from venus_interop.methods import sequences as sq  # noqa: E402
@@ -268,8 +267,7 @@ class Marionette:
                              prop("strain"), prop("plasmid")])
       plate.increment(1)
     if p.worklist_file:
-      with open(p.worklist_file, "w", newline="") as f:
-        csv.writer(f).writerows([self.FIELDS, *self.plate_map])
+      write_worklist(p.worklist_file, self.FIELDS, self.plate_map)
       self.say(f"worklist: {p.worklist_file}")
 
 
@@ -284,17 +282,6 @@ def fill(v: VenusDeck) -> None:
   waste = v.resource("Liquid_waste").get_all_items()
   give_room(waste, 1_000.0)
   make_room(waste, 20_000.0)
-
-
-def report_plate_map(rows: list) -> None:
-  """The plate map as 8 x 12 grids: inducer 1, inducer 2, selector, plasmid."""
-  col = {name: i for i, name in enumerate(Marionette.FIELDS)}
-  grid = {(r[col["row"]], r[col["column"]]): r for r in rows}
-  for name in ("inducer1Concentration", "inducer2Concentration", "selectorConc", "plasmid"):
-    print(f"plate map, {name}:")
-    for row in "ABCDEFGH":
-      cells = [f"{x:.4g}" if isinstance(x, (int, float)) else x for x in (grid[row, c][col[name]] for c in range(1, 13))]
-      print(f"  {row} " + " ".join(f"{x:>7}" for x in cells))
 
 
 def report(v: VenusDeck, media: float) -> None:
@@ -341,7 +328,8 @@ async def main(corpus: pathlib.Path, view: bool, p: Parameters, trace: pathlib.P
                       liquid_classes=VenusLiquidClasses.from_json(liquid_classes) if liquid_classes else None)
   await method.run()
   report(v, method.media)
-  report_plate_map(method.plate_map)
+  print_plate_map(Marionette.FIELDS, method.plate_map,
+                  ("inducer1Concentration", "inducer2Concentration", "selectorConc", "plasmid"))
   if view:
     print("done", flush=True)
     await asyncio.Event().wait()

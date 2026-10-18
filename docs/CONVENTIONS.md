@@ -163,6 +163,7 @@ So `ZTransValue` 0 or 1 is reliable: the rack is on its site or on a stack (18 e
 
 **Rack (`.rck`, section `RECTRACK`)**:
 - **Grid:** `Rows`, `Columns`, `Dx`, `Dy`, `BndryX/Y` (centre of the front-left position, from the corner).
+- **Listed positions:** a rack without `Rows`/`Columns` may list its positions one by one, `N.X`, `N.Y` for N = 1 … `HoleCnt`, offsets from the first position's centre (`BndryX/Y`). 10 of the 265 racks in the corpus and the Venus install do (8 of 117 corpus files, 2 of 148 install files: a 60 mL trough `rgt_cont_60ml_BC_A00`, 8 positions with a 14.5 mm gap between 4 and 5; six single-position verification sites; three CO-RE grip-tool holders); none of them also has a grid; the first is at 0, 0 in all, and every list sits centred in its footprint (the trough: 10.75 / 10.65 mm in Y, 10 / 10 in X). `plr_import` gives the non-tip ones a well at each position, named by column and row (back first) and kept in Venus's order; the grip tools stay boxes (the demos put PLR's gripper there).
 - **Body:** `Dim.Dx/Dy/Dz` and `StackHt`.
 - **Container:** `Cntr.1.file` (the `.ctr`), and `Cntr.1.base`, the container floor above the rack bottom (negative for tips hanging below the rack).
 - **Properties:** `Property.N` / `PropertyValue.N`.
@@ -486,6 +487,9 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 | Whether a sequence copy (`a = b`, `CopySequence`) carries its position properties (`methods.sequences` copies them; the HSL reference doesn't say) | A two-line test method in the simulator: set a property, copy, read it on the copy |
 | The CO-RE 96 Head Tip Eject step's `UsePickUpPosition` values: 2 is read as "default waste" from the order the dialog help lists Off / pick-up position / default waste | Set each option in the step dialog and read the saved `.stp` |
 | The Venus Y and Z of the culture-processing `Move96HeadAndArm` firmware moves (`H0YA ya07500`, `H0ZA za68500`): 117.19 mm and 342.5 mm with PLR's head drive resolutions; 68500 is the top of the head's Z window either way | Run the move and read the head's position back |
+| Whether `GetSequenceProperty` on a position where the property was never set throws "property not found" (the HSL reference's words; `methods.sequences` throws per position) or only when no position of the sequence has it. Both GROQ-Seq methods depend on it: they set `plasmid` on positions 1-8 of 12-position sequences and copy all 12 (`examples/groq_seq_demo.py`) | A two-line test method in the simulator: set a property on position 1, read it on position 2 |
+| What `array.ElementAt(i)` does when `i` is out of range or computed from a variable never assigned ("its value is undefined", HSL reference): GROQ-Seq plates 2-5 index the selector stocks by `inducer_number - 1` before it is set | The same test method: `ElementAt(-1)` and `ElementAt(x - 1)` with `x` declared only |
+| Whether `SetSequencePropertyRange` past a sequence's end is an error (GROQ-Seq plates 2-5 set positions 1-28 of an 8-position sequence; nothing reads them) | The same test method |
 
 ## 12. Method files (`.med`, `.hsl`, `.sub`)
 

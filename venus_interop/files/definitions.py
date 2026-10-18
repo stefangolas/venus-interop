@@ -69,6 +69,19 @@ class Rack(Definition):
     return self.num("StackHt")
 
   @property
+  def positions(self) -> list[tuple[float, float]]:
+    """Positions listed one by one (`1.X`, `1.Y` ... up to HoleCnt), as offsets from the first
+    position's centre (BndryX, BndryY); empty for a grid rack. In the corpus only racks without
+    Rows/Columns list them (10: a trough, verification sites, CO-RE grip tools), the first at 0, 0,
+    and every list sits centred in its rack's footprint (CONVENTIONS.md section 5)."""
+    out = []
+    for i in range(1, self.hole_count + 1):
+      if f"{i}.X" not in self.fields:
+        return []
+      out.append((self.num(f"{i}.X"), self.num(f"{i}.Y")))
+    return out
+
+  @property
   def hole_count(self) -> int:
     return self.int("HoleCnt") or (self.rows * self.columns) or 1
 
