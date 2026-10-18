@@ -11,9 +11,10 @@ the pipetting and transport functions every NGS STAR kit method is built on. Por
 
 The tip type and dispense mode come from the liquid class in Venus's database (`liquid_classes`, a
 VenusLiquidClasses; or a table of them). Dispense modes 2 and 4 ("part",
-multi-dispense) take other functions, not ported yet. Not ported, by design: the report and status
-lines, the volume plausibility dialog, the sequence check dialog, the tip scheduling for the loading
-screen, the sample-tracking mapping file (STCC).
+multi-dispense) take other functions, not ported yet. Not ported yet, and in scope: the run report
+lines and the sample-tracking mapping file each transfer writes (STCC; the port test answers its
+calls with no-ops for now). Not ported, by design: the status lines, the volume plausibility dialog,
+the sequence check dialog, the tip scheduling for the loading screen.
 """
 from __future__ import annotations
 

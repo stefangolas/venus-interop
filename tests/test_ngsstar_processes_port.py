@@ -110,6 +110,8 @@ def hsl_steps(avenio, lay, call):
     return 0
 
   nothing = lambda run, p: 0  # noqa: E731
+  # STCC (sample tracking) answered with no-ops: the mapping files are in scope but not ported yet;
+  # the test is to compare them once they are
   run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
                 (avenio / "Library").glob("*.stp"), {"x.lay": lay}, answers={"functions": {
                   "ngsstarprocesses::_data_gettiptypeanddispensemodeofliquidclass": tip_type,

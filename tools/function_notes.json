@@ -86,5 +86,17 @@
   "DECKVISUALIZE::*": {
     "scope": "out",
     "note": "Venus's on-screen deck view during the run: PLR's visualizer shows the same from its trackers"
+  },
+  "NGSSTARLOADING::MultipleChoiceDialog_DefineChoiceElement": {
+    "scope": "operator",
+    "note": "the run-setup multiple-choice dialog (choices defined, shown, read back)"
+  },
+  "NGSSTARLOADING::MultipleChoiceDialog_DisplayDialog": {
+    "scope": "operator",
+    "note": "the run-setup multiple-choice dialog (choices defined, shown, read back)"
+  },
+  "NGSSTARLOADING::MultipleChoiceDialog_RetrieveUserSelection": {
+    "scope": "operator",
+    "note": "the run-setup multiple-choice dialog (choices defined, shown, read back)"
   }
 }
