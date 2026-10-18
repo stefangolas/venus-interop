@@ -10,7 +10,8 @@ created if new.
 The counter itself is Venus's compiled element counter, which keeps a status per position. Here
 it is the sequence's current position (tips before it used), which is the same while tips are
 taken in order, as the methods take them (unverified beyond that, CONVENTIONS §11). The counters
-live in a JSON file (`TipCounters`), name -> current position, 0 for an empty rack.
+live in a JSON file (`TipCounters`), name -> current position (0 for an empty rack), or, as STAR
+Tip Tools writes them (`star_tip_tools`), the list of positions still holding tips.
 """
 from __future__ import annotations
 
@@ -24,13 +25,14 @@ LIBRARY = "TIPCOUNT"  # the Venus namespace ported
 
 
 class TipCounters:
-  """Persisted tip counters: name -> the current position of the tip sequence written."""
+  """Persisted tip counters: name -> the current position of the tip sequence written, or the
+  [labware, position] items still holding tips."""
 
   def __init__(self, path: Optional[pathlib.Path] = None):
     self.path = path
-    self.counters: dict[str, int] = {}
+    self.counters: dict = {}
     if path is not None and path.exists():
-      self.counters = {k: int(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+      self.counters = json.loads(path.read_text(encoding="utf-8"))
 
   def save(self) -> None:
     if self.path is not None:

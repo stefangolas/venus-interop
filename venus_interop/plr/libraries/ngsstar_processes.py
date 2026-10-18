@@ -63,7 +63,8 @@ SHIFTS = {
 class NGSStarProcesses:
   def __init__(self, star, deck, tips: dict[int, str], liquid_classes, channels: int = 8,
                planner: Optional[StarTipTools] = None, gripper=None, transport_tool: int = CORE_GRIPPER,
-               front_channel: int = 7, say=print):
+               front_channel: int = 7, say=print, tip_counters: Optional[dict[int, str]] = None,
+               time_scale: float = 0.0, sleep=None, clock=None):
     """`tips`: tip type -> the tip sequence (the framework's t_seqTips300 / 1000 / 50).
     `liquid_classes`: a VenusLiquidClasses (the kit's database, read by tools/liquid_classes.py),
     or a table name -> (tip type, dispense mode) with PLR's STAR classes."""
@@ -74,6 +75,13 @@ class NGSStarProcesses:
     self.star, self.say = star, say
     self._gripper, self.transport_tool = gripper, transport_tool
     self.front_channel = front_channel  # t_intFrontChannelCORETransport: 1 = back ... 8 = front
+    # tip type -> the framework's tip counter name (t_strTipCounterNameTip50 / 300 / 1000)
+    self.tip_counters = tip_counters or {}
+    import asyncio
+    import time
+    self.time_scale, self.sleep = time_scale, sleep or asyncio.sleep
+    self.clock = clock or time.monotonic
+    self._timers: dict[str, float] = {}
 
   def _take(self, seq: str, pattern: str, counting: int, use: int) -> dict:
     taken = sq.take(self.v.seq(seq), pattern, counting, use)
@@ -194,3 +202,40 @@ class NGSStarProcesses:
     dst_lab = self.v.seq(destination).current_item()[0]
     grip = dataclasses.replace(HSP_GRIP, check=1 if dst_lab == "HSP_CPAC" else 0)
     return await self._transport(source, destination, grip, park_after_move, track_to_read_barcode)
+
+  # -- incubation timers -----------------------------------------------------------------------
+
+  async def DATA_IncubationTimer(self, timer: str, seconds: float, mode: int):
+    """1: start and wait; 2: start only; 3: wait for a timer started before (what is left of it).
+    Venus skips the timers in simulation mode: `time_scale` 0 does the same; 1 is real time."""
+    import math
+
+    seconds = math.floor(seconds)
+    now = self.clock()
+    if int(mode) == 1:
+      await self.sleep(seconds * self.time_scale)
+    elif int(mode) == 2:
+      self._timers[timer] = now + seconds
+    elif int(mode) == 3:
+      left = self._timers.pop(timer, now) - now
+      await self.sleep(max(0.0, left) * self.time_scale)
+
+  # -- tip counters ----------------------------------------------------------------------------
+
+  def DATA_TipCounterWrite(self, ML_STAR=None):
+    """Each tip sequence (50, 300, 1000 uL) into its counter (STAR_TIP_TOOLS::TipCounter_Write)."""
+    for tip_type, counter in self.tip_counters.items():
+      self.planner.TipCounter_Write(ML_STAR, self.tips[tip_type], counter)
+
+  def DATA_TipCounterRead(self, ML_STAR=None, required_50=0, required_300=0, required_1000=0, tip_types=4):
+    """The tip sequences of `tip_types` (1: 50, 2: 300, 3: 1000 uL, 4: all) from their counters.
+    Too few tips for what is required is Venus's reload dialog: here an error naming the shortfall."""
+    which = {1: [LVFT], 2: [SVFT], 3: [HVFT]}.get(int(tip_types), [LVFT, SVFT, HVFT])
+    need = {LVFT: required_50, SVFT: required_300, HVFT: required_1000}
+    for tip_type in which:
+      if tip_type not in self.tips or tip_type not in self.tip_counters:
+        continue
+      have = self.planner.TipCounter_Read(ML_STAR, self.tips[tip_type], self.tip_counters[tip_type])
+      if have < int(need[tip_type]):
+        raise RuntimeError(f"{self.tips[tip_type]}: {have} tips for {need[tip_type]} required "
+                           "(Venus asks the operator to reload)")
