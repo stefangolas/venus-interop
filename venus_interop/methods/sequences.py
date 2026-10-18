@@ -284,3 +284,26 @@ def loop(seq: Sequence, consumed: int = 1, rewind: bool = True):
   seq.set_max(seq.total)
   if rewind:
     seq.set_current_position(1)
+
+
+def batches(channels: int, lead: Sequence, *others: Sequence, advance: tuple = ()):
+  """The NGSStar pipetting loop: `lead` walked `channels` positions at a time (AlignSequences,
+  steps counting manually, SeqIncrement by the channel count), each of `others` alongside: moving
+  on with it (its `advance` flag true) or taking from its current position every time (a trough, a
+  waste). Yields per pass the items of `lead` and of each of `others`, as many as every one of them
+  has room for: channel i takes item i. Ends as the library does: every sequence at position 1,
+  its max its total. (Venus's AlignSequences also caps the tip sequence at the pass's width; a
+  port picks up no more tips than the pass yields.)"""
+  flags = tuple(advance) + (False,) * (len(others) - len(advance))
+  seqs = (lead, *others)
+  while lead.cur > 0:
+    k = min([channels] + [s.valid() for s in seqs])
+    if k > 0:
+      yield tuple(s.items[s.cur - 1:s.cur - 1 + k] for s in seqs)
+    lead.increment(channels)
+    for s, moves in zip(others, flags):
+      if moves:
+        s.increment(channels)
+  for s in seqs:
+    s.set_max(s.total)
+    s.set_current_position(1)

@@ -103,6 +103,19 @@ class NGSStarProcesses:
       self.missing_classes.add(name)
     return lc
 
+  def _wells(self, items):
+    return [self.v.resolve(it) for it in items]
+
+  async def _pick_up(self, ML_STAR, tips: str, control, width: int) -> list[int]:
+    """Tips for a pass `width` positions wide: on the channels and from the tips STAR Tip Tools'
+    planner chooses, no more than the pass takes (Venus's AlignSequences caps the tip sequence)."""
+    pattern = self.planner.Optimized1mLTipPickup(ML_STAR, tips, control)
+    self.v.seq(tips).set_max(width)
+    spots = self._take(tips, pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
+    held = sorted(spots)
+    await self.p.pick_up_tips(self._wells(spots[c] for c in held), use_channels=held)
+    return held
+
   async def PIP_ReagentsFromTubeOrTroughOrPlateToPlate(
       self, ML_STAR, aspiration: str, dispense: str, volume: float, liquid_class: str, mix_cycles: int,
       mix_volume_aspiration: float, mix_volume_dispense: float, aspirate_height: float,
@@ -112,45 +125,30 @@ class NGSStarProcesses:
     if dispense_mode in (2, 4):
       raise NotImplementedError("dispense mode 'part' (multi-dispense) is not ported yet")
     tips, cfg, lc = self.tips[tip_type], TIP_SETTINGS[tip_type], self._lc(liquid_class)
-    asp, disp, tip_seq = self.v.seq(aspiration), self.v.seq(dispense), self.v.seq(tips)
-    pattern, loop, held = "", 0, []
-    while disp.cur > 0:
-      sq.align([(asp, 1), (disp, 1), (tip_seq, 1)])
-      loop += 1
-      if tip_exchange or loop == 1:
-        pattern = self.planner.Optimized1mLTipPickup(ML_STAR, tips, dispense)
-        spots = self._take(tips, pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
-        held = sorted(spots)
-        await self.p.pick_up_tips([self.v.resolve(spots[c]) for c in held], use_channels=held)
-      mix_a = mix_cycles if mix_volume_aspiration else 0
-      aspirate = (Pipetting(1, cfg.aspirate_submerge, liquid_following=True, mix_cycles=mix_a,
-                            mix_volume=mix_volume_aspiration, mix_position=MIX_POSITION)
-                  if aspirate_height == 0 else
-                  Pipetting(0, fluid_height=aspirate_height, liquid_following=aspirate_height > LIQUID_FOLLOWING_ABOVE,
-                            mix_cycles=mix_a, mix_volume=mix_volume_aspiration, mix_position=MIX_POSITION))
-      mix_d = mix_cycles if mix_volume_dispense else 0
-      dispense_step = (Pipetting(cfg.dispense_clld, cfg.dispense_submerge, liquid_following=True,
-                                 mix_cycles=mix_d, mix_volume=mix_volume_dispense, mix_position=MIX_POSITION)
-                       if dispense_height == 0 else
-                       Pipetting(0, fluid_height=dispense_height,
-                                 liquid_following=bool(liquid_following_at_fixed_dispense),
-                                 mix_cycles=mix_d, mix_volume=mix_volume_dispense))
-      wells = self._take(aspiration, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
-      ch = sorted(wells)
-      await steps.aspirate(self.p, [self.v.resolve(wells[c]) for c in ch], [volume] * len(ch), ch, aspirate, lc)
-      wells = self._take(dispense, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
-      ch = sorted(wells)
-      await steps.dispense(self.p, [self.v.resolve(wells[c]) for c in ch], [volume] * len(ch), ch, dispense_step, lc)
+    mix_a = mix_cycles if mix_volume_aspiration else 0
+    aspirate = (Pipetting(1, cfg.aspirate_submerge, liquid_following=True, mix_cycles=mix_a,
+                          mix_volume=mix_volume_aspiration, mix_position=MIX_POSITION)
+                if aspirate_height == 0 else
+                Pipetting(0, fluid_height=aspirate_height, liquid_following=aspirate_height > LIQUID_FOLLOWING_ABOVE,
+                          mix_cycles=mix_a, mix_volume=mix_volume_aspiration, mix_position=MIX_POSITION))
+    mix_d = mix_cycles if mix_volume_dispense else 0
+    dispense_step = (Pipetting(cfg.dispense_clld, cfg.dispense_submerge, liquid_following=True,
+                               mix_cycles=mix_d, mix_volume=mix_volume_dispense, mix_position=MIX_POSITION)
+                     if dispense_height == 0 else
+                     Pipetting(0, fluid_height=dispense_height, liquid_following=bool(liquid_following_at_fixed_dispense),
+                               mix_cycles=mix_d, mix_volume=mix_volume_dispense))
+    held = []
+    for targets, sources in sq.batches(self.channels, self.v.seq(dispense), self.v.seq(aspiration),
+                                       advance=(bool(increment_aspiration),)):
+      if tip_exchange or not held:
+        held = await self._pick_up(ML_STAR, tips, dispense, len(targets))
+      ch = list(range(len(targets)))
+      await steps.aspirate(self.p, self._wells(sources), [volume] * len(ch), ch, aspirate, lc)
+      await steps.dispense(self.p, self._wells(targets), [volume] * len(ch), ch, dispense_step, lc)
       if tip_exchange:
         await self.p.discard_tips(use_channels=held)
-      if increment_aspiration:
-        asp.increment(self.channels)
-      disp.increment(self.channels)
-    for s in (asp, disp, tip_seq):
-      s.set_max(s.total)
-    asp.set_current_position(1)
-    disp.set_current_position(1)
-    if not tip_exchange and loop:
+    self.v.seq(tips).set_max(self.v.seq(tips).total)
+    if held and not tip_exchange:
       await self.p.discard_tips(use_channels=held)
 
   async def PIP_Supernatant_SVFTSingleDispenseFromPlateToLiquidWaste(self, ML_STAR, aspiration, dispense,
@@ -167,35 +165,22 @@ class NGSStarProcesses:
     if tip_type != SVFT:  # Venus: an error dialog, then abort
       raise RuntimeError(f"{liquid_class}: unsupported tip type {tip_type} for supernatant removal (300 uL only)")
     # left out: _DATA_PlausibilityCheckVolume (an operator dialog on a volume too large for the tip),
-    # _DATA_ScheduleTips (the tips shown on the loading screen)
+    # _DATA_ScheduleTips (the tips shown on the loading screen), and around the loop
+    # HSLML_STAR::AspirationMonitoring_1000ulChannel_Off / _On (no PLR counterpart)
     first, second = (250.0, 50.0) if 300 - volume < 20 else (volume - 50.0, 50.0)
     draw_all = Pipetting(1, 0.5, liquid_following=True, aspirate_mode=2)
     off_bottom = Pipetting(0, fluid_height=0.7, aspirate_mode=1)
     drain = Pipetting(0, fluid_height=15.0)
     tips, lc = self.tips[SVFT], self._lc(liquid_class)
-    asp, disp, tip_seq = self.v.seq(aspiration), self.v.seq(dispense), self.v.seq(tips)
-    # left out: HSLML_STAR::AspirationMonitoring_1000ulChannel_Off / _On around the loop (Venus's
-    # aspiration monitoring on 1000 uL channels; PLR has no counterpart)
-    while asp.cur > 0:
-      sq.align([(asp, 1), (disp, 1), (tip_seq, 1)])
-      pattern = self.planner.Optimized1mLTipPickup(ML_STAR, tips, aspiration)
-      spots = self._take(tips, pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
-      held = sorted(spots)
-      await self.p.pick_up_tips([self.v.resolve(spots[c]) for c in held], use_channels=held)
-      wells = self._take(asp, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
-      ch = sorted(wells)
+    for wells, waste in sq.batches(self.channels, self.v.seq(aspiration), self.v.seq(dispense)):
+      held = await self._pick_up(ML_STAR, tips, aspiration, len(wells))
+      ch = list(range(len(wells)))
       for step, v in ((draw_all, first), (off_bottom, second)):
-        await steps.aspirate(self.p, [self.v.resolve(wells[c]) for c in ch], [v] * len(ch), ch, step, lc)
-      waste = self._take(disp, pattern, sq.MANUAL, sq.CHANNEL_PATTERN)
-      ch = sorted(waste)
-      await steps.dispense(self.p, [self.v.resolve(waste[c]) for c in ch], [first + second] * len(ch), ch, drain, lc)
+        await steps.aspirate(self.p, self._wells(wells), [v] * len(ch), ch, step, lc)
+      await steps.dispense(self.p, self._wells(waste), [first + second] * len(ch), ch, drain, lc)
       await self.p.discard_tips(use_channels=held)
       self.DATA_TipCounterWrite(ML_STAR)
-      asp.increment(self.channels)
-    for s in (asp, disp, tip_seq):
-      s.set_max(s.total)
-    asp.set_current_position(1)
-    disp.set_current_position(1)
+    self.v.seq(tips).set_max(self.v.seq(tips).total)
     # left out of the port so far, and in scope: the run report line ("Remove supernatant ...") and
     # the sample-tracking mapping file (SupernatantToWaste_<LabID>_<BC>_<No>)
 

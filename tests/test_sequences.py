@@ -228,3 +228,30 @@ def test_position_count_for_current_labware_is_the_reference_example():
   assert s.position_count_for_current_labware() == 3
   s.set_current_position(8)
   assert s.position_count_for_current_labware() == 2
+
+
+def _numbered(name, n):
+  return sq.Sequence(name, [(name, str(i)) for i in range(1, n + 1)])
+
+
+def test_batches_walk_the_lead_by_the_channels_the_others_alongside():
+  plate, trough, src = _numbered("plate", 12), _numbered("trough", 8), _numbered("src", 12)
+  passes = list(sq.batches(8, plate, trough, src, advance=(False, True)))
+  assert [len(p[0]) for p in passes] == [8, 4]
+  assert [it[1] for it in passes[1][0]] == ["9", "10", "11", "12"]
+  assert [it[1] for it in passes[1][1]] == ["1", "2", "3", "4"]  # the trough from its current position again
+  assert [it[1] for it in passes[1][2]] == ["9", "10", "11", "12"]  # moved on with the lead
+
+
+def test_a_pass_is_as_wide_as_every_sequence_has_room_for():
+  plate, waste = _numbered("plate", 16), _numbered("waste", 4)
+  assert [len(p[0]) for p in sq.batches(8, plate, waste)] == [4, 4]
+
+
+def test_batches_leave_every_sequence_at_position_1_with_its_max_its_total():
+  plate, other = _numbered("plate", 12), _numbered("other", 24)
+  plate.set_current_position(5)
+  other.set_current_position(3)
+  passes = list(sq.batches(8, plate, other, advance=(True,)))
+  assert passes[0][0][0][1] == "5" and passes[0][1][0][1] == "3"  # from the current positions
+  assert (plate.cur, plate.max, other.cur, other.max) == (1, 12, 1, 24)
