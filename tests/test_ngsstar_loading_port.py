@@ -16,7 +16,7 @@ import re
 
 import pytest
 
-from port_harness import hsl_run  # noqa: E402
+from port_harness import ARRAYTOOLS, ARRAYTOOLS_MODELS, hsl_run  # noqa: E402
 from venus_interop.files import layout  # noqa: E402
 from venus_interop.methods import sequences as sq  # noqa: E402
 
@@ -93,29 +93,6 @@ class _Deck:
     return self.live[name]
 
 
-# ArrayTools (included by NGSStarLoading) is on no machine here: its two functions the library
-# calls are declared and answered by models made from their names, not checked against the HSL
-ARRAYTOOLS = ('namespace _Method { namespace ARRAYTOOLS {\n'
-              'function get_distinct_from_array(variable & i_arr[], variable & o_arr[]) void { variable stub; }\n'
-              'function ArrayVLookUp(variable & i_values[], variable & i_keys[], variable i_key, variable & o_arr[]) void '
-              '{ variable stub; }\n'
-              '} }\n')
-
-
-def _distinct(run, p):  # the distinct values, in order of first appearance
-  from venus_interop.methods.hsl_eval import HArray
-  p["o_arr"].value = HArray(list(dict.fromkeys(p["i_arr"].value.items)))
-  return 0
-
-
-def _vlookup(run, p):  # the values whose key is the one looked up, in order
-  from venus_interop.methods.hsl_eval import HArray
-  keys, values = p["i_keys"].value.items, p["i_values"].value.items
-  p["o_arr"].value = HArray([v for k, v in zip(keys, values) if k == p["i_key"].value])
-  return 0
-
-
-ARRAYTOOLS_MODELS = {"arraytools::get_distinct_from_array": _distinct, "arraytools::arrayvlookup": _vlookup}
 
 
 def _value(a, samples):

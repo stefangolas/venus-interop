@@ -9,6 +9,15 @@ the pipetting and transport functions every NGS STAR kit method is built on. Por
       by cLLD (height 0) or at a fixed height; tips out if exchanged; both sequences on by the
       channel count. Tips out at the end when not exchanged.
 
+  PIP_MixOnly   (1,000 lines) a reagent's containers mixed in place, the mix volume measured with
+      a liquid search (PLR's probe_liquid_volumes for Venus's 0 uL cLLD aspirate and
+      HSLML_STAR::MeasureContainerVolume2) and shared among the channels in a trough.
+
+Repaired, where the library is evidently wrong and Venus would hang, lose work or stop the run
+(`faithful=True` keeps the library's behaviour; the differential tests use it): PIP_MixOnly's
+containers folded onto one labware, and its 300 uL copy looping without end (both in its
+docstring); STAR Tip Tools' planner asking for tips with tips left (star_tip_tools).
+
 The tip type and dispense mode come from the liquid class in Venus's database (`liquid_classes`, a
 VenusLiquidClasses; or a table of them). Dispense modes 2 and 4 ("part",
 multi-dispense) take other functions, not ported yet. Not ported yet, and in scope: the run report
@@ -44,6 +53,10 @@ class TipSettings:
 TIP_SETTINGS = {SVFT: TipSettings(0.5, 2, 0.5), HVFT: TipSettings(2.0, 1, 0.6), LVFT: TipSettings(0.5, 1, 0.5)}
 LIQUID_FOLLOWING_ABOVE = 1.8  # mm: a fixed-height aspirate follows the liquid above this
 MIX_POSITION = 1.0  # mm above the surface: the aspirate records' and the cLLD dispense records'
+# PIP_MixOnly, per tip type: the most a channel mixes, and what a negative mix volume becomes, in uL
+MIX_ONLY_MAX = {SVFT: 270.0, HVFT: 900.0, LVFT: 45.0}
+MIX_ONLY_FLOOR = {SVFT: 15.0, HVFT: 50.0, LVFT: 10.0}
+MIX_ONLY_SHARE = 0.75  # of the volume measured in the container, mixed
 
 ISWAP, CORE_GRIPPER = 1, 2  # the framework's transport tools (t_intTransportTool)
 # The CO-RE transports' records (_Trp_MIDIwithCOREGripper, _Trp_HSPwithCOREGripper): grip speed
@@ -74,13 +87,16 @@ class NGSStarProcesses:
   def __init__(self, star, deck, tips: dict[int, str], liquid_classes, channels: int = 8,
                planner: Optional[StarTipTools] = None, gripper=None, transport_tool: int = CORE_GRIPPER,
                front_channel: int = 7, say=print, tip_counters: Optional[dict[int, str]] = None,
-               time_scale: float = 0.0, sleep=None, clock=None, iswap=None, clinical_starlet: bool = False):
+               time_scale: float = 0.0, sleep=None, clock=None, iswap=None, clinical_starlet: bool = False,
+               faithful: bool = False):
     """`tips`: tip type -> the tip sequence (the framework's t_seqTips300 / 1000 / 50).
     `liquid_classes`: a VenusLiquidClasses (the kit's database, read by tools/liquid_classes.py),
-    or a table name -> (tip type, dispense mode) with PLR's STAR classes."""
+    or a table name -> (tip type, dispense mode) with PLR's STAR classes. `faithful`: keep the
+    library's defects the port repairs (the module docstring lists them), as the differential
+    tests compare with the HSL."""
     self.p, self.v, self.tips, self.classes = star.pipettes, deck, tips, liquid_classes
-    self.channels = channels
-    self.planner = planner or StarTipTools(deck, channels)
+    self.channels, self.faithful = channels, faithful
+    self.planner = planner or StarTipTools(deck, channels, faithful=faithful)
     self.missing_classes: set[str] = set()
     self.star, self.say = star, say
     self._gripper, self.transport_tool = gripper, transport_tool
@@ -195,6 +211,86 @@ class NGSStarProcesses:
     self.v.seq(tips).set_max(self.v.seq(tips).total)
     # left out of the port so far, and in scope: the run report line ("Remove supernatant ...") and
     # the sample-tracking mapping file (SupernatantToWaste_<LabID>_<BC>_<No>)
+
+  async def PIP_MixOnly(self, ML_STAR, aspiration, aspirate_height: float, liquid_class: str, mix_cycles: int,
+                        mix_volume: float):
+    """Mix each container of `aspiration` in place, its distinct containers a channel slice at a
+    time, with one set of tips. At height 0 (cLLD) the mix volume is measured: channel 1 finds the
+    liquid in the slice's first container, and each channel mixes 75 % of what it holds (a trough,
+    the first container's labware id with "RGT", shared among the channels; at most one per
+    container, up to all of them), up to the tip type's most; `mix_volume` is not used. At a fixed
+    height above the bottom, `mix_volume` (up to the most), following the liquid above 1.8 mm. A
+    mix is an aspirate of 0 uL with the mix cycles, 1 mm under the surface or at the height.
+
+    Two of the library's defects are repaired (`faithful` keeps them):
+      - it takes the distinct position ids and puts them all on the sequence's last labware (ten
+        troughs at position 1 become one mix); it builds the distinct labware ids alongside and
+        never uses them. Here: the distinct (labware, position) pairs.
+      - its 300 uL copy (one per tip type) mixes inside the first pass's block, so past one slice
+        it loops without end; the 1000 and 50 uL copies mix on every pass. Here: every pass.
+        Faithful, more containers than channels with 300 uL tips is an error."""
+    tip_type, _ = self._codes(liquid_class)
+    tips, lc = self.tips[tip_type], self._lc(liquid_class)
+    seq = self.v.seq(aspiration)
+    items = seq.items[:seq.end]
+    if not items:
+      return
+    if self.faithful:
+      containers = [(items[-1][0], pos) for pos in dict.fromkeys(pos for _, pos in items)]
+    else:
+      containers = list(dict.fromkeys(tuple(it) for it in items))
+    mix = sq.Sequence("l_seqAspirationMixOnly", containers)
+    lab = containers[0][0]
+    if self.faithful and tip_type == SVFT and len(containers) > self.channels:
+      raise RuntimeError(f"{aspiration}: {len(containers)} positions to mix with 300 uL tips; the library mixes "
+                         f"the first {self.channels} and loops without end on the rest")
+    pattern = self.CREATE_CHANNEL_PATTERN(1, len(containers), 8)
+    # left out: the run report line ("Mix reagents ...", in scope, not ported yet); _DATA_ScheduleTips
+    # (the tips shown on the loading screen); _DATA_PlausibilityCheckVolume (an operator dialog on a
+    # mix volume too large for the tip, asked only when `mix_volume` > 0)
+    trough = "RGT" in lab
+    active = min(len(containers), self.channels)
+    held = []
+    for (wells,) in sq.batches(self.channels, mix):
+      if not held:
+        held = await self._pick_up2(ML_STAR, tips, self.tip_counters.get(tip_type, ""), pattern, len(wells))
+      ch = list(range(len(wells)))
+      if aspirate_height == 0:
+        (measured,) = await self.p.probe_liquid_volumes([self.v.resolve(wells[0])], use_channels=[0])
+        per = measured * MIX_ONLY_SHARE / (active if trough else 1)
+        per = min(per, MIX_ONLY_MAX[tip_type])
+        # left out: the OptimizeFollowSpeed step ("Tip Tracking Speed": liquid following 1.5x as
+        # fast on the channels' next step, the mix; PLR takes following distances, not a speed:
+        # CONVENTIONS §11); and
+        # Venus's simulation-mode values (12 mL measured, 200 uL mixed, 20 with 50 uL tips)
+        per = MIX_ONLY_FLOOR[tip_type] if per < 0 else per
+        step = Pipetting(1, 1.0, liquid_following=True, mix_cycles=mix_cycles, mix_volume=per,
+                         mix_position=MIX_POSITION)
+      else:
+        per = min(mix_volume, MIX_ONLY_MAX[tip_type])
+        step = Pipetting(0, fluid_height=aspirate_height, liquid_following=aspirate_height > LIQUID_FOLLOWING_ABOVE,
+                         mix_cycles=mix_cycles, mix_volume=per, mix_position=MIX_POSITION)
+      await steps.aspirate(self.p, self._wells(wells), [0.0] * len(ch), ch, step, lc)
+    self.v.seq(tips).set_max(self.v.seq(tips).total)
+    await self.p.discard_tips(use_channels=held)
+    self.DATA_TipCounterWrite(ML_STAR)
+
+  @staticmethod
+  def CREATE_CHANNEL_PATTERN(first: int, count: int, channels: int) -> str:
+    """Create_Channel_Pattern: `count` channels on from channel `first`, of `channels`. Its source
+    is on no machine here; read from its name and its one use (1, positions, 8): taken as settled
+    (user, 2026-10-19)."""
+    return ("0" * (first - 1) + "1" * count + "0" * channels)[:channels]
+
+  async def _pick_up2(self, ML_STAR, tips: str, counter: str, pattern: str, width: int) -> list[int]:
+    """Tips on the channels of `pattern`, from the tips STAR Tip Tools' planner chooses for it
+    (Optimized1mLTipPickup2), no more than the pass takes."""
+    self.planner.Optimized1mLTipPickup2(ML_STAR, tips, counter, pattern)
+    self.v.seq(tips).set_max(width)
+    spots = self._take(tips, pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
+    held = sorted(spots)
+    await self.p.pick_up_tips(self._wells(spots[c] for c in held), use_channels=held)
+    return held
 
   # -- transports ------------------------------------------------------------------------------
 

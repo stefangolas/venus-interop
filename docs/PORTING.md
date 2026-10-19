@@ -93,7 +93,8 @@ port is described as matching Venus.
 4. **Look up what the codes mean** (`MoveType 2`, `Z end mode 0`, `UsePickUpPosition 2`) in
    Venus's step help. The help ships with Venus as `.chm` files: decompile one with
    `hh.exe -decompile <dir> <file>` from a path without spaces, then search the HTML. Anything the
-   help leaves open goes in CONVENTIONS §11, not into code as fact.
+   help leaves open goes in CONVENTIONS §11, not into code as fact. Where to look is in
+   [Venus's own references](#venuss-own-references).
 
 5. **Write the port.** Map settings to PLR's arguments (examples: CO-RE grip height →
    `pickup_distance_from_top`, grip width → `resource_size_y`, plate press →
@@ -121,6 +122,23 @@ port is described as matching Venus.
 
 8. **Run the method's demo end to end** on the simulator (`examples/`), checking the volumes it
    should produce.
+
+## Venus's own references
+
+Before reading a setting from its name, look it up in what ships with Venus (`C:\Program Files
+(x86)\HAMILTON`):
+
+| Where | What it settles |
+|---|---|
+| `Bin\HxGruCommandEnu.chm` | **The STAR step reference.** HxGruCommand is the component every Microlab STAR device step belongs to (`ML_STAR._<CLSID>("<guid>") // Aspirate`, TipPickUp, CO-RE and iSWAP transport, 96/384 head, Load Carrier, needle wash, TADM, Firmware Command, Tip Tracking Speed, ...). Per step: the dialog's settings and their values, the step's return values; and general pages on liquid level detection, sequence counting, channel mode, dispense modes, tip counters, container bottom, top-of-labware calculation, iSWAP collision control, and the error enumerations (firmware main and slave errors, error flags, recovery buttons). A step's help page is named after its record's `StepName` only sometimes: `OptimizeFollowSpeed` is "Tip Tracking Speed" |
+| `Bin\HxGruCommandEnu.dll` | The same component's strings (RT_STRING resources): the error and recovery titles `.stp` error blocks refer to by id, and the names of dialog enum values (`tools/gru_strings.py`) |
+| `Config\ML_STAR.cfg` | Each step type's default settings, as a new step gets them |
+| `HxStandardLanguageEnu.chm` | The HSL reference: element functions (sequences, devices: `ComputeContainerVolume` returns mL), string and file functions |
+| `HxMetEdEnu.chm`, `HxMetEdCompCmdEnu.chm` | The Method Editor: loops, Adjust Sequences, the general steps a method's code is built from |
+| `Library\*.hsl`, `*.hs_` | Hamilton's libraries as source (HSLML_STARLib, HSLStrLib, HSLMECCLib, ...): read what a call does before modelling it |
+
+Search the `.chm` text for a setting's words, not only its key (`grep -ril "follow"` found Tip
+Tracking Speed). Several CONVENTIONS §11 questions about enum values may be answered there.
 
 ## Liquid classes
 
@@ -199,6 +217,18 @@ needs, and no more:
   no machine here. Declare stubs for the missing functions in the test's source and replace them
   with Python models (`answers["functions"]`). Say that these are models made from the names, not
   checked against the HSL.
+- **A namesake in another namespace.** The interpreter used to resolve an unqualified name it
+  could not find from the current namespace outward to any function of that name: `GetFileName()`
+  (Venus's own, the current file) became `HSLExtensions::File::GetFileName(path)`, returned "",
+  and HelperLibrary's `StrReplace(path, "", "")` never ended. Unqualified names now resolve from
+  the current namespace outward, then to Venus's built-ins. An endless loop in a library that
+  works in Venus is the interpreter's until shown otherwise: count statements per function to
+  find it (`Run._stmt`).
+- **Stubs whose body is only a return are dropped** as `.hs_` placeholders, like empty ones; give
+  a test's stub a declaration (`{ variable v; return(v); }`).
+- **Read the braces.** PIP_MixOnly is written once per tip type; in the 300 uL copy the mix sits
+  inside the first pass's block, so past eight positions Venus loops without end. The trace and
+  the interpreter show what the indentation hides.
 - **Sequence counting.** Steps that count manually (0) don't advance their sequence; the library
   does that with `SetCurrentPosition` / `AlignSequences` (`methods/sequences.py`). Transport and
   move steps never count.
@@ -219,8 +249,8 @@ in the docstring.
 | `plr/steps.py` | `Pipetting` (cLLD, submerge, fluid height, liquid following, mix; `from_record`), `plr_arguments`, `aspirate` / `dispense`, `OBSERVERS` (what a port meant, for tests); `CoreGrip`, `core_grip_arguments` | Aspirate / Dispense / ZSwap step settings |
 | `plr/liquid_classes.py` `VenusLiquidClasses` | PLR liquid classes by Venus name, tip type, dispense mode, from `tools/liquid_classes.py`'s JSON | `ML_STARLiquids.mdb` |
 | `plr/libraries/tip_count.py` `TipCounters` | Tip counters that outlive the run (SQLite) | HxElementCounter |
-| `methods/hsl_eval.py` | The HSL interpreter for checking ports. `answers`: `functions` (a library function replaced by a Python model, e.g. its port), `tip_counters`, `labware_data`, `liquid_classes`, `simulation` | Venus's runtime |
-| `tests/port_harness.py` | `hsl_run`, `steps_of`, `RecordingDeck`, `RecordingChannels`, `assert_same_steps` | – |
+| `methods/hsl_eval.py` | The HSL interpreter for checking ports. `answers`: `functions` (a library function replaced by a Python model, e.g. its port), `tip_counters`, `labware_data`, `labware_position` (a position's deck x, y, z: `GetLabwarePosition`, `DevGetLabwarePositionEx`), `cfg.<key>` (the instrument configuration: 1 the 1 mL channels, 26 their raster), `liquid_classes`, `simulation` | Venus's runtime |
+| `tests/port_harness.py` | `hsl_run` (a source parsed once: give cases' inputs through functions answered per run, as `test_ngsstar_mix_only_port.py` does, and a 32k-line library is parsed once per file, not per case; `max_steps`), `steps_of`, `RecordingDeck`, `RecordingChannels` (`measured`: what a liquid search finds), `assert_same_steps`; stubs and models for libraries missing here (`ARRAYTOOLS`, `CREATE_CHANNEL_PATTERN`, `ARRAYTOOLS_MODELS`) | – |
 | `examples/nist_deck.py` | For demos: `install` (PLR's wastes and grip tools where the layout has its own), `give_room` / `make_room` (sources and destinations sized for a run; cavities filled as one), `write_worklist`, `print_plate_map` | – |
 | `tools/trace_method.py` | `--out` traces, `--calls` call counts, `--status` coverage and the work queue (verdicts in `tools/function_notes.json`) | – |
 | `tools/stp_dump.py` | A `.stp`'s step records, settings named | Step dialogs |
@@ -235,8 +265,8 @@ Ported libraries, each `plr/libraries/<module>.py` with `LIBRARY` = its Venus na
 | `move_96head_and_arm` | NIST culture-processing Move96HeadAndArm | `test_96head_port.py` |
 | `lmsf_utilities` | NIST LMSF_Utilities (sequence properties) | `test_lmsf_utilities_port.py` |
 | `tip_handling_96`, `tip_count` | NIST Tip Handling with 96-Head; Hamilton HSLTipCountingLib Read2/Write2 | `test_tip_counters_port.py` |
-| `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer, CO-RE plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
-| `star_tip_tools` | Hamilton STAR Tip Tools (tip planner, counters) + HelperLibrary | unit tests; the planner runs inside the NGSStar port test |
+| `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer, supernatant removal, mixing in place, CO-RE and iSWAP plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_mix_only_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
+| `star_tip_tools` | Hamilton STAR Tip Tools (tip planners Optimized1mLTipPickup and `2`, counters) + HelperLibrary | `test_star_tip_tools_hsl.py` (both planners as HSL: two racks, partly used, with gaps); the planners also run as HSL inside the NGSStar port tests |
 | `ngsstar_loading` | Hamilton NGSStarLoading: volumes per sample, containers and their volumes, the RunData / Mastermix_Prep sheets, labware per process | `test_ngsstar_loading_port.py` (Avenio's own calls, 1/8/24/96 samples) |
 | `ngsstar_prep` | Hamilton NGSStarPrep: heater shakers, CPAC, ODTC on PLR's drivers (an ODTC method run in the background while the method pipettes) | `test_ngsstar_prep_port.py` (Avenio's own calls, both HHS configurations) |
 
@@ -264,6 +294,14 @@ call. `examples/groq_seq_demo.py` shows the whole pattern:
   that is clearly not the method. Record each in the module docstring, and what only Venus can
   settle in CONVENTIONS §11. Look at what a library check would do before calling something a
   defect: GROQ-Seq's library-stock path stops in GSF-IMS's own channel check, in Venus too.
+- **Defects in a library** may be repaired in the port by default (user, 2026-10-19) when the
+  justification is strong: Venus would hang, lose work or stop the run for no reason, and the
+  library's own code shows the intent (a sibling copy that does it right, a value built and never
+  used). The port takes `faithful=True` to keep Venus's behaviour, and the differential test runs
+  faithful; a test of its own covers each repair. List the repairs in the module docstring, each
+  with its evidence. So far: NGSStarProcesses' PIP_MixOnly (containers folded onto one labware;
+  the 300 uL copy's endless loop) and STAR Tip Tools' Optimized1mLTipPickup2 (a reload asked with
+  tips left).
 - **Operator dialogs** become calls to an operator interface at the same place, with the dialog's
   own text (choices, confirmations, tables, files, pictures); a scripted operator answers them in
   tests and unattended runs, and an unanswered question is an error. (The earlier demos' `Parameters`
@@ -293,6 +331,30 @@ What each needed that the earlier ones had not built (keep a line per port):
 | Marionette, GROQ-Seq methods | `sequences.loop`; worklists; listed-position racks in the importer; the abort and source-defect policy |
 | NGSStarLoading | Excel workbooks read and written with SQL (`Run.workbooks`, SQLite); `Scripting.FileSystemObject`; HSL value types kept (a float operand gives a float; `Floor(x, hslTrue)`), since libraries branch on `GetType`; unassigned variables as integer 0 (CONVENTIONS §11) |
 | NGSStarPrep | Device drivers answered by recording models, compared with recording PLR devices in one vocabulary; PLR's ODTC backend: `upload_method_set`, `execute_method` (venus-plr) |
+| PIP_MixOnly, STAR Tip Tools' planners as HSL | A liquid search (PLR's `probe_liquid_volumes`) compared by where it searches; labware positions and instrument configuration answered (`labware_position`, `cfg.<key>`), `Scripting.FileSystemObject.GetFileName`, Jet's bare `INDEX` column; unqualified names resolved from the current namespace outward only; a source parsed once per test file |
+
+### Parsimony
+
+How much shorter each port is than the HSL it replaces (keep a line per port). Code lines: no
+blank lines, comments, docstrings or trace calls, on both sides; HSL includes the helpers the
+function runs that the port folds in. Counted over the function bodies.
+
+| Port | HSL | Python | Why it is shorter |
+|---|---|---|---|
+| Libraries through session 4 (90 functions: GSF-IMS, PlateAndLidMovement, 96-head, LMSF_Utilities, tip counters, NGSStar transfer, STAR Tip Tools v1) | 4,067 | 755 | 5.4x with the shared modules (`sequences`, `steps`) counted |
+| PIP_MixOnly (+ Create_Channel_Pattern, the pick-up) | 273 | 48 | the loop once, not once per tip type (the per-type caps a table); the step records' settings one `Pipetting` |
+| Optimized1mLTipPickup2 + TipCheck + HelperLibrary sort, sort file, reach | 557 | 70 | shared with v1: the temporary workbook and its SQL become a sort key; the 70 lines serve both planners |
+
+### Libraries inferred, not read
+
+Where a library's source is on no machine here, the port reads it from its name and its uses,
+says so in its docstring, and the HSL tests answer it with the same reading (`port_harness`):
+
+| Function | Taken to do |
+|---|---|
+| `CREATE_CHANNEL_PATTERN::Create_Channel_Pattern(first, count, channels, &pattern)` | `pattern` = `count` channels on from channel `first` (1-based), `channels` long: `"0" * (first - 1) + "1" * count`, padded with 0s and cut to `channels`. Its one use, PIP_MixOnly's `(1, positions, 8)`, gives `"11100000"` for three positions and eight 1s for eight or more. Settled by inference (user, 2026-10-19) |
+| `ARRAYTOOLS::get_distinct_from_array(in[], &out[])` | the distinct values, in order of first appearance |
+| `ARRAYTOOLS::ArrayVLookUp(values[], keys[], key, &out[])` | the values whose key equals `key`, in order |
 
 ## Inputs
 

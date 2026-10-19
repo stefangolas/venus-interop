@@ -8,6 +8,7 @@ passed and the Venus settings the port meant, through `venus_interop.plr.steps`)
 """
 from __future__ import annotations
 
+import functools
 import pathlib
 from typing import Any, Iterable, Optional
 
@@ -16,19 +17,62 @@ from venus_interop.methods import hsl_eval, protocol, sequences as sq
 
 DISPLAY_ONLY = {"VectorCustomDialogs::AppendStatusText"}  # status-window texts: nothing reads them
 
+# Libraries the NGSStar framework includes that are on no machine here: the functions called are
+# declared (put the text in the test's source) and answered by models made from their names, not
+# checked against the HSL. ArrayTools:
+ARRAYTOOLS = ('namespace _Method { namespace ARRAYTOOLS {\n'
+              'function get_distinct_from_array(variable & i_arr[], variable & o_arr[]) void { variable stub; }\n'
+              'function ArrayVLookUp(variable & i_values[], variable & i_keys[], variable i_key, variable & o_arr[]) void '
+              '{ variable stub; }\n'
+              '} }\n')
+# and Create Channel Pattern.hs_ (bodies that are only a return would be dropped as placeholders)
+CREATE_CHANNEL_PATTERN = ('namespace _Method { namespace CREATE_CHANNEL_PATTERN {\n'
+                          'function Create_Channel_Pattern(variable i_first, variable i_count, variable i_channels, '
+                          'variable & o_pattern) void { variable stub; }\n} }\n')
 
-def hsl_run(src: str, here: pathlib.Path, roots: Iterable[pathlib.Path], stp_paths: Iterable[pathlib.Path],
-            layouts: dict, answers: Optional[dict] = None, allow_unresolved: Iterable[str] = ()) -> hsl_eval.Run:
-  """Preprocess, parse and run `src` (a method's text, as if at `here`); it must run to the end and
-  call no function that neither the sources nor the run define (the interpreter would carry on
-  with an unknown value, so a library missing from the roots goes unnoticed), except those in
-  DISPLAY_ONLY and `allow_unresolved`."""
+
+def _distinct(run, p):  # the distinct values, in order of first appearance
+  p["o_arr"].value = hsl_eval.HArray(list(dict.fromkeys(p["i_arr"].value.items)))
+  return 0
+
+
+def _vlookup(run, p):  # the values whose key is the one looked up, in order
+  keys, values = p["i_keys"].value.items, p["i_values"].value.items
+  p["o_arr"].value = hsl_eval.HArray([v for k, v in zip(keys, values) if k == p["i_key"].value])
+  return 0
+
+
+def _channel_pattern(run, p):  # the port's reading of it
+  from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
+  p["o_pattern"].value = NGSStarProcesses.CREATE_CHANNEL_PATTERN(
+    *(int(p[k].value) for k in ("i_first", "i_count", "i_channels")))
+  return 0
+
+
+ARRAYTOOLS_MODELS = {"arraytools::get_distinct_from_array": _distinct, "arraytools::arrayvlookup": _vlookup,
+                     "create_channel_pattern::create_channel_pattern": _channel_pattern}
+
+
+@functools.lru_cache(maxsize=4)
+def _parsed(src: str, here: pathlib.Path, roots: tuple, stp_paths: tuple):
   pre = hsl_eval.Preprocessor(list(roots), lambda p: p.read_text(encoding="latin-1"))
   text = pre.expand(here, text=src)
   parser = hsl_eval.Parser(hsl_eval.lex(text))
   parser.unit()
-  run = hsl_eval.Run(parser, protocol.load_stps(sorted(stp_paths)), layouts, answers=answers or {})
-  run.src = text.splitlines()
+  return parser, protocol.load_stps(list(stp_paths)), text.splitlines()
+
+
+def hsl_run(src: str, here: pathlib.Path, roots: Iterable[pathlib.Path], stp_paths: Iterable[pathlib.Path],
+            layouts: dict, answers: Optional[dict] = None, allow_unresolved: Iterable[str] = (),
+            max_steps: int = 2_000_000) -> hsl_eval.Run:
+  """Preprocess, parse and run `src` (a method's text, as if at `here`); it must run to the end and
+  call no function that neither the sources nor the run define (the interpreter would carry on
+  with an unknown value, so a library missing from the roots goes unnoticed), except those in
+  DISPLAY_ONLY and `allow_unresolved`. The same source is parsed once: a test whose cases differ
+  only in their inputs can give them through functions answered per run (`answers["functions"]`)."""
+  parser, stps, lines = _parsed(src, here, tuple(roots), tuple(sorted(stp_paths)))
+  run = hsl_eval.Run(parser, stps, layouts, answers=answers or {}, max_steps=max_steps)
+  run.src = lines
   run.run()
   assert run.stopped is None, run.stopped
   missing = set(run.unresolved) - DISPLAY_ONLY - set(allow_unresolved)
@@ -81,10 +125,11 @@ class RecordingDeck:
 class RecordingChannels:
   """The STAR's channels, recording; `with` it to see the Venus settings the port meant."""
 
-  def __init__(self, label=lambda command, kw: ""):
+  def __init__(self, label=lambda command, kw: "", measured: float = 0.0):
     self.events: list[tuple] = []
     self.meant: list = []
     self.label = label
+    self.measured = measured  # what a liquid search finds in every container, in uL
 
   def __enter__(self):
     from venus_interop.plr import steps
@@ -104,6 +149,10 @@ class RecordingChannels:
 
   async def discard_tips(self, use_channels):
     self.events.append(("TipEject", {}, "", {}))
+
+  async def probe_liquid_volumes(self, containers, use_channels, **kw):
+    self._log("Probe", containers, use_channels)
+    return [self.measured] * len(containers)
 
   def _pipette(self, command, wells, vols, use_channels, kw):
     settings = {k: v for k, v in kw.items() if k not in ("hamilton_liquid_classes", "empty")}
