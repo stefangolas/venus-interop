@@ -102,3 +102,34 @@ def test_a_stub_body_does_not_replace_a_definition():
   r = run("ret = LIB::F(2);", decls="variable ret;",
           functions="function F(variable x) variable { return(0); } function F(variable x) variable { return(x * 3); }")
   assert g(r, "ret") == 6
+
+
+def test_an_unqualified_name_is_not_a_namesake_in_another_namespace():
+  # GetFileName() in a library is Venus's own (the current file), not HSLExtensions::File's
+  r = run(r'n = GetFileName(); m = LIB::FILE::GetFileName("C:\\a\\b.xls");', decls="variable n; variable m;",
+          functions="namespace FILE { function GetFileName(variable p) variable { variable r; r = \"lib\"; return(r); } }")
+  assert (g(r, "n"), g(r, "m")) == ("method", "lib")
+
+
+def test_file_system_object_gives_a_paths_file_name():
+  r = run(r'o.CreateObject("Scripting.FileSystemObject"); n = o.GetFileName("C:\\x\\TEMP_SORT_FILE.xls");',
+          decls="object o; variable n;")
+  assert g(r, "n") == "TEMP_SORT_FILE.xls"
+
+
+def test_labware_positions_come_from_the_answers():
+  r = run('DevGetLabwarePositionEx(d, "T1", "A2", x, y, z, a);', decls="variable d; variable x; variable y; "
+          "variable z; variable a;", answers={"labware_position": lambda lab, pos: (100.0 + int(pos[1:]), 300.0, 5.0)})
+  assert (g(r, "x"), g(r, "y"), g(r, "z"), g(r, "a")) == (102.0, 300.0, 5.0, 0.0)
+
+
+def test_a_workbook_query_takes_index_as_a_column_name():
+  # Jet takes a bare INDEX (STAR Tip Tools' sort file); SQLite reserves it
+  r = run("""
+    f.AddField("INDEX", i, hslInteger); f.Open("w.xls SORT", hslWrite);
+    i = 1; f.WriteRecord(); i = 2; f.WriteRecord(); f.Close(); f.RemoveFields();
+    f.AddField("INDEX", i, hslInteger); f.Open("w.xls SORT", hslRead, "UPDATE SORT SET INDEX = 5 WHERE INDEX IN(2)");
+    f.Close(); i = 0;
+    f.Open("w.xls SORT", hslRead, "SELECT INDEX FROM SORT ORDER BY INDEX DESC"); f.ReadRecord(); f.Close();
+  """, decls="file f; variable i;")
+  assert r.stopped is None and g(r, "i") == 5

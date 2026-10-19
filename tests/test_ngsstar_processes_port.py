@@ -8,9 +8,8 @@ step record, the same settings (port_harness: the record's against the PLR argum
 settings the port meant), and the record's liquid class.
 
 What Venus does through compiled services is modelled on both sides alike: the liquid class's tip
-type and dispense mode (a table), the tip planner (STAR Tip Tools, unit-tested on its own in
-test_star_tip_tools.py, here on a synthetic rack geometry), and the sample-tracking calls (STCC,
-nothing).
+type and dispense mode (a table), the tip positions STAR Tip Tools' planner reads (a synthetic rack
+geometry; the planner itself runs as HSL), and the sample-tracking calls (STCC, nothing).
 
 Needs VENUS_INTEROP_NGS (an NGS-Protocols checkout: the Avenio CGP kit) and
 VENUS_INTEROP_HAMILTON_LIBS (library folders, separated by os.pathsep, for what the kit includes from
@@ -112,19 +111,16 @@ def hsl_steps(avenio, lay, call):
     p["o_inttiptype"].value, p["o_intdispensemode"].value = CLASSES[str(p["i_strliquidclassname"].value)]
     return 0
 
-  def planner(run, p):
-    tips, ctl = p["io_seq_tipsequence"].value, p["i_seq_controlsequence"].value
-    p["o_str_channelpattern"].value = _planner({tips.name: tips, ctl.name: ctl}).Optimized1mLTipPickup(
-      None, tips.name, ctl.name)
-    return 0
-
   nothing = lambda run, p: 0  # noqa: E731
   # STCC (sample tracking) answered with no-ops: the mapping files are in scope but not ported yet;
   # the test is to compare them once they are
   run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
-                (avenio / "Library").glob("*.stp"), {"x.lay": lay}, answers={"functions": {
+                (avenio / "Library").glob("*.stp"), {"x.lay": lay}, answers={
+                  # STAR Tip Tools' planner runs as HSL: the channels and raster (configuration keys
+                  # 1, 26) and the tips' positions (the synthetic geometry the port's planner has)
+                  "cfg.1": 8, "cfg.26": 9.0, "labware_position": lambda lab, pos: (*xy((lab, pos)), 0.0),
+                  "functions": {
                   "ngsstarprocesses::_data_gettiptypeanddispensemodeofliquidclass": tip_type,
-                  "star_tip_tools::optimized1mltippickup": planner,
                   "stcc::resetfiltersequences": nothing, "stcc::addfiltersequence": nothing,
                   "stcc::generatemappingfilev43ex1": nothing,
                   # out (no PLR counterpart; commented in the port): asks the instrument its channels

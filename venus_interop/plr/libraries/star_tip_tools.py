@@ -13,10 +13,18 @@ sequence, at most the 1 mL channel count) and reorders the tip sequence so they 
               reach. The sequence becomes the chosen tips, then the rest by labware, X, Y down,
               from position 1.
 
-Too few tips is the operator's (a dialog to load more): here an error. The library does its sorting
-with SQL over a CSV file and reads positions from Venus's deck object, so the HSL interpreter cannot
-run it: this port is checked against the algorithm as read, by unit tests, not by a differential
-test.
+Optimized1mLTipPickup2 does the same for the channels of a given pattern (as many tips as it has
+1s), with two differences: on the fast path each active channel's tip must stand a raster per
+channel in front of the first tip, not of the one before; and choosing from a group, a tip read
+for an inactive channel is passed over (that channel sits between the active ones, so their tips
+must be a raster apart per channel). Venus tries the first group with enough tips only; a pattern
+with gaps can find too few in it (7 tips left in a column for `01010101` give 3) and ask the
+operator to load tips with full columns left. Repaired here: the next group with enough is tried
+before giving up (`faithful=True` keeps Venus's behaviour, for the differential test).
+
+Too few tips is the operator's (a dialog to load more): here an error. The library sorts with SQL
+in a temporary workbook and reads positions from Venus's deck object; the HSL interpreter runs it
+with both modelled (`tests/test_star_tip_tools_hsl.py` compares both planners with the port).
 
 Channel Y reach (`HelperLibrary::GetChannelLimits`, 1 mL channels only, no 5 mL, handling or camera
 channels): channel i (1 = back) of n reaches Y <= 614.5 - 9 i and Y >= -1 + 9 (n - i + 1), deck mm.
@@ -60,28 +68,40 @@ def _raster_sorted(items, xy, raster):
   return [row[-1] for row in sorted(rows)]
 
 
-def plan_tips(items: Sequence[sq.Item], needed: int, channels: int,
-              xy: Callable[[sq.Item], tuple[float, float]], raster: float = RASTER) -> list[sq.Item] | None:
-  """The tips left (`items`, from the current position on) reordered for a pick-up of `needed`
-  tips, or None when the order already serves (the fast path)."""
+def _in_order(items, needed, channels, xy, raster, pattern) -> bool:
+  """The fast path: the next tips serve as they are. Without a pattern, tip k goes to channel k,
+  each a raster in front of the one before; with one (Optimized1mLTipPickup2), the next tip goes to
+  each active channel, a raster in front of the first per channel between them."""
   y_max, y_min = channel_limits(channels, raster)
-  if len(items) >= needed:
-    ok, target_x, prev_y = True, None, None
-    for k, item in enumerate(items[:needed]):
-      x, y = xy(item)
-      if not (y_min[k] <= y <= y_max[k]):
-        ok = False
-        break
-      if k == 0:
-        target_x, prev_y = x, y
-      elif x != target_x or y > prev_y:
-        ok = False
-        break
-      else:
-        prev_y = y
-      prev_y -= raster
-    if ok:
-      return None
+  if len(items) < needed:
+    return False
+  targets = ([(k, k) for k in range(needed)] if pattern is None else
+             list(zip((c for c in range(channels) if pattern[c]), range(needed))))
+  target_x = prev_y = None
+  for c, k in targets:
+    x, y = xy(items[k])
+    if not (y_min[c] <= y <= y_max[c]):
+      return False
+    if target_x is None:
+      target_x, prev_y, first_c = x, y, c
+    elif x != target_x or y > (prev_y - raster if pattern is None else prev_y - (c - first_c) * raster):
+      return False
+    elif pattern is None:
+      prev_y = y
+  return True
+
+
+def plan_tips(items: Sequence[sq.Item], needed: int, channels: int,
+              xy: Callable[[sq.Item], tuple[float, float]], raster: float = RASTER,
+              pattern: Sequence[int] | None = None, faithful: bool = False) -> list[sq.Item] | None:
+  """The tips left (`items`, from the current position on) reordered for a pick-up of `needed`
+  tips, or None when the order already serves (the fast path). `pattern`: the channels to fill (1
+  active, per channel), as Optimized1mLTipPickup2 takes them; a group's tip read on an inactive
+  channel is passed over (that channel sits between the others, a raster apart). `faithful`:
+  give up on the first group as Venus does, not try the next."""
+  y_max, y_min = channel_limits(channels, raster)
+  if _in_order(items, needed, channels, xy, raster, pattern):
+    return None
   rest = _raster_sorted(list(items), xy, raster)
   group_of, group, cur_x, index = {}, 0, None, 0
   for item in rest:
@@ -96,10 +116,18 @@ def plan_tips(items: Sequence[sq.Item], needed: int, channels: int,
   for g in group_of.values():
     counts[g] = counts.get(g, 0) + 1
   by_place = sorted(rest, key=lambda it: (it[0], -xy(it)[1], xy(it)[0]))
-  chosen_group = next((group_of[it] for it in by_place if counts[group_of[it]] >= needed), None)
-  if chosen_group is not None:
-    members = sorted((it for it in rest if group_of[it] == chosen_group), key=lambda it: (xy(it)[0], -xy(it)[1]))
-    chosen = set(members[:needed])
+  groups = list(dict.fromkeys(group_of[it] for it in by_place if counts[group_of[it]] >= needed))
+
+  def pick(g):
+    members = sorted((it for it in rest if group_of[it] == g), key=lambda it: (xy(it)[0], -xy(it)[1]))
+    return set(members[:needed] if pattern is None else [it for it, on in zip(members, pattern) if on])
+
+  if groups:
+    # Venus tries the first group only; a pattern with gaps can then find too few in it and ask
+    # for tips with others left. Repaired (not `faithful`): the first group that has enough.
+    chosen = pick(groups[0])
+    if len(chosen) < needed and not faithful:
+      chosen = next((c for c in map(pick, groups[1:]) if len(c) >= needed), chosen)
   else:
     chosen, k = set(), 0
     for it in sorted(rest, key=lambda it: (xy(it)[0], -xy(it)[1])):
@@ -116,12 +144,13 @@ def plan_tips(items: Sequence[sq.Item], needed: int, channels: int,
 
 class StarTipTools:
   def __init__(self, deck, channels: int = 8, xy: Callable[[sq.Item], tuple[float, float]] | None = None,
-               counters=None):
+               counters=None, faithful: bool = False):
     """`xy`: a tip position's deck (X, Y); from the PLR deck when None. `counters`: the tip counters
-    (a tip_count.TipCounters), in memory when None."""
+    (a tip_count.TipCounters), in memory when None. `faithful`: keep the library's defect the port
+    repairs (Optimized1mLTipPickup2 asking for tips with tips left; see the module docstring)."""
     from venus_interop.plr.libraries.tip_count import TipCounters
 
-    self.v, self.channels = deck, channels
+    self.v, self.channels, self.faithful = deck, channels, faithful
     self.counters = counters if counters is not None else TipCounters()
     if xy is not None:
       self._xy = xy
@@ -144,6 +173,21 @@ class StarTipTools:
     if order is not None:
       tips.assign(sq.Sequence(tips.name, order))
     return channel_pattern(needed, self.channels)
+
+  def Optimized1mLTipPickup2(self, ML_STAR, tip_sequence: str, tip_counter: str, channel_pattern: str) -> None:
+    """The tip sequence reordered, when needed, for a pick-up on the channels the pattern gives
+    (as many tips as it has 1s; the pick-up step takes the pattern itself)."""
+    pattern = [int(c) for c in (str(channel_pattern) + "0" * self.channels)[:self.channels]]
+    needed = sum(pattern)
+    if needed == 0:
+      return
+    tips = self.v.seq(tip_sequence)
+    if (tips.end - tips.cur + 1 if tips.cur > 0 else 0) < needed:  # TipCheck: against the end
+      raise RuntimeError(f"{tip_sequence}: too few tips for {needed} channels (Venus asks the operator to load more)")
+    left = tips.items[tips.cur - 1:] if tips.cur > 0 else []
+    order = plan_tips(left, needed, self.channels, self._xy, pattern=pattern, faithful=self.faithful)
+    if order is not None:
+      tips.assign(sq.Sequence(tips.name, order))
 
   # -- tip counters: the positions still holding tips, carried between runs -------------------
 

@@ -1,7 +1,5 @@
-"""STAR Tip Tools' tip pick-up planner, against the algorithm as read from the HSL.
-
-The library sorts with SQL over a CSV file and reads deck positions from Venus's deck object, so it
-cannot run in the HSL interpreter; these cases follow its code (see the module docstring).
+"""STAR Tip Tools' tip pick-up planner, against the algorithm as read from the HSL: named cases of
+what it does. tests/test_star_tip_tools_hsl.py compares the port with the HSL itself.
 """
 import pytest
 

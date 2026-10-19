@@ -842,7 +842,10 @@ class Run:
       for f in cands:
         if f.ns.startswith("::".join(nsparts)):
           return f
-    return cands[0] if len(cands) == 1 or not qual else None
+      # not elsewhere: an unqualified name is the current namespace outward, then a built-in
+      # (GetFileName() is not HSLExtensions::File::GetFileName)
+      return None
+    return cands[0] if len(cands) == 1 else None
 
   def _cell(self, name: str, env, create=False) -> Optional[Cell]:
     low = name.lower()
@@ -1306,6 +1309,14 @@ class Run:
       return Unknown("Shell")
     if low in ("getcurrenttime", "gettime", "getdate"):
       return Unknown("time")
+    if low == "devgetlabwarepositionex":  # (device, labware id, position id, &x, &y, &z, &angle)
+      cells = self._args(arg_exprs, env)
+      lab, pos = (c.value if isinstance(c, Cell) else c for c in cells[1:3])
+      pos = self._labware_position(lab, pos)
+      for c, v in zip(cells[3:7], pos):
+        if isinstance(c, Cell):
+          c.value = v
+      return 1
     self.unresolved[name] = self.unresolved.get(name, 0) + 1
     return Unknown(f"function {name}")
 
@@ -1343,9 +1354,9 @@ class Run:
         return int(str(args[0]).lower() in obj.labware)
       if m == "getinstrumentname":
         return obj.name
-      if m == "getlabwareposition":  # (labware id, values[]): x, y, z, r on the deck, not modelled
+      if m == "getlabwareposition":  # (labware id, values[], position id): x, y, z, r on the deck
         if len(args) > 1 and isinstance(args[1], HArray):
-          args[1].items = [Unknown(f"position of {args[0]}") for _ in range(4)]
+          args[1].items = self._labware_position(args[0], args[2] if len(args) > 2 else "")
         return 0
       return Unknown(f"device.{method}")
     if isinstance(obj, (int, float)):
@@ -1414,6 +1425,8 @@ class Run:
         for known in (self.files, self.written, self.workbooks):
           known.pop(path, None)
         return 1
+      if m == "getfilename":  # the last part of the path, as given
+        return pathlib.PureWindowsPath(str(args[0])).name if args else ""
       return Unknown(f"Scripting.FileSystemObject.{m}")
     if pid == "hamilton.hxcoreliquidclass":
       if m == "initcoreliquidclass":
@@ -1781,7 +1794,9 @@ class Run:
       return 1
     if mode == 1:
       try:
-        cur = conn.execute(re.sub(r"\[(\w+)\$\]", r"[\1]", sql or f"SELECT * FROM [{table}]"))
+        # Jet takes INDEX as a bare column name (STAR Tip Tools' sort file); SQLite reserves it
+        sql = re.sub(r"(?<!\[)\bINDEX\b(?!\])", "[INDEX]", re.sub(r"\[(\w+)\$\]", r"[\1]", sql))
+        cur = conn.execute(sql or f"SELECT * FROM [{table}]")
       except sqlite3.Error as e:
         self.notes.append(f"workbook {book} {sheet}: {e}")
         return 0
@@ -1801,6 +1816,15 @@ class Run:
 
   def _missing_file(self, path):
     raise Stop(f"the method reads {path}, which was not supplied")
+
+  def _labware_position(self, lab, pos) -> list:
+    """A labware position's deck x, y, z and angle, from answers["labware_position"](labware id,
+    position id) -> (x, y, z[, angle]); unknown without it."""
+    lookup = self.answers.get("labware_position")
+    found = lookup(str(lab), str(pos)) if lookup else None
+    if found is None:
+      return [Unknown(f"position of {lab} {pos}") for _ in range(4)]
+    return [float(v) for v in (*found, 0.0)[:4]]
 
   # -- device steps --------------------------------------------------------------------------
 
