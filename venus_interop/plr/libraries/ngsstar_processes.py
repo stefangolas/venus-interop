@@ -57,6 +57,10 @@ ODTC_GRIP = IswapGrip(height=5, width=82.2, opening=85, force=5)
 # The elbow stops tried, in order (Venus leaves it to the arm): the right first, as the KAPA demo
 # found on the same deck (the others sweep the arm over the 96-head waste behind the ODTC)
 ODTC_ELBOWS = ("right", None, "front", "left")
+# Trp_HamiltonComfortLid's records: by the iSWAP (GetPlate, MovePlate, OpenGripper) or the CO-RE gripper
+LID_GRIP = IswapGrip(height=5, width=85.3, opening=89, force=2)
+LID_CORE_GRIP = CoreGrip(height=5, width=85.3, opening=88, force=8, z_speed=128.7, press=0, x_acceleration=4,
+                         place_z_speed=50, check=0)
 # Drops into the waste chutes and onto the stacker: the source and the destination shifted first, in
 # mm (VIRTUALLABWARE::MoveSeq), and back after
 SHIFTS = {
@@ -142,7 +146,8 @@ class NGSStarProcesses:
     dispense_step = (Pipetting(cfg.dispense_clld, cfg.dispense_submerge, liquid_following=True,
                                mix_cycles=mix_d, mix_volume=mix_volume_dispense, mix_position=MIX_POSITION)
                      if dispense_height == 0 else
-                     Pipetting(0, fluid_height=dispense_height, liquid_following=bool(liquid_following_at_fixed_dispense),
+                     Pipetting(0, fluid_height=dispense_height,
+                               liquid_following=bool(liquid_following_at_fixed_dispense),
                                mix_cycles=mix_d, mix_volume=mix_volume_dispense))
     held = []
     for targets, sources in sq.batches(self.channels, self.v.seq(dispense), self.v.seq(aspiration),
@@ -254,18 +259,43 @@ class NGSStarProcesses:
     grip = dataclasses.replace(ODTC_GRIP, inverse=self.clinical_starlet and src_lab != "HSP_ODTC")
     if track_to_read_barcode and int(track_to_read_barcode) > 0:
       self.say(f"{src_lab}: barcode read at the autoload not modelled")
+    await self._by_iswap(src_lab, dst_lab, grip, park_after_move)
+    # left out of the port so far, and in scope: the run report line ("Transport plate using iSWAP ...")
+    return "" if track_to_read_barcode and int(track_to_read_barcode) > 0 else "No barcode reading activated"
+
+  async def Trp_HamiltonComfortLid(self, ML_STAR, source, destination, park_after_move=0,
+                                   reachable_with_core_gripper=0):
+    """A Hamilton ComfortLid moved: by the CO-RE gripper when the destination is reachable with it
+    (the flag compared with TRUE: Avenio's call passing 4 takes the iSWAP, as in Venus), else by the
+    iSWAP, the short side 5 mm below the top at force 2, let go by opening to 95 mm over the lid
+    waste, 89 elsewhere."""
+    # left out: _DATA_ScheduleConsumables (the lids shown on the loading screen)
+    src_lab = self.v.seq(source).current_item()[0]
+    dst_lab = self.v.seq(destination).current_item()[0]
+    lid = self.v.resource(src_lab)
+    if int(reachable_with_core_gripper) == 1:
+      pick, drop = steps.core_grip_arguments(LID_CORE_GRIP)
+      await self._gripper_().to_placeholder(lid, dst_lab, front_channel=self.front_channel - 1,
+                                            eject=bool(park_after_move), grip=pick, release=drop)
+    else:
+      opening = 95 if dst_lab == "Ham_ComfortLid_Waste" else 89
+      await self._by_iswap(src_lab, dst_lab, LID_GRIP, park_after_move,
+                           release=dict(open_margin=round(opening - LID_GRIP.width, 4)))
+    # left out of the port so far, and in scope: the run report line
+
+  async def _by_iswap(self, src_lab: str, dst_lab: str, grip: IswapGrip, park, release=None):
+    """The labware at `src_lab` to `dst_lab` by the iSWAP; then the arm parked, or only its Z homed
+    (Venus's `R0ZI`: up to the top of its travel here)."""
     if self._iswap is None:
       from pylabrobot.hamilton.star.driver.features.iswap_transport import iSWAPTransport
       self._iswap = iSWAPTransport(self.star.iswap)
     await self._gripper_().to_placeholder(self.v.resource(src_lab), dst_lab, iswap=self._iswap,
                                           direction=grip.direction, elbows=ODTC_ELBOWS,
-                                          grip=steps.iswap_grip_arguments(grip))
-    if park_after_move:
+                                          grip=steps.iswap_grip_arguments(grip), release=release)
+    if park:
       await self.star.iswap.park(traverse_height=280.0)
     else:
       await self.star.iswap.elbow_move_to_safe_z_height()
-    # left out of the port so far, and in scope: the run report line ("Transport plate using iSWAP ...")
-    return "" if track_to_read_barcode and int(track_to_read_barcode) > 0 else "No barcode reading activated"
 
   # -- sequences ------------------------------------------------------------------------------
 

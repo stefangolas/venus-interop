@@ -199,7 +199,7 @@ class Gripper:
     the first of `elbows` (elbow stops; None is the planner's choice) whose plan it can reach and
     that hits nothing. `grip` and `release` are passed to the CO-RE gripper's pick-up and drop
     (a library's grip height, width, force, speeds, plate press), `grip` to the iSWAP's pick-up plan
-    (its height below the top, width, opening margin, strength); `front_channel` to its tool
+    (its height below the top, width, opening margin, strength), `release` to its drop plan; `front_channel` to its tool
     pick-up, unless the tools are still on from a move that kept them; `eject` False keeps them on
     after this one (a library's eject_gripper 0).
     """
@@ -222,7 +222,8 @@ class Gripper:
                              elbows)
 
       async def drop(to):
-        await self._iswap_step(iswap, lambda e: iswap.plan_drop(to, direction=direction, elbow=e), elbows)
+        await self._iswap_step(iswap, lambda e: iswap.plan_drop(to, direction=direction, elbow=e, **(release or {})),
+                               elbows)
     # Venus stacks parked lids on what stands there (a plate, a waste plate and its lid): PLR will
     # not put a resource on the deck inside another, so it goes down on top of the stack
     for _ in range(5):

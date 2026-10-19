@@ -1831,7 +1831,7 @@ class Run:
       if path == "" and key not in top:
         top[key] = value
     command = rec.step_name
-    iswap_plate = command in ("GetPlate", "PutPlate") and top.get("PlateObject")
+    iswap_plate = command in ("GetPlate", "PutPlate", "MovePlate", "OpenGripper") and top.get("PlateObject")
     if command in ("ZSwapGetPlate", "ZSwapPlacePlate") or iswap_plate:
       return self._transport_step(rec, command, guid, name, top, env, line)
     if command in ("Head96Move", "MoveToPosition", "FirmwareCommand") or (

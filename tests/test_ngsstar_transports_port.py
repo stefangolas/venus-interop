@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(NGS is None or not LIBS,
 
 # What this test checks against the HSL (read by tools/trace_method.py --status)
 LIBRARY = "NGSSTARPROCESSES"
-COVERS = ["Trp_HSP", "Trp_MIDI", "Trp_HSPFromAndToODTCwithiSWAP"]
+COVERS = ["Trp_HSP", "Trp_MIDI", "Trp_HSPFromAndToODTCwithiSWAP", "Trp_HamiltonComfortLid"]
 
 # (function, source, destination, park)
 CALLS = [
@@ -122,7 +122,8 @@ def port_moves(lay):
 
 
 def test_covers_what_it_calls():
-  assert sorted(COVERS) == sorted({fn for fn, *_ in CALLS} | {"Trp_HSPFromAndToODTCwithiSWAP"})
+  others = {"Trp_HSPFromAndToODTCwithiSWAP", "Trp_HamiltonComfortLid"}
+  assert sorted(COVERS) == sorted({fn for fn, *_ in CALLS} | others)
 
 
 def test_port_moves_plates_as_the_library_does(avenio, lay):
@@ -171,10 +172,18 @@ class _IswapGripper:
   def __init__(self, log):
     self.log = log
 
-  async def to_placeholder(self, thing, placeholder, iswap, direction, elbows, grip):
-    self.log.append(dict(thing=thing, to=placeholder, height=grip["pickup_distance_from_top"], width=grip["width"],
-                         opening=round(grip["width"] + grip["open_margin"], 4), force=grip["grip_strength"],
-                         direction=direction))
+  async def to_placeholder(self, thing, placeholder, iswap=None, direction=None, elbows=None, grip=None,
+                           release=None, front_channel=None, eject=None):
+    if iswap is None:  # the CO-RE gripper
+      self.log.append(dict(thing=thing, to=placeholder, core=True, height=grip["pickup_distance_from_top"],
+                           width=grip["resource_size_y"], force=grip["grip_strength"], end=int(eject)))
+      return
+    move = dict(thing=thing, to=placeholder, height=grip["pickup_distance_from_top"], width=grip["width"],
+                opening=round(grip["width"] + grip["open_margin"], 4), force=grip["grip_strength"],
+                direction=direction)
+    if release is not None:
+      move["release"] = round(grip["width"] + release["open_margin"], 4)
+    self.log.append(move)
 
 
 class _Iswap:
@@ -218,4 +227,85 @@ def test_port_moves_plates_into_and_out_of_the_odtc_as_the_library_does(avenio, 
   assert len(hsl) == len(port) == len(ISWAP_CALLS)
   assert any(m["inverse"] for m in hsl) == clinical
   for call, x, y in zip(ISWAP_CALLS, hsl, port):
+    assert x == y, f"{call}: library {x}, port {y}"
+
+
+# Trp_HamiltonComfortLid: Avenio's calls (source, destination, park, reachable with the CO-RE
+# gripper: FALSE, or 4, which is not TRUE), and the CO-RE branch either way
+LID_CALLS = [("Ham_ComfortLid_ODTC", "Ham_ComfortLid_Stack_ParkPos", 0, 0),
+             ("Ham_ComfortLid_ODTC", "Ham_ComfortLid_Waste", 0, 0),
+             ("Ham_ComfortLid_Stack_ParkPos", "Ham_ComfortLid_ODTC", 1, 0),
+             ("Ham_ComfortLid_Stack_ParkPos", "Ham_ComfortLid_ODTC", 1, 4),
+             ("Ham_ComfortLid_Stack_ParkPos", "Ham_ComfortLid_ODTC", 1, 1),
+             ("Ham_ComfortLid_ODTC", "Ham_ComfortLid_Stack_ParkPos", 0, 1)]
+
+
+def hsl_lid_moves(avenio, lay):
+  N = "NGSSTARPROCESSES::"
+  src = (
+    'namespace _Method { #include "HSLSeqLib.hsl" }\n'
+    'namespace _Method { #include "NGSStarProcesses.hs_" }\n'
+    'global device ML_STAR ("x.lay", "ML_STAR", hslTrue);\n'
+    'namespace _Method { #include "HSLMECCLib.hs_" }\n'
+    "namespace _Method { method main() void {\n"
+    f"{N}t_intFrontChannelCORETransport = 7;\n{N}t_seqCOREGripper = ML_STAR.COREGripTool_OnWaste_1000ul_0001;\n"
+    + "".join(f"{N}Trp_HamiltonComfortLid(ML_STAR, ML_STAR.{a}, ML_STAR.{b}, {park}, {core});\n"
+              for a, b, park, core in LID_CALLS)
+    + "} }\n")
+  nothing = lambda run, p: 0  # noqa: E731
+  run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
+                (avenio / "Library").glob("*.stp"), {"x.lay": lay},
+                answers={"functions": {"ngsstarprocesses::_data_scheduleconsumables": nothing}})
+  moves = []
+  for e in run.events:
+    s = e.settings
+    if e.command == "GetPlate":
+      moves.append(dict(thing=e.channels[1][0], height=s["GripperAccessHeight"], width=s["grip width"],
+                        opening=s["grip opening"], force=s["grip force"], inverse=bool(s["InversGripping"]),
+                        large_side=bool(s["GrippLargeSite"]), orientation=s["LabwareOrientation"]))
+    elif e.command == "MovePlate":
+      moves[-1]["to"] = e.channels[1][0]
+    elif e.command == "OpenGripper":
+      moves[-1]["release"] = s["grip opening"]
+    elif e.command == "ParkISwap":
+      moves[-1]["end"] = "park"
+    elif e.command == "FirmwareCommand":
+      moves[-1]["end"] = s["firmware command string"]
+    elif e.command == "ZSwapGetPlate":
+      moves.append(dict(thing=e.channels[1][0], core=True, height=s["GripperAccessHeight"], width=s["grip width"],
+                        force=s["grip force"]))
+    elif e.command == "ZSwapPlacePlate":
+      moves[-1].update(to=e.channels[1][0], end=s["ToolEject"])
+  return moves
+
+
+def port_lid_moves(lay):
+  from venus_interop.plr import steps
+  from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
+
+  log, grips = [], []
+  steps.OBSERVERS[:] = [lambda command, ch, grip: grips.append(grip) if command == "IswapGrip" else None]
+  star = type("Star", (), {"pipettes": None, "iswap": _Iswap(log)})()
+  procs = NGSStarProcesses(star, RecordingDeck(lay), {}, {}, gripper=_IswapGripper(log), say=lambda _: None,
+                           iswap=object())
+
+  async def go():
+    for a, b, park, core in LID_CALLS:
+      await procs.Trp_HamiltonComfortLid(None, a, b, park, core)
+
+  try:
+    asyncio.run(go())
+  finally:
+    steps.OBSERVERS.clear()
+  for move, grip in zip([m for m in log if not m.get("core")], grips):
+    assert move.pop("direction") == grip.direction
+    move.update(inverse=grip.inverse, large_side=grip.large_side, orientation=grip.orientation)
+  return log
+
+
+def test_port_moves_comfortlids_as_the_library_does(avenio, lay):
+  hsl, port = hsl_lid_moves(avenio, lay), port_lid_moves(lay)
+  assert len(hsl) == len(port) == len(LID_CALLS)
+  assert [bool(m.get("core")) for m in hsl] == [False] * 4 + [True] * 2
+  for call, x, y in zip(LID_CALLS, hsl, port):
     assert x == y, f"{call}: library {x}, port {y}"
