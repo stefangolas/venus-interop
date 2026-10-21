@@ -12,12 +12,13 @@ pylabrobot.
 import asyncio
 import os
 import pathlib
+import time
 
 import pytest
 
 pytest.importorskip("pylabrobot.resources")
 
-from port_harness import RecordingDeck, hsl_run  # noqa: E402
+from port_harness import CLOCK, REPORT_BOOK, RecordingDeck, hsl_run, report_rows  # noqa: E402
 from venus_interop.files import layout  # noqa: E402
 
 NGS = pathlib.Path(os.environ["VENUS_INTEROP_NGS"]) if os.environ.get("VENUS_INTEROP_NGS") else None
@@ -58,6 +59,7 @@ def hsl_moves(avenio, lay):
     'variable bc;\n'
     'namespace _Method { #include "HSLMECCLib.hs_" }\n'
     "namespace _Method { method main() void {\n"
+    f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
     f"{N}t_intTransportTool = 2;\n{N}t_intFrontChannelCORETransport = 7;\n"
     f"{N}t_seqCOREGripper = ML_STAR.COREGripTool_OnWaste_1000ul_0001;\n"
     + "".join(f"{N}{fn}(ML_STAR, ML_STAR.{a}, ML_STAR.{b}, 0, {park}, bc, 4);\n" for fn, a, b, park in CALLS)
@@ -65,7 +67,8 @@ def hsl_moves(avenio, lay):
   nothing = lambda run, p: 0  # noqa: E731
   run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
                 (avenio / "Library").glob("*.stp"), {"x.lay": lay},
-                answers={"functions": {"ngsstarprocesses::_data_scheduleconsumables": nothing}})
+                answers={"clock": time.struct_time(CLOCK),
+                         "functions": {"ngsstarprocesses::_data_scheduleconsumables": nothing}})
   moves, shift, get = [], {}, None
   for e in run.events:
     s = e.settings
@@ -82,7 +85,20 @@ def hsl_moves(avenio, lay):
         opening=g["grip opening"], force=g["grip force"], z_speed=g["z speed"], front=g["ToolUpperChannel"],
         check=s["ZSwapPlateCheck"], eject=s["ToolEject"], press=s["plate press"], x_acceleration=s["x acceleration"],
         place_z_speed=s["z speed"], pick_shift=pick_shift, drop_shift=shift.get(e.channels[1][0], (0, 0, 0))))
-  return moves
+  return moves, report_rows(run)
+
+
+def _report():
+  from venus_interop.plr.libraries.ngsstar_report import RunReport
+  return RunReport(clock=lambda: time.struct_time(CLOCK))
+
+
+def assert_same_report(hsl, port):
+  """The run report's rows, as the library appends them and as the port does."""
+  assert hsl, "the library wrote no report rows"
+  assert len(hsl) == len(port), f"library {len(hsl)} rows, port {len(port)}"
+  for i, (x, y) in enumerate(zip(hsl, port)):
+    assert x == y, f"row {i}: library {x}, port {y}"
 
 
 class _Gripper:
@@ -105,7 +121,7 @@ def port_moves(lay):
 
   gripper, checks = _Gripper(), []
   steps.OBSERVERS[:] = [lambda command, ch, grip: checks.append(grip.check) if command == "CoreGrip" else None]
-  procs = NGSStarProcesses(type("Star", (), {"pipettes": None})(), RecordingDeck(lay), {}, {}, gripper=gripper,
+  procs = NGSStarProcesses(type("Star", (), {"pipettes": None})(), RecordingDeck(lay), {}, {}, gripper=gripper, report=_report(),
                            say=lambda _: None)
 
   async def go():
@@ -118,7 +134,7 @@ def port_moves(lay):
     steps.OBSERVERS.clear()
   for move, check in zip(gripper.moves, checks):
     move["check"] = check
-  return gripper.moves
+  return gripper.moves, procs.report.rows
 
 
 def test_covers_what_it_calls():
@@ -127,10 +143,11 @@ def test_covers_what_it_calls():
 
 
 def test_port_moves_plates_as_the_library_does(avenio, lay):
-  hsl, port = hsl_moves(avenio, lay), port_moves(lay)
+  (hsl, hsl_report), (port, port_report) = hsl_moves(avenio, lay), port_moves(lay)
   assert len(hsl) == len(port) == len(CALLS)
   for (fn, a, b, _), x, y in zip(CALLS, hsl, port):
     assert x == y, f"{fn} {a} -> {b}: library {x}, port {y}"
+  assert_same_report(hsl_report, port_report)
 
 
 # Trp_HSPFromAndToODTCwithiSWAP, as Avenio calls it: (source, destination, park)
@@ -146,12 +163,13 @@ def hsl_iswap_moves(avenio, lay, clinical):
     'variable bc;\n'
     'namespace _Method { #include "HSLMECCLib.hs_" }\n'
     "namespace _Method { method main() void {\n"
+    f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
     f"{N}t_blnClinicalNGSStarlet = {int(clinical)};\n"
     + "".join(f"{N}Trp_HSPFromAndToODTCwithiSWAP(ML_STAR, ML_STAR.{a}, ML_STAR.{b}, 0, {park}, bc);\n"
               for a, b, park in ISWAP_CALLS)
     + "} }\n")
   run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
-                (avenio / "Library").glob("*.stp"), {"x.lay": lay})
+                (avenio / "Library").glob("*.stp"), {"x.lay": lay}, answers={"clock": time.struct_time(CLOCK)})
   moves = []
   for e in run.events:
     s = e.settings
@@ -165,7 +183,7 @@ def hsl_iswap_moves(avenio, lay, clinical):
       moves[-1]["end"] = "park"
     elif e.command == "FirmwareCommand":
       moves[-1]["end"] = s["firmware command string"]
-  return moves
+  return moves, report_rows(run)
 
 
 class _IswapGripper:
@@ -204,7 +222,7 @@ def port_iswap_moves(lay, clinical):
   log, grips = [], []
   steps.OBSERVERS[:] = [lambda command, ch, grip: grips.append(grip) if command == "IswapGrip" else None]
   star = type("Star", (), {"pipettes": None, "iswap": _Iswap(log)})()
-  procs = NGSStarProcesses(star, RecordingDeck(lay), {}, {}, gripper=_IswapGripper(log), say=lambda _: None,
+  procs = NGSStarProcesses(star, RecordingDeck(lay), {}, {}, gripper=_IswapGripper(log), report=_report(), say=lambda _: None,
                            iswap=object(), clinical_starlet=clinical)
 
   async def go():
@@ -218,16 +236,17 @@ def port_iswap_moves(lay, clinical):
   for move, grip in zip(log, grips):
     assert move.pop("direction") == grip.direction
     move.update(inverse=grip.inverse, large_side=grip.large_side, orientation=grip.orientation)
-  return log
+  return log, procs.report.rows
 
 
 @pytest.mark.parametrize("clinical", [False, True], ids=["NGS STAR", "Clinical NGS STARlet"])
 def test_port_moves_plates_into_and_out_of_the_odtc_as_the_library_does(avenio, lay, clinical):
-  hsl, port = hsl_iswap_moves(avenio, lay, clinical), port_iswap_moves(lay, clinical)
+  (hsl, hsl_report), (port, port_report) = hsl_iswap_moves(avenio, lay, clinical), port_iswap_moves(lay, clinical)
   assert len(hsl) == len(port) == len(ISWAP_CALLS)
   assert any(m["inverse"] for m in hsl) == clinical
   for call, x, y in zip(ISWAP_CALLS, hsl, port):
     assert x == y, f"{call}: library {x}, port {y}"
+  assert_same_report(hsl_report, port_report)
 
 
 # Trp_HamiltonComfortLid: Avenio's calls (source, destination, park, reachable with the CO-RE
@@ -248,6 +267,7 @@ def hsl_lid_moves(avenio, lay):
     'global device ML_STAR ("x.lay", "ML_STAR", hslTrue);\n'
     'namespace _Method { #include "HSLMECCLib.hs_" }\n'
     "namespace _Method { method main() void {\n"
+    f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
     f"{N}t_intFrontChannelCORETransport = 7;\n{N}t_seqCOREGripper = ML_STAR.COREGripTool_OnWaste_1000ul_0001;\n"
     + "".join(f"{N}Trp_HamiltonComfortLid(ML_STAR, ML_STAR.{a}, ML_STAR.{b}, {park}, {core});\n"
               for a, b, park, core in LID_CALLS)
@@ -255,7 +275,8 @@ def hsl_lid_moves(avenio, lay):
   nothing = lambda run, p: 0  # noqa: E731
   run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
                 (avenio / "Library").glob("*.stp"), {"x.lay": lay},
-                answers={"functions": {"ngsstarprocesses::_data_scheduleconsumables": nothing}})
+                answers={"clock": time.struct_time(CLOCK),
+                         "functions": {"ngsstarprocesses::_data_scheduleconsumables": nothing}})
   moves = []
   for e in run.events:
     s = e.settings
@@ -276,7 +297,7 @@ def hsl_lid_moves(avenio, lay):
                         force=s["grip force"]))
     elif e.command == "ZSwapPlacePlate":
       moves[-1].update(to=e.channels[1][0], end=s["ToolEject"])
-  return moves
+  return moves, report_rows(run)
 
 
 def port_lid_moves(lay):
@@ -286,7 +307,7 @@ def port_lid_moves(lay):
   log, grips = [], []
   steps.OBSERVERS[:] = [lambda command, ch, grip: grips.append(grip) if command == "IswapGrip" else None]
   star = type("Star", (), {"pipettes": None, "iswap": _Iswap(log)})()
-  procs = NGSStarProcesses(star, RecordingDeck(lay), {}, {}, gripper=_IswapGripper(log), say=lambda _: None,
+  procs = NGSStarProcesses(star, RecordingDeck(lay), {}, {}, gripper=_IswapGripper(log), report=_report(), say=lambda _: None,
                            iswap=object())
 
   async def go():
@@ -300,12 +321,13 @@ def port_lid_moves(lay):
   for move, grip in zip([m for m in log if not m.get("core")], grips):
     assert move.pop("direction") == grip.direction
     move.update(inverse=grip.inverse, large_side=grip.large_side, orientation=grip.orientation)
-  return log
+  return log, procs.report.rows
 
 
 def test_port_moves_comfortlids_as_the_library_does(avenio, lay):
-  hsl, port = hsl_lid_moves(avenio, lay), port_lid_moves(lay)
+  (hsl, hsl_report), (port, port_report) = hsl_lid_moves(avenio, lay), port_lid_moves(lay)
   assert len(hsl) == len(port) == len(LID_CALLS)
   assert [bool(m.get("core")) for m in hsl] == [False] * 4 + [True] * 2
   for call, x, y in zip(LID_CALLS, hsl, port):
     assert x == y, f"{call}: library {x}, port {y}"
+  assert_same_report(hsl_report, port_report)

@@ -24,11 +24,52 @@ ARRAYTOOLS = ('namespace _Method { namespace ARRAYTOOLS {\n'
               'function get_distinct_from_array(variable & i_arr[], variable & o_arr[]) void { variable stub; }\n'
               'function ArrayVLookUp(variable & i_values[], variable & i_keys[], variable i_key, variable & o_arr[]) void '
               '{ variable stub; }\n'
-              '} }\n')
+              'function Lookup(variable & i_arr[], variable i_value) variable { variable v; return(v); }\n'
+              '} }\n'
+              # StringTokenizer\StrTokenize.hs_
+              'namespace _Method { namespace STRTOKENIZE {\n'
+              'function StrTokenize(variable i_str, variable i_delimiter, variable & o_arr[], variable i_flag) void '
+              '{ variable stub; }\n} }\n')
+# VectorCustomDialogs (a compiled dialog component): the dialogs a test answers, and their constants
+VECTORCUSTOMDIALOGS = (
+  'namespace _Method { namespace VECTORCUSTOMDIALOGS {\n'
+  'namespace IconType { const variable Information(0); const variable Warning(1); const variable Question(2); '
+  'const variable Error(3); }\n'
+  'namespace ButtonType { const variable Ok(0); const variable OkCancel(1); const variable YesNo(4); }\n'
+  'function LoadingDialogSetResources(variable & i_columns[]) variable { variable v; return(v); }\n'
+  'function LoadingDialog(variable i_title, variable i_buttons, variable i_x, variable i_y, variable i_timeout, '
+  'variable i_top, variable i_bottom, variable i_image, variable i_small, variable i_flag, variable & i_col1[], '
+  'variable & i_col2[], variable & i_col3[]) variable { variable v; return(v); }\n'
+  'function ListDialog(variable i_title, variable i_icon, variable i_buttons, variable i_x, variable i_y, '
+  'variable i_timeout, variable i_top, variable i_bottom, variable & i_items[]) variable { variable v; return(v); }\n'
+  'function MessageDialog(variable i_title, variable i_icon, variable i_buttons, variable i_x, variable i_y, '
+  'variable i_timeout, variable i_text) variable { variable v; return(v); }\n'
+  'function ErrorDialog(variable i_title, variable i_icon, variable i_buttons, variable i_x, variable i_y, '
+  'variable i_timeout, variable i_text, variable i_bottom) variable { variable v; return(v); }\n'
+  '} }\n')
 # and Create Channel Pattern.hs_ (bodies that are only a return would be dropped as placeholders)
 CREATE_CHANNEL_PATTERN = ('namespace _Method { namespace CREATE_CHANNEL_PATTERN {\n'
                           'function Create_Channel_Pattern(variable i_first, variable i_count, variable i_channels, '
                           'variable & o_pattern) void { variable stub; }\n} }\n')
+
+# and Aliquot\Aliquot_for_EasySteps v2.hs_
+ALIQUOT = ('namespace _Method { namespace ALIQUOT_FOR_EASYSTEPS_V2 {\n'
+           'function CalcAliquot_v2_1(sequence & i_seq, variable i_volume, variable i_pre, variable i_reserve, '
+           'variable i_capacity, variable & o_loops, variable i_channels, variable i_rows, variable & o_aspirate[], '
+           'variable & o_mix[], variable & o_patterns[], variable & o_pattern) void { variable stub; }\n} }\n')
+
+
+def _aliquot(run, p):  # the port's reading of it
+  from venus_interop.plr.libraries.ngsstar_processes import CalcAliquot_v2_1
+
+  s = p["i_seq"].value
+  a = CalcAliquot_v2_1(s.end - s.cur + 1 if s.cur > 0 else 0,
+                       *(float(p[k].value) for k in ("i_volume", "i_pre", "i_reserve", "i_capacity")),
+                       int(p["i_channels"].value), int(p["i_rows"].value))
+  p["o_loops"].value, p["o_pattern"].value = a.loops, a.aspirate_pattern
+  for k, v in (("o_aspirate", a.aspirate), ("o_mix", a.mix), ("o_patterns", a.dispense_patterns)):
+    p[k].value = hsl_eval.HArray(list(v))
+  return 0
 
 
 def _distinct(run, p):  # the distinct values, in order of first appearance
@@ -49,8 +90,21 @@ def _channel_pattern(run, p):  # the port's reading of it
   return 0
 
 
+def _lookup(run, p):  # the 1-based index of the first element equal to the value; 0 when none
+  items = p["i_arr"].value.items
+  return next((i for i, v in enumerate(items, start=1) if v == p["i_value"].value), 0)
+
+
+def _tokenize(run, p):  # split at the delimiter, empty tokens dropped (the flag's meaning: inferred)
+  text, delim = str(p["i_str"].value), str(p["i_delimiter"].value)
+  p["o_arr"].value = hsl_eval.HArray([t for t in text.split(delim) if t])
+  return 0
+
+
 ARRAYTOOLS_MODELS = {"arraytools::get_distinct_from_array": _distinct, "arraytools::arrayvlookup": _vlookup,
-                     "create_channel_pattern::create_channel_pattern": _channel_pattern}
+                     "arraytools::lookup": _lookup, "strtokenize::strtokenize": _tokenize,
+                     "create_channel_pattern::create_channel_pattern": _channel_pattern,
+                     "aliquot_for_easysteps_v2::calcaliquot_v2_1": _aliquot}
 
 
 @functools.lru_cache(maxsize=4)
@@ -64,17 +118,21 @@ def _parsed(src: str, here: pathlib.Path, roots: tuple, stp_paths: tuple):
 
 def hsl_run(src: str, here: pathlib.Path, roots: Iterable[pathlib.Path], stp_paths: Iterable[pathlib.Path],
             layouts: dict, answers: Optional[dict] = None, allow_unresolved: Iterable[str] = (),
-            max_steps: int = 2_000_000) -> hsl_eval.Run:
+            max_steps: int = 2_000_000, stops: Optional[str] = None) -> hsl_eval.Run:
   """Preprocess, parse and run `src` (a method's text, as if at `here`); it must run to the end and
   call no function that neither the sources nor the run define (the interpreter would carry on
   with an unknown value, so a library missing from the roots goes unnoticed), except those in
   DISPLAY_ONLY and `allow_unresolved`. The same source is parsed once: a test whose cases differ
-  only in their inputs can give them through functions answered per run (`answers["functions"]`)."""
+  only in their inputs can give them through functions answered per run (`answers["functions"]`).
+  `stops`: the run is to stop on an error whose text holds this (what Venus would raise)."""
   parser, stps, lines = _parsed(src, here, tuple(roots), tuple(sorted(stp_paths)))
   run = hsl_eval.Run(parser, stps, layouts, answers=answers or {}, max_steps=max_steps)
   run.src = lines
   run.run()
-  assert run.stopped is None, run.stopped
+  if stops is None:
+    assert run.stopped is None, run.stopped
+  else:
+    assert run.stopped is not None and stops in run.stopped, run.stopped
   missing = set(run.unresolved) - DISPLAY_ONLY - set(allow_unresolved)
   assert not missing, f"functions the library calls that nothing defines: {sorted(missing)}"
   return run
@@ -103,6 +161,20 @@ def steps_of(run: hsl_eval.Run, label=lambda e: "") -> list[tuple]:
     settings = pipetting(e.command, e.settings, e.volumes, e.channels) if e.command in ("Aspirate", "Dispense") else {}
     out.append((e.command, dict(e.channels) if e.command != "TipEject" else {}, label(e), settings))
   return out
+
+
+REPORT_BOOK = "report.xls"  # the run report a test points the NGSStar libraries at (t_str*FullPathReportFile)
+CLOCK = (2026, 10, 19, 14, 5, 9, 0, 292, -1)  # the time stamped report rows take, on both sides
+
+
+def report_rows(run: hsl_eval.Run, book: str = REPORT_BOOK) -> list[dict[str, str]]:
+  """The rows the run appended to the report's RuntimeReport sheet, every cell as text."""
+  conn = run.workbooks.get(book)
+  if conn is None:
+    return []
+  cur = conn.execute("SELECT * FROM [RuntimeReport]")
+  names = [d[0] for d in cur.description]
+  return [{n: hsl_eval._fmt(v) if v is not None else "" for n, v in zip(names, r)} for r in cur.fetchall()]
 
 
 class RecordingDeck:

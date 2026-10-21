@@ -19,6 +19,7 @@ and pylabrobot.
 import asyncio
 import os
 import pathlib
+import time
 
 import pytest
 
@@ -26,7 +27,8 @@ pytest.importorskip("pylabrobot.hamilton.star.driver.lld_mode")
 
 from pylabrobot.hamilton.star.driver.lld_mode import LLDMode  # noqa: E402
 
-from port_harness import RecordingChannels, RecordingDeck, assert_same_steps, hsl_run, steps_of  # noqa: E402
+from port_harness import (CLOCK, REPORT_BOOK, RecordingChannels, RecordingDeck, assert_same_steps,  # noqa: E402
+                          hsl_run, report_rows, steps_of)
 from venus_interop.files import layout  # noqa: E402
 
 NGS = pathlib.Path(os.environ["VENUS_INTEROP_NGS"]) if os.environ.get("VENUS_INTEROP_NGS") else None
@@ -78,8 +80,8 @@ def _planner(seqs):
   from venus_interop.plr.libraries.star_tip_tools import StarTipTools
 
   class Shim:
-    def seq(self, name):
-      return seqs[name]
+    def seq(self, name):  # a sequence the method built is itself (VenusDeck's way)
+      return name if not isinstance(name, str) else seqs[name]
   return StarTipTools(Shim(), 8, xy=xy)
 
 
@@ -104,6 +106,7 @@ def hsl_steps(avenio, lay, call):
     'namespace _Method { #include "HSLMECCLib.hs_" }\n'
     "namespace _Method { method main() void {\n"
     + "".join(f"{N}t_seqTips{k} = ML_STAR.{TIPS[t]};\n" for k, t in (("300", 1), ("1000", 5), ("50", 23)))
+    + f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
     + f"{N}t_intNumberOfAllAvailableChannels = 8;\n{N}t_blnDeactivatePipettingStepsForTransportTests = 0;\n"
     + run_it + "} }\n")
 
@@ -118,7 +121,7 @@ def hsl_steps(avenio, lay, call):
                 (avenio / "Library").glob("*.stp"), {"x.lay": lay}, answers={
                   # STAR Tip Tools' planner runs as HSL: the channels and raster (configuration keys
                   # 1, 26) and the tips' positions (the synthetic geometry the port's planner has)
-                  "cfg.1": 8, "cfg.26": 9.0, "labware_position": lambda lab, pos: (*xy((lab, pos)), 0.0),
+                  "clock": time.struct_time(CLOCK), "cfg.1": 8, "cfg.26": 9.0, "labware_position": lambda lab, pos: (*xy((lab, pos)), 0.0),
                   "functions": {
                   "ngsstarprocesses::_data_gettiptypeanddispensemodeofliquidclass": tip_type,
                   "stcc::resetfiltersequences": nothing, "stcc::addfiltersequence": nothing,
@@ -128,18 +131,20 @@ def hsl_steps(avenio, lay, call):
                   "hslml_star::aspirationmonitoring_1000ulchannel_on": nothing}})
   classes = [e.settings["LiquidName"] for e in run.events if e.command == "Aspirate"]
   label = lambda e: ("lld" if e.guid[:8] in LLD_RECORDS else "fixed") if e.command in ("Aspirate", "Dispense") else ""  # noqa: E731
-  return steps_of(run, label), classes
+  return steps_of(run, label), classes, report_rows(run)
 
 
 def port_steps(lay, call):
   from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
+  from venus_interop.plr.libraries.ngsstar_report import RunReport
 
   n, asp, disp, vol, lc, cyc, mva, mvd, ha, hd, ex, inc, lf = _call(call)
   deck = RecordingDeck(lay)
   deck.seq(disp if cyc is not None else asp).set_count(n)
   label = lambda command, kw: "lld" if kw.get("lld_mode") not in (None, LLDMode.OFF) else "fixed"  # noqa: E731
   with RecordingChannels(label) as ch:
-    procs = NGSStarProcesses(type("Star", (), {"pipettes": ch})(), deck, TIPS, CLASSES, planner=_planner(deck.live))
+    procs = NGSStarProcesses(type("Star", (), {"pipettes": ch})(), deck, TIPS, CLASSES, planner=_planner(deck.live),
+                             report=RunReport(clock=lambda: time.struct_time(CLOCK)))
     classes = []
     procs._lc = lambda name: classes.append(name)  # the class asked for; none given to the recorder
     if cyc is not None:
@@ -147,7 +152,7 @@ def port_steps(lay, call):
                                                                      ex, inc, lf))
     else:
       asyncio.run(procs.PIP_Supernatant_SVFTSingleDispenseFromPlateToLiquidWaste(None, asp, disp, vol, lc))
-  return ch.events, classes
+  return ch.events, classes, procs.report.rows
 
 
 def test_covers_what_it_calls():
@@ -156,10 +161,11 @@ def test_covers_what_it_calls():
 
 @pytest.mark.parametrize("call", CALLS, ids=[f"{c[4]}-{c[2]}-n{c[0]}" for c in CALLS])
 def test_port_pipettes_as_the_library_does(avenio, lay, call):
-  (hsl, hsl_classes), (port, port_classes) = hsl_steps(avenio, lay, call), port_steps(lay, call)
+  (hsl, hsl_classes, hsl_report), (port, port_classes, port_report) = hsl_steps(avenio, lay, call), port_steps(lay, call)
   assert len(hsl) > 3
   assert_same_steps(hsl, port)
   assert set(hsl_classes) == set(port_classes) == {call[4]}
+  assert hsl_report and hsl_report == port_report
 
 
 # supernatant removal: (positions, aspiration, dispense, volume, class); 160 uL: 110 + 50, 290 uL: 250 + 50
@@ -168,7 +174,8 @@ SUPERNATANT = [(24, "MIDI_OnMagnet", "LiquidWaste", 160, "LC300"), (12, "MIDI_On
 
 @pytest.mark.parametrize("call", SUPERNATANT, ids=[f"n{c[0]}-{c[3]}uL" for c in SUPERNATANT])
 def test_supernatant_removal_as_the_library_does(avenio, lay, call):
-  (hsl, _), (port, _) = hsl_steps(avenio, lay, call), port_steps(lay, call)
+  (hsl, _, hsl_report), (port, _, port_report) = hsl_steps(avenio, lay, call), port_steps(lay, call)
+  assert hsl_report and hsl_report == port_report
   assert [e[0] for e in hsl[:5]] == ["TipPickUp", "Aspirate", "Aspirate", "Dispense", "TipEject"]
   assert_same_steps(hsl, port)
   first, second = (250.0, 50.0) if call[3] > 280 else (call[3] - 50.0, 50.0)

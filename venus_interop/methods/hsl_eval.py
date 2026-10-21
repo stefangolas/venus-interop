@@ -1165,7 +1165,9 @@ class Run:
     if op == "/":
       if nb == 0:
         raise Stop(f"line {line}: division by zero")
-      return _typed(na / nb, na, nb)  # integers by integers: unverified (CONVENTIONS §11)
+      if isinstance(na, int) and isinstance(nb, int) and not isinstance(na, bool):
+        return int(na / nb)  # integers by integers truncate: inferred from the libraries (CONVENTIONS §11)
+      return _typed(na / nb, na, nb)
     if op == "%":
       return _typed(math.fmod(na, nb), na, nb) if nb else Unknown("mod by zero")
     if op == "^":
@@ -1307,6 +1309,10 @@ class Run:
       return Opaque("error")
     if low == "shell":
       return Unknown("Shell")
+    if low in ("gettime", "getdate") and "clock" in self.answers and arg_exprs:
+      # the local time answers["clock"] (a time.struct_time), formatted as strftime does
+      import time
+      return time.strftime(str(vals()[0]), self.answers["clock"])
     if low in ("getcurrenttime", "gettime", "getdate"):
       return Unknown("time")
     if low == "devgetlabwarepositionex":  # (device, labware id, position id, &x, &y, &z, &angle)
@@ -1786,7 +1792,8 @@ class Run:
     conn = self.workbooks.setdefault(book.lower().replace("/", "\\"), sqlite3.connect(":memory:"))
     table = sheet.rstrip("$")
     f.sheet, f.mode, f.pos, f.header, f.rows = (conn, table), mode, 0, [], []
-    if mode == 2:
+    exists = conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (table,)).fetchone()
+    if mode == 2 or mode == 3 and not exists:  # appending to a sheet the run has not made: made from the fields
       kind = {"i": "INTEGER", "f": "REAL"}
       conn.execute(f"DROP TABLE IF EXISTS [{table}]")
       conn.execute(f"CREATE TABLE [{table}] ("
@@ -1861,6 +1868,8 @@ class Run:
     if command in ("Head96Move", "MoveToPosition", "FirmwareCommand") or (
         command == "Head96TipEject" and not top.get("SequenceObject")):
       return self._move_step(rec, command, guid, name, top, env, line)
+    if command in ("LoadCarrier", "UnloadCarrier", "LockFrontCover"):
+      return self._autoload_step(rec, command, guid, name, top, env)
     seq_raw = top.get("SequenceObject", "")
     if not seq_raw or command in ("GetPlate", "PutPlate", "MovePlate",
                                    "Initialize", "LoadCarrier", "UnloadCarrier", "FirmwareCommand"):
@@ -1880,7 +1889,7 @@ class Run:
       taken = sq.take_head96(seq, int(counting), positions=positions or 96)
       pat_s = str(pat)
     else:
-      pat = self._binding(rec, top.get("ChannelPattern", "11111111"), env)
+      pat = self._bound_element(rec, "ChannelPattern", top.get("ChannelPattern", "11111111"), env)
       if isinstance(pat, Unknown):
         raise Stop(f"line {line}: {command}: channel pattern unknown ({pat.why})")
       pat_s = str(pat)
@@ -1890,7 +1899,9 @@ class Run:
       if command in ("TipEject", "XLTipEject") and not seq.items:
         self._event(command, guid, name, seq, {}, {}, 0, 0, counting, pat_s, env, note="default waste")
         return self._success(name, command, {})
-      taken = sq.take(seq, pat_s[:16], int(counting), int(use))
+      # a pattern longer than the instrument's channels (cfg.1 when given) is cut at them: what Venus
+      # does with the rest is unverified (CONVENTIONS §11)
+      taken = sq.take(seq, pat_s[:int(self.answers.get("cfg.1") or 16)], int(counting), int(use))
     vols = self._volumes(rec, taken.channels, env)
     settings = self._channel_settings(rec, taken.channels, top, env)
     self._event(command, guid, name, seq, taken.channels, vols, taken.first, taken.used, counting, pat_s, env,
@@ -1905,7 +1916,13 @@ class Run:
     value where they agree and a list (channel order) where they do not, plus STEP_SETTINGS."""
     per: dict[str, list] = {}
     block = next((v for k, v in rec.tree if stp_pars.key_id(k) == "-534183936" and isinstance(v, list)), None)
-    for ch_key, sub in block or []:
+
+    def channel(entry):  # records keep the channel blocks in any order (Avenio's: 3 to 8, then 1, 2)
+      try:
+        return int(stp_pars.key_id(entry[0]))
+      except ValueError:
+        return 0
+    for ch_key, sub in sorted(block or [], key=channel):
       if not isinstance(sub, list):
         continue
       try:
@@ -1947,7 +1964,9 @@ class Run:
         settings[key] = self._setting(rec, value, env)
     self._event(command, guid, name, seq, {1: item} if item else {}, {}, seq.cur, 0, 0, "", env,
                 settings=settings)
-    return self._success(name, command, {})
+    # Venus's help: one block, Num the transport mode (1, a plate or a lid; 2, a plate with its lid,
+    # not told apart here), and the labware and position
+    return HArray([name, command, f"0[1,0,0,0,,{item[0]},{item[1]}" if item else "0"])
 
   MOVE_SETTINGS = ("MoveType", "MoveDirection", "MoveAbsDistance", "MoveRelDistance", "MoveZEndMode",
                    "UsePickUpPosition", "firmware command string", "firmware parameter string")
@@ -2000,6 +2019,29 @@ class Run:
     return out
 
   _SERIES = re.compile(r"^<?([A-Za-z_]\w*)\[\*(\w*)\]>?$")
+  _ELEMENT = re.compile(r"^<([A-Za-z_]\w*)>\s+\1\[(.+)\]$")
+
+  def _bound_element(self, rec, key: str, raw: str, env):
+    """A step-level setting bound to one element of an array (the record shows `<arr> arr[i]`, its
+    ArrayStartIndex and ArrayAddIndex under `/arr/<key>`): one-based, as `_channel_value` reads a
+    series, element start + add - 1. Anything else as `_binding`."""
+    m = self._ELEMENT.match(raw)
+    if m is None:
+      return self._binding(rec, raw, env)
+    name, start, add = m.group(1), m.group(2), 1
+    for path, k, v in rec.readable():
+      if path.lower() == f"/{name}/{key}".lower():
+        if k == "ArrayStartIndex":
+          start = v
+        elif k == "ArrayAddIndex":
+          add = int(_num(v))
+    start = self._setting(rec, str(start), env)
+    c = self._cell(name, env)
+    arr = c.value if c is not None else None
+    if not isinstance(arr, HArray) or not isinstance(start, (int, float)):
+      return Unknown(f"array element {raw}")
+    i = int(start) + add - 2
+    return arr.items[i] if 0 <= i < len(arr.items) else Unknown(f"{name}[{i + 1}] past the array's end")
 
   def _channel_value(self, rec, raw: str, sub, ch: int, env):
     """A per-channel value: a literal, a bound variable, or a series of an array (`arr[*]`,
@@ -2026,6 +2068,26 @@ class Run:
       return Unknown(f"array series {raw}")
     i = int(start) + add - 2  # one-based start, one-based channel offset
     return arr.items[i] if 0 <= i < len(arr.items) else Unknown(f"{name}[{i + 1}] past the array's end")
+
+  AUTOLOAD_SETTINGS = ("RackTypeName", "BarcodesToRead", "BarcodeTraceFile", "LockFrontCoverState")
+
+  def _autoload_step(self, rec, command, guid, name, top, env):
+    """Load or unload a carrier, or lock the front cover: the settings bound. A load returns what
+    Venus's help gives (result values 3 and 4: the carrier's block, a block per position read), from
+    answers["autoload"](carrier, barcodes to read) -> {"track", "carrier_barcode", "positions":
+    [(num, barcode, labware, position)]}; without it, nothing read."""
+    settings = {k: self._setting(rec, top[k], env) for k in self.AUTOLOAD_SETTINGS if k in top}
+    settings = {k: v[1:-1] if isinstance(v, str) and len(v) > 1 and v[0] == v[-1] == '"' else v
+                for k, v in settings.items()}  # a literal's quotes
+    self._event(command, guid, name, None, {}, {}, 0, 0, "", "", env, settings=settings)
+    if command != "LoadCarrier":
+      return self._success(name, command, {})
+    rack = settings.get("RackTypeName", "")
+    answer = self.answers.get("autoload")
+    read = (answer(str(rack), str(settings.get("BarcodesToRead", ""))) if answer else None) or {}
+    carrier = f"0[{read.get('track', 1)},0,0,0,{read.get('carrier_barcode', '')},{rack},"
+    blocks = "".join(f"[{n},0,0,0,{bc},{lab},{pos}" for n, bc, lab, pos in read.get("positions", ()))
+    return HArray([name, command, carrier, "0" + blocks, "", ""])
 
   def _move_note(self, top, env) -> str:
     return ", ".join(f"{k}={v}" for k, v in top.items() if "Sequence" in k and v)

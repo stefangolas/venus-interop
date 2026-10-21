@@ -116,8 +116,9 @@ def hsl_side(avenio, lay, sequence):
     "createstardevice": create, "createusbdevice": create,
     "setplatelock": lambda r, p: rec("hhs", p["h"].value, "lock_plate" if p["v"].value else "unlock_plate") and 0,
     "startshaker": lambda r, p: rec("hhs", p["h"].value, "shake", p["s"].value) and 0,
-    "stopshaker": lambda r, p: rec("hhs", p["h"].value, "stop_shaking") and 0,
-    "stopallshaker": lambda r, p: [rec("hhs", n, "stop_shaking") for n in created] and 0,
+    # StopShaker: "stop shaking and unlock plate" (HslHamHeaterShakerLib); StopAllShaker, each
+    "stopshaker": lambda r, p: rec("hhs", p["h"].value, "stop_shaking") and rec("hhs", p["h"].value, "unlock_plate") and 0,
+    "stopallshaker": lambda r, p: [rec("hhs", n, "stop_shaking") and rec("hhs", n, "unlock_plate") for n in created] and 0,
     "starttempctrl": lambda r, p: rec("hhs", p["h"].value, "set_temperature", p["t"].value) and 0,
     "stoptempctrl": lambda r, p: rec("hhs", p["h"].value, "deactivate") and 0,
   })

@@ -15,13 +15,14 @@ Needs VENUS_INTEROP_NGS and VENUS_INTEROP_HAMILTON_LIBS, and pylabrobot.
 """
 import asyncio
 import dataclasses
+import time
 
 import pytest
 
 pytest.importorskip("pylabrobot.hamilton.star.driver.lld_mode")
 
-from port_harness import (ARRAYTOOLS, ARRAYTOOLS_MODELS, CREATE_CHANNEL_PATTERN, RecordingChannels,  # noqa: E402
-                          RecordingDeck, assert_same_steps, hsl_run, steps_of)
+from port_harness import (ARRAYTOOLS, ARRAYTOOLS_MODELS, CLOCK, CREATE_CHANNEL_PATTERN, REPORT_BOOK,  # noqa: E402
+                          RecordingChannels, RecordingDeck, assert_same_steps, hsl_run, report_rows, steps_of)
 from venus_interop.files import layout  # noqa: E402
 from test_ngsstar_processes_port import CLASSES, LIBS, NGS, TIPS, _planner, avenio, lay, xy  # noqa: E402,F401
 
@@ -68,6 +69,7 @@ SRC = (
             for k, t in (("300", 1), ("1000", 5), ("50", 23)))
   + f"{N}t_intNumberOfAllAvailableChannels = 8;\n{N}t_blnDeactivatePipettingStepsForTransportTests = 0;\n"
   + f"{N}t_blnSimulationModeON = 0;\n"
+  + f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
   + "".join(f"if (TESTINPUT::Sequence() == {i}) {{ ML_STAR.{s}.SetCount(TESTINPUT::Count());\n"
             f"{N}PIP_MixOnly(ML_STAR, ML_STAR.{s}, TESTINPUT::Height(), TESTINPUT::LiquidClass(), "
             "TESTINPUT::Cycles(), TESTINPUT::Volume()); }\n" for i, s in enumerate(SEQUENCES))
@@ -90,7 +92,7 @@ def hsl_steps(avenio, lay, call, max_steps=2_000_000):
   inputs = dict(zip(INPUTS, (SEQUENCES.index(seq), n, height, lc, cycles, volume, first[0] if first else 1)))
   run = hsl_run(SRC, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS],
                 (avenio / "Library").glob("*.stp"), {"x.lay": lay}, max_steps=max_steps, answers={
-                  "cfg.1": 8, "cfg.26": 9.0, "labware_position": lambda lab, pos: (*xy((lab, pos)), 0.0),
+                  "clock": time.struct_time(CLOCK), "cfg.1": 8, "cfg.26": 9.0, "labware_position": lambda lab, pos: (*xy((lab, pos)), 0.0),
                   "functions": {"ngsstarprocesses::_data_gettiptypeanddispensemodeofliquidclass": tip_type,
                                 "hslml_star::measurecontainervolume2": litres, "hslml_star::getcontainervolume": litres,
                                 **{f"testinput::{k.lower()}": (lambda v: lambda run, p: v)(v) for k, v in inputs.items()},
@@ -102,11 +104,12 @@ def hsl_steps(avenio, lay, call, max_steps=2_000_000):
     # the liquid search: where, not how (PLR searches its own way)
     out.append(("Probe", step[1], "", {}) if e.guid[:8] in PROBES else step)
   classes = [e.settings["LiquidName"] for e in run.events if e.command == "Aspirate"]
-  return out, classes
+  return out, classes, report_rows(run)
 
 
 def port_steps(lay, call, faithful=True):
   from venus_interop.plr.libraries.ngsstar_processes import NGSStarProcesses
+  from venus_interop.plr.libraries.ngsstar_report import RunReport
 
   n, seq, height, lc, cycles, volume, measured, *first = call
   deck = RecordingDeck(lay)
@@ -115,44 +118,45 @@ def port_steps(lay, call, faithful=True):
     deck.seq(tips).set_current_position(first[0] if first else 1)
   with RecordingChannels(measured=measured) as ch:
     procs = NGSStarProcesses(type("Star", (), {"pipettes": ch})(), deck, TIPS, CLASSES, planner=_planner(deck.live),
-                             faithful=faithful)
+                             faithful=faithful, report=RunReport(clock=lambda: time.struct_time(CLOCK)))
     classes = []
     procs._lc = lambda name: classes.append(name)  # the class asked for; none given to the recorder
     asyncio.run(procs.PIP_MixOnly(None, seq, height, lc, cycles, volume))
-  return ch.events, classes
+  return ch.events, classes, procs.report.rows
 
 
 @pytest.mark.parametrize("call", CALLS, ids=[f"{c[3]}-{c[1]}-n{c[0]}-h{c[2]}-{c[6]:g}uL" + (f"-tip{c[7]}" if len(c) > 7 else "")
                                   for c in CALLS])
 def test_port_mixes_as_the_library_does(avenio, mlay, call):
-  (hsl, hsl_classes), (port, _) = hsl_steps(avenio, mlay, call), port_steps(mlay, call)
+  (hsl, hsl_classes, hsl_report), (port, _, port_report) = hsl_steps(avenio, mlay, call), port_steps(mlay, call)
   assert [e[0] for e in hsl][:2] == ["TipPickUp", "Probe" if call[2] == 0 else "Aspirate"]
   assert_same_steps(hsl, port)
   assert set(hsl_classes) == {call[3]}
+  assert hsl_report and hsl_report == port_report
 
 
 def test_the_mix_volume_is_what_the_library_works_out(avenio, lay):
   """The numbers themselves, from the library's arithmetic: a trough shares 75 % of what it holds."""
-  port, _ = port_steps(lay, CALLS[1])
+  port, _, _ = port_steps(lay, CALLS[1])
   mixes = [e[3]["venus"].mix_volume for e in port if e[0] == "Aspirate"]
   assert mixes == [2000.0 * 0.75 / 8]
-  port, _ = port_steps(lay, CALLS[0])
+  port, _, _ = port_steps(lay, CALLS[0])
   assert [e[3]["venus"].mix_volume for e in port if e[0] == "Aspirate"] == [900.0]
 
 
 def test_a_trough_shares_among_the_channels_not_the_positions(mlay):
-  port, _ = port_steps(mlay, CALLS[8])
+  port, _, _ = port_steps(mlay, CALLS[8])
   assert [e[3]["venus"].mix_volume for e in port if e[0] == "Aspirate"] == [4000.0 * 0.75 / 8] * 2
 
 
 def test_ten_troughs_at_position_1_mix_one_position_on_the_last(lay):
-  port, _ = port_steps(lay, CALLS[4])
+  port, _, _ = port_steps(lay, CALLS[4])
   assert [e[1] for e in port if e[0] == "Aspirate"] == [{1: ("RGT_10", "1")}]
 
 
 def test_repaired_ten_troughs_are_ten_containers(lay):
   """Repaired (the default): each (labware, position) of the sequence, two slices on one set of tips."""
-  port, _ = port_steps(lay, CALLS[4], faithful=False)
+  port, _, _ = port_steps(lay, CALLS[4], faithful=False)
   mixed = [it for e in port if e[0] == "Aspirate" for it in e[1].values()]
   assert mixed == [(f"RGT_{k:02}", "1") for k in range(1, 11)]
   assert [e[0] for e in port].count("TipPickUp") == 1
@@ -160,7 +164,7 @@ def test_repaired_ten_troughs_are_ten_containers(lay):
 
 def test_repaired_300_uL_tips_mix_every_slice(lay):
   call = (12, "CAR_VIALS_LARGE", 0, "LC300", 10, 0, 300.0)
-  port, _ = port_steps(lay, call, faithful=False)
+  port, _, _ = port_steps(lay, call, faithful=False)
   assert [e[0] for e in port] == ["TipPickUp", "Probe", "Aspirate", "Probe", "Aspirate", "TipEject"]
   assert [len(e[1]) for e in port if e[0] == "Aspirate"] == [8, 4]
   assert [e[3]["venus"].mix_volume for e in port if e[0] == "Aspirate"] == [225.0, 225.0]

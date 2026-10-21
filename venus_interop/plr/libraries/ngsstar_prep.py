@@ -4,7 +4,8 @@ Inheco CPAC (a TEC on an Inheco control box) and the Inheco ODTC thermocycler.
 
 Each function is the driver calls the library makes; what it adds on top of them is kept:
 - HHS_Init closes and opens the plate lock of every HHS the method names; HHS_Shake starts the
-  shaker, waits the duration and stops it, the plate left locked; HHS_SetTemperature turns
+  shaker (locking the plate), waits the duration and stops it, the plate unlocked (the heater
+  shaker library's StopShaker: "stop shaking and unlock plate"); HHS_SetTemperature turns
   temperature control off, then on at the new temperature unless that is 0.
 - ODTC_DownloadProtocol stores a MethodSet XML (the kit's `Files\\ODTC_scripts`) on the ODTC;
   ODTC_ExecuteProtocol starts one of its methods by name and returns at once (priority 10000 to cut
@@ -86,20 +87,23 @@ class NGSStarPrep:
       await hs.set_temperature(float(temperature))
 
   async def HHS_Shake(self, hhs, speed: int, seconds: float) -> None:
-    """Shake at `speed` rpm for `seconds`; the plate stays locked."""
+    """Shake at `speed` rpm for `seconds`, then stop and unlock the plate (StopShaker)."""
     if self.simulation:
       return
     hs = self._hhs(hhs)
     await hs.shake(speed=speed)  # locks the plate and starts, without waiting
     await self.sleep(seconds * self.time_scale)
     await hs.stop_shaking()
+    await hs.unlock_plate()
 
   async def HHS_Terminate(self, hhs1=0, hhs2=0, hhs3=0, hhs4=0, hhs5=0) -> None:
-    """Every shaker stopped (StopAllShaker), then the temperature control of each handle given."""
+    """Every shaker stopped and its plate unlocked (StopAllShaker), then the temperature control of
+    each handle given."""
     if self.simulation:
       return
     for h in self._hhs_used:
       await self._hhs(h).stop_shaking()
+      await self._hhs(h).unlock_plate()
     for h in (hhs1, hhs2, hhs3, hhs4, hhs5):
       if h:
         await self._hhs(h).deactivate()

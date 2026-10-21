@@ -106,7 +106,11 @@ def _value(a, samples):
   return a
 
 
-def hsl_side(avenio, lay, calls, samples):
+def hsl_side(avenio, lay, calls, samples, after="", before="", answers=None, run_only=False, handover="", stps=(),
+             allow_unresolved=()):
+  """The calls in the HSL; then `after` (HSL text) in the same method, `before` declared ahead of it,
+  `handover` in place of the default DATA_HandOverDataToSMT_NGSStarLoading call, `answers` added to
+  the run's, `stps` the step records. `run_only`: the run, not what the comparison reads."""
   from venus_interop.plr.libraries.ngsstar_loading import NGSStarLoading
 
   L = "NGSSTARLOADING::"
@@ -130,10 +134,10 @@ def hsl_side(avenio, lay, calls, samples):
     'namespace _Method { #include "NGSStarLoading\\\\NGSStarLoading.hs_" }\n'
     'global device ML_STAR ("x.lay", "ML_STAR", hslTrue);\n'
     'sequence t50; sequence t300; sequence t1000;\n' + decl +
-    'namespace _Method { #include "HSLMECCLib.hs_" }\n' + ARRAYTOOLS +
+    'namespace _Method { #include "HSLMECCLib.hs_" }\n' + ARRAYTOOLS + before +
     "namespace _Method { method main() void {\n"
-    f'{L}DATA_HandOverDataToSMT_NGSStarLoading("C:\\\\r\\\\report.csv", 1, "Roche", "Avenio CGP", 0, 0, '
-    '"tc50", "tc300", "tc1000", t50, t300, t1000, 0);\n' + "\n".join(body) + "\n} }\n")
+    + (handover or f'{L}DATA_HandOverDataToSMT_NGSStarLoading("C:\\\\r\\\\report.csv", 1, "Roche", "Avenio CGP", 0, 0, '
+       '"tc50", "tc300", "tc1000", t50, t300, t1000, 0);\n') + "\n".join(body) + "\n" + after + "\n} }\n")
   port = NGSStarLoading(_Deck(lay))  # its layout lookup answers the deck-layout object in the HSL too
 
   def carrier_site(run, p):
@@ -141,10 +145,14 @@ def hsl_side(avenio, lay, calls, samples):
     p["o_str_carrierid"].value, p["o_str_siteid"].value = carrier, site
     return 1
 
-  run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS], [],
-                {"x.lay": lay}, answers={"functions": {"ngsstarloading::_abstract": lambda r, p: 0,
-                                                       "ngsstarloading::_getcarrieridandsiteid_fromlabid": carrier_site,
-                                                       **ARRAYTOOLS_MODELS}})
+  answers = dict(answers or {})
+  functions = {"ngsstarloading::_abstract": lambda r, p: 0,
+               "ngsstarloading::_getcarrieridandsiteid_fromlabid": carrier_site,
+               **ARRAYTOOLS_MODELS, **answers.pop("functions", {})}
+  run = hsl_run(src, avenio / "Library" / "port_test.hsl", [avenio / "Library", avenio / "Methods", *LIBS], stps,
+                {"x.lay": lay}, answers={"functions": functions, **answers}, allow_unresolved=allow_unresolved)
+  if run_only:
+    return run
   from venus_interop.methods.hsl_eval import Device
 
   g = {k.lower(): c.value for cells in run.globals.values() for k, c in cells.items()}
@@ -163,11 +171,12 @@ def hsl_side(avenio, lay, calls, samples):
   return sheets, results, rgt, templates
 
 
-def port_side(lay, calls, samples):
+def port_side(lay, calls, samples, port=None):
+  """The calls through the port (`port`, on a _Deck, when given)."""
   from venus_interop.plr.libraries.ngsstar_loading import LabwareType, NGSStarLoading
 
-  deck = _Deck(lay)
-  port = NGSStarLoading(deck)
+  deck = port.v if port is not None else _Deck(lay)
+  port = port if port is not None else NGSStarLoading(deck)
   results = {}
   for i, (fn, a) in enumerate(calls):
     if fn == "Define_VolumePerWell":

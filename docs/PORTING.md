@@ -250,6 +250,7 @@ in the docstring.
 | `plr/liquid_classes.py` `VenusLiquidClasses` | PLR liquid classes by Venus name, tip type, dispense mode, from `tools/liquid_classes.py`'s JSON | `ML_STARLiquids.mdb` |
 | `plr/libraries/tip_count.py` `TipCounters` | Tip counters that outlive the run (SQLite) | HxElementCounter |
 | `methods/hsl_eval.py` | The HSL interpreter for checking ports. `answers`: `functions` (a library function replaced by a Python model, e.g. its port), `tip_counters`, `labware_data`, `labware_position` (a position's deck x, y, z: `GetLabwarePosition`, `DevGetLabwarePositionEx`), `cfg.<key>` (the instrument configuration: 1 the 1 mL channels, 26 their raster), `liquid_classes`, `simulation` | Venus's runtime |
+| `plr/operator.py` | The operator: `message`, `confirm`, `choose`, `show_table`, `ask_file`, `status`; `ScriptedOperator` (answers by text), `ConsoleOperator`; `RunAborted` | Operator dialogs (VectorCustomDialogs, MessageBox, InputBox); `abort` |
 | `tests/port_harness.py` | `hsl_run` (a source parsed once: give cases' inputs through functions answered per run, as `test_ngsstar_mix_only_port.py` does, and a 32k-line library is parsed once per file, not per case; `max_steps`), `steps_of`, `RecordingDeck`, `RecordingChannels` (`measured`: what a liquid search finds), `assert_same_steps`; stubs and models for libraries missing here (`ARRAYTOOLS`, `CREATE_CHANNEL_PATTERN`, `ARRAYTOOLS_MODELS`) | – |
 | `examples/nist_deck.py` | For demos: `install` (PLR's wastes and grip tools where the layout has its own), `give_room` / `make_room` (sources and destinations sized for a run; cavities filled as one), `write_worklist`, `print_plate_map` | – |
 | `tools/trace_method.py` | `--out` traces, `--calls` call counts, `--status` coverage and the work queue (verdicts in `tools/function_notes.json`) | – |
@@ -265,8 +266,10 @@ Ported libraries, each `plr/libraries/<module>.py` with `LIBRARY` = its Venus na
 | `move_96head_and_arm` | NIST culture-processing Move96HeadAndArm | `test_96head_port.py` |
 | `lmsf_utilities` | NIST LMSF_Utilities (sequence properties) | `test_lmsf_utilities_port.py` |
 | `tip_handling_96`, `tip_count` | NIST Tip Handling with 96-Head; Hamilton HSLTipCountingLib Read2/Write2 | `test_tip_counters_port.py` |
-| `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer, supernatant removal, mixing in place, CO-RE and iSWAP plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_mix_only_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
-| `star_tip_tools` | Hamilton STAR Tip Tools (tip planners Optimized1mLTipPickup and `2`, counters) + HelperLibrary | `test_star_tip_tools_hsl.py` (both planners as HSL: two racks, partly used, with gaps); the planners also run as HSL inside the NGSStar port tests |
+| `ngsstar_processes` | Hamilton NGSStarProcesses: reagent transfer (multi-dispense from troughs and tubes included), supernatant removal, mixing in place, the four bead clean-ups, CO-RE and iSWAP plate transports, incubation timer, tip counters | `test_ngsstar_processes_port.py`, `test_ngsstar_multidispense_port.py`, `test_ngsstar_cleanup_port.py`, `test_ngsstar_mix_only_port.py`, `test_ngsstar_transports_port.py`, `test_ngsstar_state.py` |
+| `star_tip_tools` | Hamilton STAR Tip Tools (tip planners Optimized1mLTipPickup and `2`, counters, DefragTipRacks1mL, Get1mLChannelCount) + HelperLibrary | `test_star_tip_tools_hsl.py` (both planners as HSL: two racks, partly used, with gaps; the defrag on up to four racks, one at the back beyond some channels' reach); the planners also run as HSL inside the NGSStar port tests |
+| `ngsstar_report` | The NGSStar run report (RuntimeReport): text rows, transport and autoload rows; the volume text | `test_ngsstar_report_port.py`; the rows in every NGSStar port test |
+| `ngsstar_loading` (Load_Carrier) | NGSStarLoading's deck loading: the carriers to load, the loading dialog, the tip counters with their refill, PLR's autoload and cover monitoring | `test_ngsstar_load_carrier_port.py` (Avenio's twelve calls; locked or not; a short rack refilled, more tips than the deck holds, too many plates for the stacker) |
 | `ngsstar_loading` | Hamilton NGSStarLoading: volumes per sample, containers and their volumes, the RunData / Mastermix_Prep sheets, labware per process | `test_ngsstar_loading_port.py` (Avenio's own calls, 1/8/24/96 samples) |
 | `ngsstar_prep` | Hamilton NGSStarPrep: heater shakers, CPAC, ODTC on PLR's drivers (an ODTC method run in the background while the method pipettes) | `test_ngsstar_prep_port.py` (Avenio's own calls, both HHS configurations) |
 
@@ -300,12 +303,21 @@ call. `examples/groq_seq_demo.py` shows the whole pattern:
   used). The port takes `faithful=True` to keep Venus's behaviour, and the differential test runs
   faithful; a test of its own covers each repair. List the repairs in the module docstring, each
   with its evidence. So far: NGSStarProcesses' PIP_MixOnly (containers folded onto one labware;
-  the 300 uL copy's endless loop) and STAR Tip Tools' Optimized1mLTipPickup2 (a reload asked with
+  the 300 uL copy's endless loop), its multi-dispense from a trough (the report analysis stopping the
+  run on a column part full), the clean-ups' batch helper (a count of batches it never built), STAR Tip Tools' DefragTipRacks1mL (a round that can move nothing repeats for ever) and STAR Tip Tools' Optimized1mLTipPickup2 (a reload asked with
   tips left).
 - **Operator dialogs** become calls to an operator interface at the same place, with the dialog's
   own text (choices, confirmations, tables, files, pictures); a scripted operator answers them in
   tests and unattended runs, and an unanswered question is an error. (The earlier demos' `Parameters`
-  are pre-answered dialogs.)
+  are pre-answered dialogs.) The interface is `venus_interop.plr.operator`: `message`, `confirm`
+  (OK / Cancel or Yes / No), `choose`, `show_table` (a loading dialog: columns, rows, pictures),
+  `ask_file`, `status`; `ScriptedOperator` answers by text, `ConsoleOperator` on the terminal; Venus's
+  `abort` is `RunAborted`. In the HSL test the dialog component is declared and answered by models
+  that record what it was given (`port_harness.VECTORCUSTOMDIALOGS`), and the test compares that
+  with what the port asked: the same text, table rows and pictures, dialog for dialog.
+- **The run report** (NGSStar's RuntimeReport sheet) is `ngsstar_report.RunReport`, CSV in Venus's
+  eleven columns. The HSL tests point the libraries at a report workbook (`port_harness.REPORT_BOOK`,
+  a fixed `CLOCK` for the stamped rows) and compare its rows with the port's, row for row.
 - **What is left out stays visible** (user, 2026-10-18). Every Venus call the translation doesn't
   carry over (email alerts, the scheduler's file handshakes, error-recovery dialogs, debugging
   message boxes, TipCount::Edit2) gets a comment at that place in the translation, naming the call
@@ -332,6 +344,11 @@ What each needed that the earlier ones had not built (keep a line per port):
 | NGSStarLoading | Excel workbooks read and written with SQL (`Run.workbooks`, SQLite); `Scripting.FileSystemObject`; HSL value types kept (a float operand gives a float; `Floor(x, hslTrue)`), since libraries branch on `GetType`; unassigned variables as integer 0 (CONVENTIONS §11) |
 | NGSStarPrep | Device drivers answered by recording models, compared with recording PLR devices in one vocabulary; PLR's ODTC backend: `upload_method_set`, `execute_method` (venus-plr) |
 | PIP_MixOnly, STAR Tip Tools' planners as HSL | A liquid search (PLR's `probe_liquid_volumes`) compared by where it searches; labware positions and instrument configuration answered (`labware_position`, `cfg.<key>`), `Scripting.FileSystemObject.GetFileName`, Jet's bare `INDEX` column; unqualified names resolved from the current namespace outward only; a source parsed once per test file |
+| _PIP_MultidispenseFromTroughToPlate | A step setting bound to one array element (`<arr> arr[i]`, the round's channel pattern); per-channel settings listed in channel order (records keep the channel blocks in any order: Avenio's 3 to 8, then 1, 2); per-channel mix volumes in `steps.Pipetting`; `hsl_run(stops=...)` for a run Venus would stop; CalcAliquot_v2_1 inferred |
+| DefragTipRacks1mL | A plan as a pure function (`plan_defrag`: rounds of pick-up and put-down) run on PLR's channels (`drop_tips` into rack positions); the library's sort workbook a table of states. In the test: a rack at the back to make the channels' Y reach bind; an endless loop shown by the interpreter's step budget |
+| _PIP_MultidispenseBeadsFromTubesToPlate | The trough loop with the bead copy's differences as parameters; in the interpreter a channel pattern cut at the instrument's channels (`cfg.1`). In the test: where Venus stops is not predicted by a rule but taken from the faithful port, and the HSL must stop exactly there (`hsl_run(stops=...)`); a mutation that AlignSequences makes equivalent (the tube pattern for the pick-up) shown so and the port simplified |
+| The bead clean-ups (Process_CleanUp and three customized) | Nothing new in the interpreter: the first port made only of ported functions. In the test: a function model in the timeline (the incubation timer, to see when one starts), a heater shaker answered at its real library's functions (NIST's HslHamHeaterShakerLib); integer division truncating |
+| The run report, Load_Carrier | The operator interface; `RunReport`; in the interpreter: transport steps' result block (Venus's help: Num, labware, position), the autoload's steps (LoadCarrier's result values 3 and 4 from `answers["autoload"]`), `GetDate` / `GetTime` from `answers["clock"]`, appending to a sheet not yet made; the dialog component's models; `hsl_side`'s hooks in the loading test (calls after, declarations before, the handover, step records) |
 
 ### Parsimony
 
@@ -342,8 +359,15 @@ function runs that the port folds in. Counted over the function bodies.
 | Port | HSL | Python | Why it is shorter |
 |---|---|---|---|
 | Libraries through session 4 (90 functions: GSF-IMS, PlateAndLidMovement, 96-head, LMSF_Utilities, tip counters, NGSStar transfer, STAR Tip Tools v1) | 4,067 | 755 | 5.4x with the shared modules (`sequences`, `steps`) counted |
+| Avenio's NGSStar ports so far (2026-10-19): NGSStarProcesses 16 functions 1,496 -> 290; NGSStarLoading 7, 1,953 -> 288; NGSStarPrep 16, 528 -> 100; STAR Tip Tools 6 + helpers, 950 -> 134 (whole modules on the Python side) | 4,927 | 812 | 6.1x; 4.5x counting the shared `sequences` and `steps` (295) |
 | PIP_MixOnly (+ Create_Channel_Pattern, the pick-up) | 273 | 48 | the loop once, not once per tip type (the per-type caps a table); the step records' settings one `Pipetting` |
 | Optimized1mLTipPickup2 + TipCheck + HelperLibrary sort, sort file, reach | 557 | 70 | shared with v1: the temporary workbook and its SQL become a sort key; the 70 lines serve both planners |
+| Load_Carrier, DATA_TipCounterRead / Write, Evaluate_ResourcesByCarrier and their helpers (10 functions) | 1,154 | ~210 | the three tip types' copies written once (a table of each type's carriers and texts); SQL over RunData a filter; the step-return parsing gone (PLR returns the barcodes); the error-code table's 216 lines reduced to its no-error text, since PLR raises instead (not an equivalence: what a recovered error would report is left out) |
+| _PIP_MultidispenseFromTroughToPlate (its three tip-type copies; the trough check) | 473 | 71 (+16 the inferred CalcAliquot_v2_1) | the loop once, the copies' differences a table (ALIQUOT); the trough check's nested ifs one loop |
+| DefragTipRacks1mL (+ GetDefaultSequence, RemoveTruncatedSequencePositions, Get1mLChannelCount) | 426 | 82 | four SQL queries over a temporary workbook a sort and a filter each; the workbook's states a list |
+| _PIP_MultidispenseBeadsFromTubesToPlate (three tip-type copies, from tubes) | 547 | +9 on the trough loop | the trough loop reused: the bead copy's 1000 uL differences (no pre-dispense or drain, the measure's channels, the dispense height) as parameters |
+| The four clean-ups, _DATA_CalculateAndDefineBatchProcessCleanUp, _HHS_Shake | 423 | 131 | three shared parts (bind, washes, the tail) for four copies; the batch helper's twelve numbered sequence variables a list |
+| The run report: DATA_UpdateInformationIntoReportFile, the transport row, the two error-code tables | 623 | ~55 | the tables' 507 lines down to their no-error texts (as above); the workbook's open-retry-close per row one append |
 
 ### Libraries inferred, not read
 
@@ -355,6 +379,9 @@ says so in its docstring, and the HSL tests answer it with the same reading (`po
 | `CREATE_CHANNEL_PATTERN::Create_Channel_Pattern(first, count, channels, &pattern)` | `pattern` = `count` channels on from channel `first` (1-based), `channels` long: `"0" * (first - 1) + "1" * count`, padded with 0s and cut to `channels`. Its one use, PIP_MixOnly's `(1, positions, 8)`, gives `"11100000"` for three positions and eight 1s for eight or more. Settled by inference (user, 2026-10-19) |
 | `ARRAYTOOLS::get_distinct_from_array(in[], &out[])` | the distinct values, in order of first appearance |
 | `ARRAYTOOLS::ArrayVLookUp(values[], keys[], key, &out[])` | the values whose key equals `key`, in order |
+| `ARRAYTOOLS::Lookup(arr[], value)` | the 1-based index of the first element equal to `value`; 0 when none (Load_Carrier's "is this carrier in RunData", _SortElements' "is this a single digit") |
+| `ALIQUOT_FOR_EASYSTEPS_V2::CalcAliquot_v2_1(dispense seq, volume, pre, reserve, capacity, &loops, channels, rows, &aspirate[], &mix[], &patterns[], &pattern)` | the dispense sequence's positions from the current one, a column (`rows`, no more than the channels) per round, channel i on its i-th; rounds = min(columns left, floor((capacity - pre - reserve) / volume)); a channel aspirates its dispenses' volume + pre + reserve (the pre-dispense goes back into the trough, the reserve is drained after); patterns per round and for the aspirate = the channels with a dispense. Guessed: the mix volume (the aspirate volume). Calls: 1000 uL (50, 50, 1000), 300 uL (10, 10, 300), 50 uL (5, 5, 50); the bead variant (20, 0, 1000). Told the user 2026-10-19; open points in CONVENTIONS §11 |
+| `STRTOKENIZE::StrTokenize(text, delimiter, &tokens[], flag)` | `text` split at `delimiter`. The flag's meaning is a guess: every call passes FALSE, taken as "empty tokens dropped" (`"1,2,"` gives two). Where it matters: a position list ending in a comma (the 1000 uL carrier's) |
 
 ## Inputs
 

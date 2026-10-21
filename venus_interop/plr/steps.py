@@ -24,7 +24,7 @@ class (its aspirate or dispense mix flow rate); MIX_FLOW where no class is known
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 MIX_FLOW = 250.0  # uL/s
 
@@ -34,6 +34,18 @@ MIX_FLOW = 250.0  # uL/s
 OBSERVERS: list = []
 
 
+
+def _per_channel(v) -> Union[float, tuple[float, ...]]:
+  """A setting as the interpreter binds it (one value, or a list where the channels differ)."""
+  if isinstance(v, (list, tuple)):
+    return tuple(float(x or 0) for x in v)
+  return float(v or 0)
+
+
+def _volumes(v) -> list[float]:
+  return list(v) if isinstance(v, tuple) else [v]
+
+
 @dataclasses.dataclass(frozen=True)
 class Pipetting:
   clld: int  # cLLD sensitivity, 0 = off
@@ -41,7 +53,7 @@ class Pipetting:
   fluid_height: float = 0.0  # mm above the bottom (cLLD off)
   liquid_following: bool = False
   mix_cycles: int = 0
-  mix_volume: float = 0.0
+  mix_volume: Union[float, tuple[float, ...]] = 0.0  # one per channel (in channel order) where they differ
   mix_position: float = 0.0  # mm above the surface (aspirate)
   aspirate_mode: int = 0  # 0 aspiration, 1 consecutive aspiration, 2 aspirate all
 
@@ -51,14 +63,14 @@ class Pipetting:
     return cls(clld=int(s.get("cLLD sensitivity", 0) or 0), submerge=float(s.get("submerge depth", 0) or 0),
                fluid_height=float(s.get("fluid height", 0) or 0),
                liquid_following=bool(int(s.get("LiquidFollowing", 0) or 0)),
-               mix_cycles=int(s.get("mix cycles", 0) or 0), mix_volume=float(s.get("mix volume", 0) or 0),
+               mix_cycles=int(s.get("mix cycles", 0) or 0), mix_volume=_per_channel(s.get("mix volume", 0)),
                mix_position=float(s.get("mix position", 0) or 0),
                aspirate_mode=int(s.get("aspirate mode", 0) or 0))
 
   def effective(self) -> "Pipetting":
     """Only what takes effect: the submerge depth with cLLD on, the fluid height with it off, the
     mix's volume and position with cycles. Two steps that pipette alike compare equal."""
-    mixing = self.mix_cycles > 0 and self.mix_volume > 0
+    mixing = self.mix_cycles > 0 and max(_volumes(self.mix_volume)) > 0
     return dataclasses.replace(
       self, submerge=self.submerge if self.clld else 0.0, fluid_height=0.0 if self.clld else self.fluid_height,
       mix_cycles=self.mix_cycles if mixing else 0, mix_volume=self.mix_volume if mixing else 0.0,
@@ -82,11 +94,13 @@ def plr_arguments(step: Pipetting, n: int, aspirate: bool, mix_flow: Optional[fl
     if s.aspirate_mode == 1:
       out["blow_out_air_volumes"] = [0.0] * n
   if s.mix_cycles:
-    mix = Mix(volume=s.mix_volume, repetitions=s.mix_cycles, flow_rate=MIX_FLOW if mix_flow is None else mix_flow)
+    flow = MIX_FLOW if mix_flow is None else mix_flow
+    vols = _volumes(s.mix_volume)
+    mixes = [Mix(volume=v, repetitions=s.mix_cycles, flow_rate=flow) for v in (vols if len(vols) == n else vols * n)]
     if aspirate:
-      out.update(pre_mixes=[mix] * n, mix_positions_from_liquid_surface=[s.mix_position] * n)
+      out.update(pre_mixes=mixes, mix_positions_from_liquid_surface=[s.mix_position] * n)
     else:
-      out.update(post_mixes=[mix] * n)
+      out.update(post_mixes=mixes)
   return out
 
 

@@ -26,6 +26,10 @@ Too few tips is the operator's (a dialog to load more): here an error. The libra
 in a temporary workbook and reads positions from Venus's deck object; the HSL interpreter runs it
 with both modelled (`tests/test_star_tip_tools_hsl.py` compares both planners with the port).
 
+DefragTipRacks1mL moves tips out of the emptiest racks into the gaps of the fullest, a channel slice
+at a time (`plan_defrag`; the library works over a temporary workbook with SQL, read here as a
+table of positions and their states).
+
 Channel Y reach (`HelperLibrary::GetChannelLimits`, 1 mL channels only, no 5 mL, handling or camera
 channels): channel i (1 = back) of n reaches Y <= 614.5 - 9 i and Y >= -1 + 9 (n - i + 1), deck mm.
 """
@@ -142,6 +146,90 @@ def plan_tips(items: Sequence[sq.Item], needed: int, channels: int,
   return sorted(rest, key=lambda it: (it not in chosen, it[0], xy(it)[0], -xy(it)[1]))
 
 
+RACK = 96  # a rack counted as full (the library's "< 96": partial)
+HAS_TIP, EMPTY, EMPTIED, FILLED = 1, 0, -1, 2  # the defrag's states (its sort table's USED column)
+
+
+def plan_defrag(remaining: Sequence[sq.Item], racks: dict[str, Sequence[sq.Item]], channels: int, xy,
+                faithful: bool = False):
+  """DefragTipRacks1mL's plan: (rounds, the tip sequence after). The table is the tips left, in
+  order, then each rack's empty positions in its default order. A round: the racks with tips, the
+  fewest first (fewer than 96; ties by labware id, as the interpreter's SQL gives them: Jet's order
+  is open, CONVENTIONS §11), all but the fullest give tips: channel by channel, the first tip it can
+  reach, X up then Y down, on the first of them that has one; the racks with gaps, the fewest first,
+  all but the emptiest take them: each channel that holds a tip, the first gap it can reach, X down
+  then Y down, else the channel is dropped. Stops when one rack (or none) is left on either side.
+  Moved tips and the gaps they leave are marked apart (FILLED, EMPTIED) and no longer counted. A
+  round yields (pattern, pick-up items, put-down items) as the library builds them: the pick-ups of
+  dropped channels stay in the list (its steps then take them in order for the channels left).
+  After: the positions holding tips, in table order. Repaired (`faithful` raises): a round that can
+  move nothing would repeat for ever."""
+  have = {tuple(it) for it in remaining}
+  table = [tuple(it) for it in remaining] + [tuple(it) for lab in dict.fromkeys(it[0] for it in remaining)
+                                              for it in racks[lab] if tuple(it) not in have]
+  state = [HAS_TIP] * len(remaining) + [EMPTY] * (len(table) - len(remaining))
+  ymax, ymin = channel_limits(channels)
+  where = {it: xy(it) for it in table}
+  rounds = []
+
+  def partial(kind):
+    counts: dict[str, int] = {}
+    for it, s in zip(table, state):
+      if s == kind:
+        counts[it[0]] = counts.get(it[0], 0) + 1
+    return [lab for lab, n in sorted(sorted(counts.items()), key=lambda kv: kv[1]) if n < RACK][:-1]
+
+  def first(c, labs, kind, used, x_sign):
+    for lab in labs:
+      found = sorted((i for i, it in enumerate(table) if it[0] == lab and state[i] == kind
+                      and ymin[c] <= where[it][1] <= ymax[c]),
+                     key=lambda i: (x_sign * where[table[i]][0], -where[table[i]][1]))
+      for i in found:
+        if i not in used:
+          return i
+    return None
+
+  while True:
+    givers = partial(HAS_TIP)
+    if not givers:
+      break
+    used, picks, pattern = set(), [], []
+    for c in range(channels):
+      i = first(c, givers, HAS_TIP, used, 1)
+      pattern.append(i is not None)
+      if i is not None:
+        picks.append(i)
+        used.add(i)
+        if len(picks) == channels:
+          break
+    pattern += [False] * (channels - len(pattern))
+    takers = partial(EMPTY)
+    if not takers:
+      break
+    puts = []
+    for c in range(channels):
+      if pattern[c]:
+        i = first(c, takers, EMPTY, used, -1)
+        if i is None:
+          pattern[c] = False
+        else:
+          puts.append(i)
+          used.add(i)
+          if len(puts) == channels:
+            break
+    if not any(pattern):
+      if faithful:
+        raise RuntimeError("DefragTipRacks1mL: no tip can be moved, and the library tries again for ever")
+      break
+    active = sum(pattern)
+    for i in picks[:active]:  # the library marks the first picks, one per active channel
+      state[i] = EMPTIED
+    for i in puts[:active]:
+      state[i] = FILLED
+    rounds.append(("".join("1" if c else "0" for c in pattern), [table[i] for i in picks], [table[i] for i in puts]))
+  return rounds, [it for it, s in zip(table, state) if s > 0]
+
+
 class StarTipTools:
   def __init__(self, deck, channels: int = 8, xy: Callable[[sq.Item], tuple[float, float]] | None = None,
                counters=None, faithful: bool = False):
@@ -189,6 +277,37 @@ class StarTipTools:
     if order is not None:
       tips.assign(sq.Sequence(tips.name, order))
 
+  def Get1mLChannelCount(self, ML_STAR=None) -> int:
+    """The instrument's 1 mL channels (configuration key 1)."""
+    return self.channels
+
+  def _rack(self, lab: str) -> list[sq.Item]:
+    """HelperLibrary::GetDefaultSequence: every position of a rack, by column (it reads the rack's
+    rows and columns from Venus's deck object): here as the layout sequence listing most of them
+    has them, which is that order for tip racks."""
+    best = max((items for items in self.v.sequences.values()), key=lambda items: sum(it[0] == lab for it in items),
+               default=[])
+    return [tuple(it) for it in best if it[0] == lab]
+
+  async def DefragTipRacks1mL(self, ML_STAR, tip_sequence, pipettes) -> None:
+    """Tips moved from the emptiest racks into the gaps of the fullest (`plan_defrag`), a slice of
+    channels at a time on `pipettes` (PLR's channels): picked up and put down into the rack. The
+    tip sequence then lists what holds tips, from position 1. Its tips from the current position
+    on (HelperLibrary::RemoveTruncatedSequencePositions). Left out: the deck view's used/empty
+    marks (DeckVisualize)."""
+    s = self.v.seq(tip_sequence)
+    left = s.items[s.cur - 1:] if s.cur > 0 else []
+    racks = {lab: self._rack(lab) for lab in dict.fromkeys(it[0] for it in left)}
+    rounds, after = plan_defrag(left, racks, self.channels, self._xy, self.faithful)
+    for pattern, picks, puts in rounds:
+      up = sq.take(sq.Sequence("seq_TipsPickUp", picks), pattern, sq.AUTOMATIC, sq.ALL_POSITIONS)
+      down = sq.take(sq.Sequence("seq_TipsPutDown", puts), pattern, sq.MANUAL, sq.ALL_POSITIONS)
+      on = sorted(up.channels)
+      await pipettes.pick_up_tips([self.v.resolve(up.channels[c]) for c in on], use_channels=[c - 1 for c in on])
+      held = sorted(down.channels)
+      await pipettes.drop_tips([self.v.resolve(down.channels[c]) for c in held], use_channels=[c - 1 for c in held])
+    s.assign(sq.Sequence(s.name, after))
+
   # -- tip counters: the positions still holding tips, carried between runs -------------------
 
   def TipCounter_Read(self, ML_STAR, tip_sequence: str, tip_counter: str, counters=None):
@@ -200,8 +319,8 @@ class StarTipTools:
     stored = counters.read(tip_counter)
     s = self.v.seq(tip_sequence)
     items = ([it for it, status in stored if status == OCCUPIED] if stored is not None
-             else list(self.v.sequences[tip_sequence]))
-    s.assign(sq.Sequence(tip_sequence, items))
+             else list(self.v.sequences[s.name]))
+    s.assign(sq.Sequence(s.name, items))
     return s.total
 
   def TipCounter_Write(self, ML_STAR, tip_sequence: str, tip_counter: str, counters=None):

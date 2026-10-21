@@ -29,6 +29,7 @@ import math
 from typing import Any, Optional
 
 from venus_interop.methods import sequences as sq
+from venus_interop.plr.operator import RunAborted
 
 LIBRARY = "NGSSTARLOADING"  # the Venus namespace ported
 
@@ -57,7 +58,18 @@ class LabwareType:
 
 
 PLT_TIP1000 = "PLT_CAR_2TIP_2PCR_MTP"  # ARW_Global::CarrierType: the carrier with 1000 uL tips and plates
+PLT_STACK = "PLT_CAR_L4ST_0001"  # the plate stacker
+TIP50_01, TIP50_02 = "TIP_CAR_480BC_TIP_50F_PINK_0001", "TIP_CAR_480BC_TIP_50F_PINK_0002"
+TIP300_01, TIP300_02 = "TIP_CAR_480BC_TIP_STF_YELLOW_0001", "TIP_CAR_480BC_TIP_STF_YELLOW_0002"
 TIP_SLOTS = {LabwareType.TIP50: 10, LabwareType.TIP300: 10, LabwareType.TIP1000: 2}  # ARW_Global::TipLocations
+STACK_UNITS = {LabwareType.MIDI_Plate: 4, LabwareType.HSP_Plate: 4, LabwareType.Comfortlid: 8}  # per stack
+TIPS = (50, 300, 1000)  # the tip types, in the library's order (its 1, 2, 3)
+TIP_NAMES = {50: LabwareType.TIP50, 300: LabwareType.TIP300, 1000: LabwareType.TIP1000}
+# A tip type's carriers to unload and load: both of a pair on an NGS STAR
+TIP_CARRIERS = {50: (TIP50_01, TIP50_02), 300: (TIP300_01, TIP300_02), 1000: (PLT_TIP1000,)}
+NO_RELOAD = " No reload of this tip type necessary"
+PREVENTIVE = " Preventive reload of this tip type necessary"
+COVER_OPEN = "Front cover open - close door to proceed run."
 
 MASTERMIX_PREP = ["Mastermix_ID", "Component_ID", "Ratio", "MastermixTube_ID", "MastermixTube_LabwareID",
                   "VolumeMastermixPerTube", "VolumeComponentPerTube", "SourceComponentTube_ID",
@@ -110,23 +122,45 @@ def _volume_text(v: float) -> str:
 
 
 class NGSStarLoading:
-  def __init__(self, deck, ngsstar: bool = True):
+  def __init__(self, deck, ngsstar: bool = True, star=None, operator=None, report=None, planner=None,
+               faithful: bool = False):
     """`deck`: `seq(name)` (live sequences) and `layout` (the layout file, for carriers and sites).
-    `ngsstar`: an NGS STAR (8 channels) rather than a Clinical NGS STARlet (4)."""
-    self.v = deck
+    `ngsstar`: an NGS STAR (8 channels) rather than a Clinical NGS STARlet (4). For loading the
+    deck: `star` (its autoload and front cover), `operator` (an operator.Operator), `report` (the
+    run report, ngsstar_report.RunReport, one in memory when none) and `planner` (STAR Tip Tools,
+    for the tip counters; one on `deck` when none)."""
+    from venus_interop.plr.libraries.ngsstar_report import RunReport
+    from venus_interop.plr.libraries.star_tip_tools import StarTipTools
+
+    self.v, self.star, self.operator, self.faithful = deck, star, operator, faithful
+    self.report = report if report is not None else RunReport()
+    self.planner = planner or StarTipTools(deck, faithful=faithful)
     self.DATA_HandOverDataToSMT_NGSStarLoading(ngsstar=ngsstar)
 
   def DATA_HandOverDataToSMT_NGSStarLoading(self, report_file: str = "", platform: int = 1, kit_provider: str = "",
                                             kit_name: str = "", mph_used: int = 0, lock_unlock: int = 0,
-                                            *_tips_and_counters, ngsstar: Optional[bool] = None) -> None:
-    """The run's start: the platform, a fresh RunData workbook, the trough bookkeeping emptied.
-    The report file, pictures and the operator's tip dialogs are not ported."""
+                                            counter50: str = "", counter300: str = "", counter1000: str = "",
+                                            tips50=None, tips300=None, tips1000=None, check_barcodes: int = 0,
+                                            ngsstar: Optional[bool] = None) -> None:
+    """The run's start: the platform, a fresh RunData workbook, the trough bookkeeping emptied, the
+    tip counters' names and copies of the tip sequences (the library keeps its own). Whether to
+    lock the front cover around loading, and (`check_barcodes`) to read the 1000 uL carrier's
+    other labware's barcodes too. The report file is the RunReport given."""
     self.ngsstar = platform == 1 if ngsstar is None else ngsstar
     self.run_data, self.mastermix_prep = Sheet(RUNDATA), Sheet(MASTERMIX_PREP)
     self.rgt_total_volume: list[float] = []  # t_arr_flt_RGT_TotalVolume, ..._RGT_ReagentName
     self.rgt_reagent_name: list[str] = []
     self.rgt_sequences: list[sq.Sequence] = []  # t_arr_seq_RGT_SequencesToAspirate
     self.last_mastermix_name = ""
+    self.lock_unlock, self.check_barcodes = bool(int(lock_unlock)), bool(int(check_barcodes))
+    self.counters = {50: counter50, 300: counter300, 1000: counter1000}
+    self.tips = {t: self.v.seq(s).copy() for t, s in zip(TIPS, (tips50, tips300, tips1000)) if s is not None}
+    platform_name = "NGSStar" if self.ngsstar else "ClinicalNGSStarlet"
+    folder = ("NGSStarMPH" if int(mph_used) else "NGSStarChannel") if self.ngsstar else "ClinicalNGSStarlet"
+    self.pictures = (f"C:\\Program Files (x86)\\HAMILTON\\{platform_name}\\{kit_provider}\\{kit_name}"
+                     f"\\Library\\NGSStarLoading\\{folder}Pictures\\")  # t_str_LoadingPicturesFileDirectory
+    self.carriers_to_load: list[str] = []  # t_arr_strCarrierName_Distinct
+    self.totals: dict[str, int] = {}
 
   # -- what one sample takes -----------------------------------------------------------------
 
@@ -382,3 +416,271 @@ class NGSStarLoading:
                            DB_MasterMixComponentName="", DB_ReagentType="LabwareResource", DB_PrepareMastermixOnDeck=0,
                            DB_ReagentNameANDLabwareType=labware_name if labware_type == labware_name
                            else f"{labware_type} ({labware_name})")
+
+  # -- loading the deck ----------------------------------------------------------------------
+
+  def Evaluate_ResourcesByCarrier(self) -> None:
+    """The carriers RunData names (what to load), and the totals the method reads: each tip type's
+    units (its last row's), and the plates and lids on the stacker and the ODTC (summed)."""
+    rows = self.run_data.rows
+    self.carriers_to_load = list(dict.fromkeys(r["DB_CarrierName"] for r in rows if r["DB_CarrierName"]))
+
+    def units(labware_type, carrier=None):
+      found = [r for r in rows if _same(r["DB_LabwareType"], labware_type)
+               and (carrier is None or _same(r["DB_CarrierName"], carrier))]
+      if not found:
+        return 0
+      return sum(r["DB_Units"] or 0 for r in found) if carrier else (found[-1]["DB_Units"] or 0)
+
+    self.totals = {"50": units(LabwareType.TIP50), "300": units(LabwareType.TIP300),
+                   "1000": units(LabwareType.TIP1000), "MIDI": units(LabwareType.MIDI_Plate, PLT_STACK),
+                   "HSP": units(LabwareType.HSP_Plate, PLT_STACK),
+                   "ComfortLid": units(LabwareType.Comfortlid, "MFX_CAR_ODTC_MTP_0001")}
+
+  def _loading_list(self, carrier: str):
+    """What the loading dialog shows for `carrier`, from its RunData rows: (position, quantity,
+    description) rows sorted by position; the 1000 uL carrier's positions to read barcodes on; the
+    rows' reagent names; the last row. Kept as the library has them: on the 1000 uL carrier a
+    tip row's position is every tip position so far ("1,2,"); a stacker's sites each show the
+    stack's size or the remainder, not what is left (three sites for 6 plates: 4, 4, 2)."""
+    positions, quantities, descriptions, names = [], [], [], []
+    plt1000, multiple, sites, per_stack, last = "", 0, 0, 0, None
+    for r in self.run_data.where("DB_CarrierName", carrier):
+      last = r
+      names.append(r["DB_ReagentName"])
+      pos = r["DB_PositionID"] or ""
+      if carrier == PLT_TIP1000:
+        if r["DB_LabwareType"] == LabwareType.TIP1000:
+          plt1000 += pos + ","
+          positions.append(plt1000)
+        else:
+          if self.check_barcodes:
+            plt1000 += pos + ","
+          positions.append(pos)
+      else:
+        multiple = pos.find(",")
+        if not pos:
+          positions.append(r["DB_SiteID"] or "")
+        elif multiple >= 0 and r["DB_CarrierName"] == PLT_STACK:
+          tokens = [t for t in pos.split(",") if t]
+          sites = len(tokens)
+          positions += tokens
+        else:
+          sites = 1
+          positions.append(pos)
+      if carrier == PLT_STACK:
+        per_stack = STACK_UNITS.get(r["DB_LabwareType"], per_stack)
+      description = r["DB_ReagentNameANDLabwareType"] or ""
+      units = r["DB_Units"] or 0
+      if "RGT" in carrier:
+        quantities.append(_volume_text(r["DB_TotalVolume"] or 0.0))
+        descriptions.append(description)
+      elif multiple != 0 and carrier == PLT_STACK:
+        if units > per_stack * sites:
+          raise RunAborted("The number of elements to stack exceeds the total number of positions in "
+                           "the stack deck sequence. Review maximum number of elements in stack. Method will abort")
+        last_site = units % per_stack or per_stack
+        done, per_site = False, 0
+        for k in range(1, sites + 1):
+          if not done:
+            per_site = units if units <= per_stack else (per_stack if k != sites else last_site)
+          quantities.append(str(per_site))
+          descriptions.append(description)
+          done = units - per_site == 0
+          if done:
+            per_site = 0
+      else:
+        quantities.append(_text(units))
+        descriptions.append(description)
+    rows = sorted(f"{_position_text(p)}${q}${d}" for p, q, d in zip(positions, quantities, descriptions))
+    table = [tuple(row.split("$")[:3]) for row in rows]
+    return table, plt1000[:-1], names, last
+
+  async def _cover_unlocked(self):
+    if self.lock_unlock:
+      await cover_unlocked(self.star)
+
+  async def _cover_locked(self):
+    if self.lock_unlock:
+      await cover_locked(self.star, self._ask)
+
+  def _ask(self, kind: str, text: str, **kw):
+    if self.operator is None:
+      raise RunAborted(f"the operator is asked, and there is none: {text}")
+    return getattr(self.operator, kind)(text, **kw)
+
+  def _carrier_sites(self, carrier: str) -> list[tuple[str, str]]:
+    """The carrier's (site id, labware) holding labware, in the layout's order."""
+    return [(p.fields.get("SiteId", ""), p.id) for p in self.v.layout.labware if p.fields.get("Template") == carrier]
+
+  async def _unload(self, carrier: str) -> None:
+    if self.star is not None:
+      await self.star.autoload.unload_carrier(self.v.resource(carrier))
+
+  async def _load(self, carrier: str, barcodes: str, report: bool = True) -> None:
+    """LoadCarrier, reading the barcodes asked ("?" or "*": all; "TIP1,TIP2": those sites; "":
+    none), and the report's rows for the barcodes read (_DATA_AnalyzeStepReturnValueOfAutoLoadStep...).
+    Unverified (CONVENTIONS §11): that PLR's container positions are the carrier's sites holding
+    labware in the layout's order, and the position Venus gives a plate's barcode (none here)."""
+    from venus_interop.plr.libraries.ngsstar_report import AUTOLOAD_OK
+
+    if self.star is None:
+      return
+    read = await self.star.autoload.load_carrier(self.v.resource(carrier), barcode_reading=barcodes != "")
+    if not report:
+      return
+    wanted = None if barcodes in ("?", "*") else {p for p in barcodes.split(",") if p}
+    sites = self._carrier_sites(carrier)
+    for position, barcode in sorted((read or {}).get("container_barcodes", {}).items()):
+      site, labware = sites[position] if position < len(sites) else ("", "")
+      if barcode and (wanted is None or site in wanted):
+        # the target and the pipetting columns are variables the library never assigns: "0" if one
+        # is integer 0 (CONVENTIONS §11)
+        self.report.add({**self.report.stamp(), "LabID Source": labware, "Barcode": barcode,
+                         "Transport information": AUTOLOAD_OK, "LabID Target": "0", "PosID Target": "0",
+                         "Aspiration information": "0", "Dispense information": "0"})
+
+  async def Load_Carrier(self, ML_STAR, carrier: str, skip_loading=0, loadable=1, no_dialogs=0,
+                         main_image: str = "", sub_image: str = "") -> bool:
+    """Have the operator load `carrier` (one RunData names; else nothing is done): the autoload
+    takes it out (both of a tip pair on an NGS STAR), the operator is shown what goes on it
+    (positions, quantities, what) with its pictures, a tip carrier's counter is read and edited
+    for its tip type, and the autoload loads it back, reading barcodes; the barcodes read go into
+    the run report. `skip_loading` or not `loadable`: only the dialog and the tip counters.
+    Kept as the library has it: of a tip pair's loads, only the last one's barcodes are reported."""
+    if carrier not in self.carriers_to_load:  # ARRAYTOOLS::Lookup (inferred: PORTING)
+      return False
+    moved = not int(skip_loading) and int(loadable)
+    pair = TIP_CARRIERS[50 if carrier == TIP50_01 else 300] if carrier in (TIP50_01, TIP300_01) else None
+    await self._cover_unlocked()
+    if moved:
+      for c in (pair if pair and self.ngsstar else (carrier,)):
+        await self._unload(c)
+    table, plt1000, names, last = self._loading_list(carrier)
+    if not int(no_dialogs):
+      images = [self.pictures + main_image] + ([self.pictures + sub_image] if sub_image else [])
+      if not self._ask("show_table", "Press OK to Continue, Cancel to Abort", title=carrier,
+                       columns=["Position", "Quantity", "Description"], rows=table, images=images):
+        raise RunAborted(f"{carrier}: loading cancelled")
+      if "TIP_" in carrier or "Tip" in carrier:
+        tip_type = 0  # never assigned when no row names a tip type (CONVENTIONS §11: integer 0)
+        name = (last or {}).get("DB_ReagentName") or ""
+        if TIP_NAMES[50] in name:
+          tip_type = 1
+        if TIP_NAMES[300] in name:
+          tip_type = 2
+        if any(TIP_NAMES[1000] in (n or "") for n in names):
+          tip_type = 3
+        units = (last or {}).get("DB_Units") or 0
+        await self.DATA_TipCounterRead(ML_STAR, units, units, units, tip_type, 1, 0)
+        self.DATA_TipCounterWrite(ML_STAR)
+    if moved:
+      await self._cover_locked()
+      if pair:
+        both = pair[:2 if self.ngsstar else 1]
+        for c in both:
+          await self._load(c, "?", report=c == both[-1])
+      else:
+        await self._load(carrier, plt1000 if carrier == PLT_TIP1000 else "*")
+    return True
+
+  # -- tip counters --------------------------------------------------------------------------
+
+  def DATA_TipCounterWrite(self, ML_STAR=None) -> None:
+    """The library's copies of the tip sequences into their counters (STAR_TIP_TOOLS::TipCounter_Write)."""
+    for t, seq in self.tips.items():
+      self.planner.TipCounter_Write(ML_STAR, seq, self.counters[t])
+
+  async def DATA_TipCounterRead(self, ML_STAR, required50, required300, required1000, tip_types, always_edit=1,
+                                show_calculation=0) -> None:
+    """The tip sequences of `tip_types` (1: 50, 2: 300, 3: 1000 uL, 4: all) from their counters,
+    the operator editing them first when `always_edit`. With fewer tips than required: past what
+    the deck holds (960 of 50 or 300 uL, 192 of 1000), the operator is told a reload will come;
+    otherwise shown what to refill, asked whether to refill every type, and each type to refill
+    is unloaded, its counter edited, and loaded again (its barcodes into the report).
+
+    Kept as the library has them: what is left is the end less the current position plus one, so
+    a used-up rack (both 0) counts one tip; the operator's Cancel on the refill list is acted on
+    only after the question that follows it, and ignored on the reload notice; the channel count
+    the refill reads is never set in this library, so it takes the Clinical STARlet's branch and
+    an NGS STAR refills only the first carrier of each pair. The consumed-tip counts the library
+    works out are used nowhere and not ported."""
+    which = {1: (50,), 2: (300,), 3: (1000,), 4: TIPS}.get(int(tip_types), ())
+    required = dict(zip(TIPS, (int(required50), int(required300), int(required1000))))
+    texts = dict.fromkeys(TIPS, NO_RELOAD)
+    short = False
+    for t in which:
+      if int(always_edit):
+        self.planner.TipCounter_Edit(ML_STAR, self.tips[t], self.counters[t])
+        self.DATA_TipCounterWrite(ML_STAR)
+      else:
+        self.planner.TipCounter_Read(ML_STAR, self.tips[t], self.counters[t])
+      s = self.tips[t]
+      if s.end - s.cur + 1 < required[t]:
+        short = True
+        full = required[t] > (96 if t == 1000 else 960)
+        texts[t] = ("\nPlease load 2 (only 1 for MPH version) full racks of 1000ul tips.  You will need to come back "
+                    "later to replenish." if full and t == 1000 else
+                    f"\nPlease load two full carriers of {t}ul tips.  You will need to come back later to replenish."
+                    if full else f"\nPlease load more {t}ul tips.  You will need at least this many:  {required[t]}")
+    if short:
+      later = any(required[t] > (192 if t == 1000 else 960) for t in which)  # t_blnReduceTip1000sequence never set
+      items = [f" Tip type {t} ul filter : {texts[t]}" for t in TIPS]
+      scheduled = ("The amount of needed tips exceeds the maximum capacity of available tips. A reload step will be "
+                   "scheduled within the process.")
+      if later:
+        self._ask("confirm", "Not enough tips available.", title=scheduled, items=items)
+        texts = dict.fromkeys(TIPS, NO_RELOAD)
+      else:
+        ok = self._ask("confirm", "Not enough tips available - refill tips according to shown list", title=scheduled,
+                       items=items)
+        refill_all = self._ask("confirm", "Preventative tip exchange : Do you want to take the chance to reload all "
+                                          "tip types?", yes_no=True)
+        if not ok:
+          raise RunAborted("not enough tips: cancelled")
+        if refill_all:
+          texts = dict.fromkeys(TIPS, PREVENTIVE)
+      for t in TIPS:
+        if texts[t] != NO_RELOAD:
+          await self._refill(ML_STAR, t)
+    self.DATA_TipCounterWrite(ML_STAR)
+
+  async def _refill(self, ML_STAR, t: int) -> None:
+    """A tip type's carrier out, its counter edited, and in again. The library unlocks and locks
+    the cover around it (LockFrontCover only, no cover monitoring switched): here the operator is
+    asked to close the cover while it is open, as the lock's retry does."""
+    carriers = TIP_CARRIERS[t][:1]  # t_intNumberOfAllAvailableChannels == 8 never holds (see DATA_TipCounterRead)
+    for c in carriers:
+      await self._unload(c)
+    self.planner.TipCounter_Edit(ML_STAR, self.tips[t], self.counters[t])
+    self.DATA_TipCounterWrite(ML_STAR)
+    for c in carriers:
+      await self._load(c, "*")
+    if self.lock_unlock and self.star is not None and self.star.front_cover is not None:
+      while await self.star.front_cover.request_state() == "open":
+        self._ask("message", COVER_OPEN, title="Front cover monitoring")
+
+
+async def cover_unlocked(star) -> None:
+  """The front cover's monitoring off (C0CD) and the cover unlocked. PLR has no cover lock (its
+  FrontCover leaves lock and unlock out, unverified on hardware): only the monitoring is set."""
+  if star is not None and getattr(star, "front_cover", None) is not None:
+    await star.front_cover.disable_control()
+
+
+async def cover_locked(star, ask) -> None:
+  """The cover locked, the operator asked (`ask`, as `_ask`) to close it while it is open (Venus
+  retries the lock after its dialog), then the monitoring on again (C0CE)."""
+  if star is None or getattr(star, "front_cover", None) is None:
+    return
+  while await star.front_cover.request_state() == "open":
+    ask("message", COVER_OPEN, title="Front cover monitoring")
+  await star.front_cover.enable_control()
+
+
+def _position_text(p: str) -> str:
+  """_SortElements' position: 1 to 9 as 01 to 09; a list ("1,12") one a line, single digits so
+  ("01" and "12" on two lines)."""
+  if p in [str(i) for i in range(1, 10)]:
+    return "0" + p
+  return "\n".join("0" + t if len(t) == 1 else t for t in p.split(",") if t)
