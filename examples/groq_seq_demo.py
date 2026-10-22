@@ -70,6 +70,7 @@ from venus_interop.plr.liquid_classes import VenusLiquidClasses  # noqa: E402
 
 from pylabrobot.hamilton.star.device import RECORDING_STAR, STARDevice  # noqa: E402
 from pylabrobot.resources import set_tip_tracking, set_volume_tracking  # noqa: E402
+from venus_interop.plr import faithful  # noqa: E402
 
 LAYOUT = "5ae1a84b57e5.lay"  # GROQ-Seq.2_TFs.lay, both methods'
 GRIP = "COREGripTool_OnWaste_1000ul_0001"
@@ -370,6 +371,7 @@ async def main(corpus: pathlib.Path, which: str, view: bool, p: Parameters, trac
   print("not on the deck at the start:", ", ".join(v.clear_absent(trace)))
   star = STARDevice(deck=v.deck, simulation=True, declared_configuration_json=RECORDING_STAR, name="STAR")
   await star.setup()
+  faithful.apply(star)  # Venus's defaults when PLR_VENUS_FAITHFUL_CFG is set
   fill(v)
 
   if view:

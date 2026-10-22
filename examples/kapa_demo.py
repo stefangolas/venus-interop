@@ -44,6 +44,7 @@ from pylabrobot.lib.liquid_handling.mix import Mix  # noqa: E402
 from pylabrobot.resources import Coordinate, Plate, Resource, set_tip_tracking  # noqa: E402
 from pylabrobot.resources import set_volume_tracking  # noqa: E402
 from pylabrobot.visualizer3D.facility import Facility  # noqa: E402
+from venus_interop.plr import faithful  # noqa: E402
 
 SAMPLE_VOLUME = 70.0  # uL: DNA + fragmentation, end repair, adapters, ligation master mixes
 BEADS = 88.0  # uL, 1.0X
@@ -188,6 +189,7 @@ async def main(view: bool, n: int, steps=("cleanup", "odtc"), housing: bool = Tr
   k = build_kapa_deck(extension_housing=housing)
   facility = build_facility(k)
   await k.star.setup()
+  faithful.apply(k.star)  # Venus's defaults when PLR_VENUS_FAITHFUL_CFG is set
   channels_y = await k.star.pipettes.request_y_positions()  # where a replay puts them back
   await k.odtc.setup()
   fill(k, n)

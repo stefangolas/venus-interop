@@ -305,6 +305,11 @@ class _Exporter:
         if abs(cx - rx) < TOL and abs(cy - ry) < TOL:
           f.update({"SiteId": rules.rail_site_id(max(1, round(r.get_size_x() / rules.TRACK_WIDTH)), rail),
                     "ZTransValue": "1"})
+    if f["ZTransValue"] == "2":
+      from venus_interop.plr import plr_import
+      # Venus reads a hand-set ZTrans as the container floor, not the rack's bottom
+      floor = venus_z + plr_import.z_above_bottom(2, d if isinstance(d, Rack) else None, self.store)
+      f["ZTrans"] = fmt(round(floor, 4))
     positions = rules.default_positions(d) if isinstance(d, Rack) and d.rows and d.columns else (
       [it.get_identifier() if hasattr(it, "get_identifier") else str(i + 1)
        for i, it in enumerate(r.get_all_items())] if isinstance(r, ItemizedResource) else [])

@@ -55,6 +55,7 @@ from pylabrobot.lib.liquid_handling.head_alignment import get_items_under_channe
 from pylabrobot.lib.liquid_handling.mix import Mix  # noqa: E402
 from pylabrobot.resources import Plate, TipRack, set_tip_tracking, set_volume_tracking  # noqa: E402
 from pylabrobot.resources.hamilton import HamiltonTip  # noqa: E402
+from venus_interop.plr import faithful  # noqa: E402
 
 LAYOUT = "ce242e85d05d.lay"  # Fitness Selection 2.With DNA Extraction.lay
 WIDE_BORE_LENGTH = 79.8  # mm, the method's `wide_bore_length`: firmware length 71.8 + fitting 8
@@ -350,6 +351,7 @@ async def main(corpus: pathlib.Path, view: bool, culture_volume: float, time_sca
     v.resource(name)._frame_height = 0.0
   star = STARDevice(deck=v.deck, simulation=True, declared_configuration_json=RECORDING_STAR, name="STAR")
   await star.setup()
+  faithful.apply(star)  # Venus's defaults when PLR_VENUS_FAITHFUL_CFG is set
   fill(v, culture_volume, 1)
   model = None
   if models is not None:  # the animated MPE² where the layout has its unit, seated under its plates

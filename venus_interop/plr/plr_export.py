@@ -49,7 +49,7 @@ def _update_position(p: Placement, r: Resource, store: DefinitionStore) -> None:
   dx, dy = now[0] - have[0], now[1] - have[1]
   x, y, _ = p.tform
   p.set_tform(x + dx, y + dy)
-  p.z = now[2]
+  p.z = now[2] + (p.z - have[2])  # ZTrans is measured from what its ZTransValue says, not the bottom
 
 
 def plr_to_lay(deck: Deck, store: DefinitionStore, allow_unmapped: bool = False) -> Layout:

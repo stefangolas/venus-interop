@@ -101,10 +101,12 @@ Measured on 4,467 racks on carrier sites in the corpus and the NGS layouts, with
 |---|---|---|---|
 | the site's Z | 3,840 | 0 or 1 (3,730); 2 (110) | **Z follows the site.** Within 0.3 mm in another 69, all hand nudges |
 | the rack below + that rack's `StackHt` | 140, plus whole chains | 1 | **Stacks are chains:** each rack sits on the one below at that one's `StackHt`. Only the bottom of a chain can be offset from the site, e.g. MIDI plates on `PLT_CAR_L4ST` at +4, +32.85, +61.6 (steps of 28.75); ComfortLids at +2.0 … +22.1 (steps of 6.7); Hard-Shell plates at −31, −18.75, −6.5 (steps of 12.25). |
-| site Z + the rack's container base (`Cntr.1.base`) | 93 | **always 2** | Tip racks, wastes and teaching blocks: −83.5 (`HTF_L`), −72.5, −39, −29.5 (CO-RE 96 tip supports), −52 (teaching needles), −22 (slide wastes), +23 (verification). As if the site height was typed into a field meaning the container base. Which height the robot uses is a Venus check. |
+| site Z + the rack's container base (`Cntr.1.base`) | 93 | **always 2** | Tip racks, wastes and teaching blocks: −83.5 (`HTF_L`), −72.5, −39, −29.5 (CO-RE 96 tip supports), −52 (teaching needles), −22 (slide wastes), +23 (verification). Venus answers it (FIRMWARE_EQUIVALENCE §2.4): a `ZTransValue` 2 height is the container floor, so these racks sit on their site. |
 | anything else | 325 | 2 in 93% | Hand-set or taught heights |
 
 So `ZTransValue` 0 or 1 is reliable: the rack is on its site or on a stack (18 exceptions in 3,900). Only `ZTransValue 2` carries a height that has to be kept.
+
+**What the stored height measures** is also set by `ZTransValue`, as Venus's own positions show (the sweep, FIRMWARE_EQUIVALENCE §2.4 and §5): 1 = the rack's bottom, 0 = the container base (`Cntr.1.base`), 2 = the container floor (base + the `.ctr`'s `BaseMM`). The table above compares stored heights with site heights; where the labware actually is follows from the stored height by this rule, which `plr_import.venus_corner` applies. A `ZTransValue` 0 rack stored at its site's Z therefore stands `Cntr.1.base` below the site in Venus.
 
 **Several racks on one site:**
 - **At the same height:** alternatives (one object or a choice), not two objects.

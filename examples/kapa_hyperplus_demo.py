@@ -93,6 +93,7 @@ from pylabrobot.lib.liquid_handling.mix import Mix  # noqa: E402
 from pylabrobot.resources import Coordinate, Lid, Plate, TipRack, set_tip_tracking, set_volume_tracking  # noqa: E402
 from pylabrobot.resources.hamilton import hamilton_1_trough_60mL_Vb  # noqa: E402
 from pylabrobot.resources.hamilton.core_grippers import hamilton_core_gripper_1000ul_at_waste  # noqa: E402
+from venus_interop.plr import faithful  # noqa: E402
 
 LAYOUT = pathlib.Path("protocols", "KAPA_HyperPrep", "KAPA_HyperPlus_Deck.lay")
 # The layout's tip support file, missing here; Hamilton's CO-RE II ST-filter support in the corpus
@@ -479,6 +480,7 @@ async def main(corpus: pathlib.Path, ngs: pathlib.Path, view: bool, samples: int
   prepare(v, samples, min(dna_input_ng, 50))
   star = STARDevice(deck=v.deck, simulation=True, declared_configuration_json=RECORDING_STAR, name="STAR")
   await star.setup()
+  faithful.apply(star)  # Venus's defaults when PLR_VENUS_FAITHFUL_CFG is set
 
   if view:
     from pylabrobot.hamilton.star.motion import attach_viewer_motion

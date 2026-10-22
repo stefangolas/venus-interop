@@ -2,6 +2,28 @@
 
 Notes for anyone, human or agent, changing this repository. Read [SPEC.md](SPEC.md) for the architecture and [docs/CONVENTIONS.md](docs/CONVENTIONS.md) for the rules the code implements. To port a Venus library or translate a method, follow [docs/PORTING.md](docs/PORTING.md).
 
+## Venus-faithful mode: `PLR_VENUS_FAITHFUL_CFG`
+
+One environment variable decides whether translated methods use Venus's defaults or PLR's, wherever
+a port leaves a setting to the driver. It's the only switch: every Venus-faithful behaviour joins it,
+none gets a flag of its own.
+
+| Value | Effect |
+|---|---|
+| unset or empty | PLR's own defaults; nothing changes |
+| `stock` | Venus's stock values (`venus_interop.plr.faithful.STOCK`) |
+| a path to an instrument `.cfg` (`HAMILTON\Config\ML_STAR.cfg`, `ML_Starlet.cfg`, ...) | that instrument's values |
+
+- **Where it acts:** `faithful.apply(star)`, called after `star.setup()` (every demo does). A value a
+  port passes explicitly always wins.
+- **What it covers so far:** traverse heights (`TraverseHeight` for the channels and tip pick-up and
+  eject, `ZSwapTraverseHeight` for the CO-RE gripper, `Head96TraverseHeight`). Venus-faithful LLD
+  will join it.
+- **When to set it:** for any 1:1 comparison with Venus (`tools/venus_sim/README.md`, "Running the
+  1:1 tests"); `marionette_plr_firmware.py` sets it itself. To keep it on for a machine:
+  `setx PLR_VENUS_FAITHFUL_CFG "C:\Program Files (x86)\HAMILTON\Config\ML_Starlet.cfg"` (new shells
+  only).
+
 ## Ground rules
 
 - **Never run `HxCfgFilConverter.exe`, or any Hamilton GUI tool, from scripts.** The converter sends `{ENTER}` to whatever window has focus. Everything it does, `files.hxcfg` does.

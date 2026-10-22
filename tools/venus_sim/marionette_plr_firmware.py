@@ -1,12 +1,15 @@
 """Run examples/marionette_demo.py on PLR's simulated STAR and write every firmware command it sends,
 one per line, to <work>/phase3/marionette_plr.fw (the simulator's own exchange log, as a real link
-logs it). Needs the venus-plr PLR worktree first on PYTHONPATH.
+logs it). Needs the venus-plr PLR worktree first on PYTHONPATH. Venus-faithful defaults are on:
+PLR_VENUS_FAITHFUL_CFG, when not already set, is the instrument .cfg the Venus run used
+(Config/ML_Starlet.cfg), else "stock".
 
   python marionette_plr_firmware.py"""
 import asyncio
+import os
 import sys
 
-from paths import CORPUS, NIST, REPO, WORK
+from paths import CONFIG, CORPUS, NIST, REPO, WORK
 
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "examples"))
@@ -18,6 +21,9 @@ OUT = WORK / "phase3" / "marionette_plr.fw"
 
 
 def main() -> None:
+  cfg = CONFIG / "ML_Starlet.cfg"
+  os.environ.setdefault("PLR_VENUS_FAITHFUL_CFG", str(cfg) if cfg.is_file() else "stock")
+  print("PLR_VENUS_FAITHFUL_CFG =", os.environ["PLR_VENUS_FAITHFUL_CFG"])
   sent = []
   cls = next(c for c in vars(simulator).values() if isinstance(c, type) and "_log_exchange" in vars(c))
   orig = cls._log_exchange

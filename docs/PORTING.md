@@ -28,7 +28,8 @@ port is described as matching Venus.
 **The acceptance check is firmware equivalence in Venus's own simulation**, and above all the
 spatial layer. [FIRMWARE_EQUIVALENCE.md](FIRMWARE_EQUIVALENCE.md) is the procedure: configuration
 map, comparison, the position sweep, the spatial rules found, heuristics, open work. The harness is
-`tools/venus_sim` (setup in its README). The interpreter and per-function tests above are
+`tools/venus_sim`. **How to run the 1:1 tests** (position test, firmware test: commands, inputs, pass
+criteria, clean-up) is its README's "Running the 1:1 tests". The interpreter and per-function tests above are
 scaffolding: they show a port calls what the library calls. Venus's simulation shows what the
 instrument would do.
 

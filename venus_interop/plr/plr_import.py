@@ -70,13 +70,26 @@ def layout_metadata(layout: Layout) -> dict:
 # ---------------------------------------------------------------------------------------- geometry
 
 
+def z_above_bottom(z_mode: int, rack: Optional[Rack], store: DefinitionStore) -> float:
+  """How far above the rack's bottom a placement's stored ZTrans is, by its ZTransValue, as Venus
+  reports positions (docs/FIRMWARE_EQUIVALENCE.md section 2.4): 1 = the rack's bottom, 0 = the
+  container base (Cntr.1.base), 2 = the container floor (the base + the .ctr's BaseMM)."""
+  if rack is None or z_mode == 1:
+    return 0.0
+  base = rack.num("Cntr.1.base")
+  if z_mode == 0:
+    return base
+  ctr = store.ref(rack, "Cntr.1.file")
+  return base + (ctr.num("BaseMM") if ctr is not None else 0.0)
+
+
 def venus_corner(p: Placement, store: DefinitionStore) -> tuple[float, float, float]:
   """Front-left-bottom corner of a placement in deck coordinates, as Venus places it."""
   x, y, _ = p.tform
   rack = store.rack(p.file)
   if rack is not None:
     x, y = rules.rack_corner((x, y), rack)
-  return x, y, p.z
+  return x, y, p.z - z_above_bottom(p.z_mode, rack, store)
 
 
 def _tip_creator(rack: Rack, store: Optional[DefinitionStore] = None):
@@ -170,7 +183,9 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
     return Resource(name, sx, sy, sz, category="venus_rack")
   wx, wy, depth = _container_size(rack, store)
   bx, by = rack.boundary
-  dz = max(rack.num("Cntr.1.base"), 0.0)
+  # a negative base (filter and binding plates, the 96-head wastes) puts the containers below the
+  # rack's bottom, as Venus reports them (docs/FIRMWARE_EQUIVALENCE.md section 2.4)
+  dz = rack.num("Cntr.1.base")
   if rack.is_tip_rack:
     creator, how = _tip_creator(rack, store)
     probe = creator("probe")

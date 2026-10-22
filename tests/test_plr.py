@@ -11,7 +11,7 @@ from pylabrobot.resources import Coordinate, Deck, ItemizedResource, Plate  # no
 from conftest import LAYOUTS, corpus_params  # noqa: E402
 from venus_interop.files import hxcfg  # noqa: E402
 from venus_interop.plr import plr_export, plr_import
-from venus_interop.files.definitions import Carrier, DefinitionStore, Rack  # noqa: E402
+from venus_interop.files.definitions import Carrier, Definition, DefinitionStore, Rack  # noqa: E402
 from venus_interop.files.layout import Layout, read_layout, write_layout  # noqa: E402
 
 logging.getLogger("pylabrobot").setLevel(logging.ERROR)
@@ -57,6 +57,41 @@ def test_tiny_geometry():
   a1 = plate.get_item("A1").get_absolute_location(x="c", y="c")
   assert (a1.x, a1.y, a1.z) == pytest.approx((ax, ay, 186.15))
   assert plate.parent.name == "car_site_1"
+
+
+@pytest.mark.parametrize("ztv, floor_above_ztrans", [("1", 2.3), ("0", 1.0), ("2", 0.0)])
+def test_ztrans_value_says_what_ztrans_measures(ztv, floor_above_ztrans):
+  # Venus's reported floor (the 2026-10-22 sweep): ZTrans + base + BaseMM (1), + BaseMM (0), ZTrans (2);
+  # here Fourtitude's growth plate, base 1.3 and BaseMM 1.0
+  lay, store, _ = tiny()
+  store.add("ML_STAR\\WELL.ctr", Definition("ml_star/well.ctr", "CONTAINER", {"Dim.Dx": "7", "Depth": "10", "BaseMM": "1"}))
+  plate = store.get("ML_STAR\\PLATE.rck")
+  plate.fields.update({"Cntr.1.file": "ML_STAR\\WELL.ctr", "Cntr.1.base": "1.3"})
+  lay.by_id()["plate"].fields["ZTransValue"] = ztv
+  data = write_layout(lay)
+  deck = plr_import.lay_to_plr(lay, store)
+  floor = deck.get_resource("plate").get_item("A1").get_location_wrt(deck, "c", "c", "cavity_bottom").z
+  assert floor == pytest.approx(186.15 + floor_above_ztrans)
+  assert write_layout(plr_export.plr_to_lay(through_json(deck), store)) == data
+  deck.get_resource("plate").location += Coordinate(0, 0, 5)
+  assert plr_export.plr_to_lay(deck, store).by_id()["plate"].z == pytest.approx(191.15)
+
+
+@pytest.mark.parametrize("ztv, base, base_mm, floor_above_ztrans", [
+  ("2", -6.8, 8.8, 0.0),  # Nunc binding plate on an MPE2 filter site
+  ("2", -21.6, 10.0, 0.0),  # Varian Captiva filter plate
+  ("1", -22.5, 0.0, -22.5),  # the 96-head's external waste
+])
+def test_a_negative_container_base_hangs_below_the_rack(ztv, base, base_mm, floor_above_ztrans):
+  # the sweep (2026-10-22): Venus's floor uses the base as it is, not clamped at 0
+  lay, store, _ = tiny()
+  store.add("ML_STAR\\WELL.ctr", Definition("ml_star/well.ctr", "CONTAINER", {"Dim.Dx": "7", "Depth": "10",
+                                                                                  "BaseMM": str(base_mm)}))
+  store.get("ML_STAR\\PLATE.rck").fields.update({"Cntr.1.file": "ML_STAR\\WELL.ctr", "Cntr.1.base": str(base)})
+  lay.by_id()["plate"].fields["ZTransValue"] = ztv
+  deck = plr_import.lay_to_plr(lay, store)
+  floor = deck.get_resource("plate").get_item("A1").get_location_wrt(deck, "c", "c", "cavity_bottom").z
+  assert floor == pytest.approx(186.15 + floor_above_ztrans)
 
 
 def test_a_rack_listing_its_positions_gets_a_well_at_each():

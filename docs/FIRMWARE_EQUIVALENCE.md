@@ -11,8 +11,9 @@ commands and sort each difference as expected, explained by configuration, or a 
 
 ## 1. The run, end to end
 
-The harness is `tools/venus_sim/`. Its README covers setup: the 32-bit Python, environment
-variables, the Venus configuration. Locations come from `paths.py`. Everything the scripts write goes
+The harness is `tools/venus_sim/`. Its README covers setup (the 32-bit Python, environment
+variables, the Venus configuration) and, under "Running the 1:1 tests", the exact commands and
+pass criteria for both tests. This section is why each step is there. Locations come from `paths.py`. Everything the scripts write goes
 to a work folder outside the repo (`VENUS_SIM_WORK`, default `~/venus-sim`): staged copies of other
 people's methods, traces, backups of Venus files.
 
@@ -139,8 +140,11 @@ how to align the two for a test.
     | 0 | the container base | `ZTrans` + `BaseMM` | 64 of 64 |
     | 2 | the floor itself | `ZTrans` | 112 of 131 |
 
-    The importer applies the value-1 rule to all three (`plr_import.venus_corner` returns
-    `p.z`). **Not yet fixed.** Value-2 tip racks are 40.9 to 83.5 mm too low in PLR because of it.
+    **Applied** (`plr_import.z_above_bottom`, used by `venus_corner` on import and by
+    `plr_export` and `deck_export`, which write a value-2 `ZTrans` as the floor). Before, the
+    importer read all three as the rack's bottom, and value-2 tip racks were 40.9 to 83.5 mm too
+    low in PLR (their `Cntr.1.base` is negative). With it the pilot is 481 of 517 exact, up from
+    362; with the negative-base fix below, the whole sweep's only misses are rotated labware.
   - **`BaseMM`** (`.ctr`) is material under the floor. Half the installed `.ctr` files have one
     (0.5 to 10 mm). It's carried as the well's `material_z_thickness`, so PLR's `cavity_bottom` is
     Venus's floor (import, export and generator).
@@ -152,12 +156,20 @@ how to align the two for a test.
   - These three firmware rules were exact on three plates (`Media_source`, `Reagent_Stock_Plate`,
     `Growth_Plate`). **Not yet applied:** the converter should carry `MaxDepth` and `LSHt`, and the
     steps should pass minimum height, search start and fixed height as Venus measures them.
-- **Exceptions in the pilot** (25 labware, still open):
-  - **96/384-head slide wastes** (`core96slidewaste.rck`, `ver_96externalwaste.rck`,
-    `StarPlusCore384Waste.rck`) are 22 mm off the rule, whatever the `ZTransValue`. Venus treats
-    these waste racks specially.
-  - **Filter and binding plates on MPE² and MultiFlex sites** (`ZTransValue` 2) are 3.0 and 6.8 mm
-    beyond the rule. Probably a second container or a stacking reference. Read their `.rck`.
+- **A negative `Cntr.1.base` is used as it is** (resolved 2026-10-22). The containers hang below the
+  rack's bottom: filter and binding plates (spouts below the skirt), the 96/384-head wastes (the chute
+  below the deck). These were the pilot's 25 "exceptions", and 11 more in the wider sweep; each was
+  off by exactly −base:
+  - Agilent filter plates −3.0, Nunc binding plates −6.8, Varian Captiva filter plates −21.6;
+  - slide wastes −22, `ver_96externalwaste`/`core96externalwaste`/`starpluscore96waste` −22.5,
+    whatever the `ZTransValue`.
+
+  The importer had clamped the wells' base at 0 (`max(base, 0)`, from the first commit, no recorded
+  reason) while tip racks used it raw. Without the clamp the 73 swept layouts are 1,825 of 1,836
+  exact, with no Z miss left. Test: `test_a_negative_container_base_hangs_below_the_rack`.
+  - **Lesson:** two misses that "Venus treats specially" were one rule applied inconsistently in our
+    code. Before calling something a Venus special case, check every place our code reads the same
+    field.
 - **Rotation** (`Angle` 90/180/270): the importer places rotated labware unrotated, with a
   warning. The sweep measures this at up to 198 mm off in X/Y: every X/Y miss in the pilot (11
   labware) is a rotated one. Venus rotates about the labware's position-1 point (`TForm`). Derive
@@ -273,9 +285,12 @@ how to align the two for a test.
       and `fp`, the firmware doing the search. Not built yet.
   - **Tip pick-up and eject.** The driver travels as high as the mounted tips allow
     (`_tip_traverse_height` with no height given: Z range top − tip overhang = 247.6 for 1000 µL
-    tips), never below 245.0. Venus uses 245.0. Matching Venus means passing
-    `minimum_traverse_height_start=245.0`.
-  - **Gripper:** 280.0 against Venus's `ZSwapTraverseHeight` of 275.0. Pass it explicitly.
+    tips), never below 245.0. Venus uses 245.0.
+  - **Gripper:** 280.0 against Venus's 275.0 (`ZSwapTraverseHeight`) for gripping and placing. Taking
+    and returning the tools (`C0ZT/ZS`) is a channel move: Venus travels at `TraverseHeight`, 245.0.
+  - **Align:** `PLR_VENUS_FAITHFUL_CFG` (AGENTS.md; `venus_interop.plr.faithful`) set to the Venus
+    run's instrument `.cfg` fills `TraverseHeight`, `ZSwapTraverseHeight` and `Head96TraverseHeight`
+    wherever a port passes none. The same variable will carry the faithful LLD.
 
 ### 2.11 Waste and tip eject
 - **Venus:** `DefaultWaste = Waste` in the `.cfg` names the layout's `Waste` labware
@@ -391,7 +406,9 @@ commands, most of them position queries.
 | `lp` | floor + `LSHt` (172.9, 178.2, 199.5) | PLR's container top | **Explained** (§2.4): carry `LSHt` |
 | `zl` | `zx` + the step's height | from the cavity bottom | **Explained** (§2.4) |
 | `zu zr` | no second section | cone 3.2 mm | Labware geometry: open |
-| `th/te` on tip commands | 245.0 | 247.6 | Traverse (§2.10): PLR's default is the highest the tips allow |
+| `th/te` on tip commands | 245.0 | was 247.6 | **Fixed** (§2.10): `PLR_VENUS_FAITHFUL_CFG` fills `TraverseHeight` |
+| `th/te` on the CO-RE gripper | grip/place 275.0 (`ZSwapTraverseHeight`); tools `C0ZT/ZS` 245.0 (`TraverseHeight`) | was 280.0 for all | **Fixed** (§2.10), all 20 commands |
+| `C0ZR` `te` | 150.4 to 220.3, one per place | 275.0 | Open: depends on the placed plate, not a traverse setting |
 | `tp/tz` (+2.1 mm on 1000 µL) | rack + `MaxDepth` / `Depth` | was rack + tip length − 8, + 10 | **Fixed** (§2.7). Pick-up `tp/tz/th` now match |
 | `tt`, `td` | slot 05, td1 | slot 01, td0 | Tip types (§2.7) |
 | `C0TR` | spread over the waste, `tz` 187.0 | was tight at the centre, `tz` 235.9 | **Fixed** (§2.11): all fields match |
@@ -431,7 +448,7 @@ wrong about what Venus does.
   The rest:
   - `ZTransValue` 0 and 2 (§2.4's rule explains all but 25);
   - rotation (11);
-  - the slide-waste and filter-plate exceptions.
+  - the slide-waste and filter-plate "exceptions" (a negative container base, since fixed: §2.4).
 - **Layouts that failed to run, and why:**
   - **missing labware** in both the corpus and the install ("Invalid file name ... .tml"). The
     pyhamilton test layouts, an Allen `ReaderLocations.tml`, a MultiFlex `.tml`. Skip and list them,
@@ -440,9 +457,13 @@ wrong about what Venus does.
     instrument"**: the layout expects modules the simulated STARlet doesn't report. Declare them in
     the simulator config (§2.2), per layout;
   - **an empty output** (2 layouts): not diagnosed. Rerun one by hand with `run_probe.py`.
-- **Full corpus:** 149 STAR layouts, about 20 s each plus labware staging (1–1.5 h unattended).
-  Layouts on a STAR deck (not STARlet) may need `SimulateMode=1` in `ML_STAR.cfg` (back it up
-  first).
+- **Beyond the pilot (2026-10-22):** the corpus has 149 STAR-family layouts, but it repeats
+  itself. 20 more layouts in corpus order added 543 labware, 523 exact and 20 slide wastes: nothing
+  new. So the sweep now runs on a covering set (`select_sweep.py`): the fewest layouts that hold
+  every (rack, `ZTransValue`, angle, carrier) not yet measured. 105 layouts were left, 46 of them
+  added anything, and 27 cover it all. None of those is rotated: rotation needs its own probes.
+  These STAR2-deck layouts ran with simulation set in `ML_Starlet.cfg` only; `ML_STAR.cfg` stayed
+  at `SimulateMode=0`.
 
 ## 6. Heuristics and lessons
 
@@ -491,10 +512,10 @@ wrong about what Venus does.
   - the harness lives in this repository (`tools/venus_sim`);
   - labware may be added to the Venus install as tests need it (with the manifest).
 - **Next, spatial:**
-  1. apply the `ZTransValue` floor rule in `venus_corner` and the export;
+  1. ~~apply the `ZTransValue` floor rule in `venus_corner` and the export~~ (done, 2026-10-22);
   2. carry `MaxDepth` and `LSHt` and use them for `zx`, `lp` and `zl`;
   3. derive and implement rotation;
-  4. explain the slide-waste and filter-plate exceptions;
+  4. ~~explain the slide-waste and filter-plate exceptions~~ (a negative base, done 2026-10-22);
   5. run the full corpus sweep;
   6. firmware probes per labware family for the derived heights;
   7. runtime snapshots: position dumps inserted after each transport and `HSLLabwrAccess` edit in a

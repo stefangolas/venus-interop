@@ -128,9 +128,10 @@ def capture(layout: Layout, store) -> list[Item]:
         elif abs(p.z - z) > TOL:
           base = rack.num("Cntr.1.base")
           if base and abs((p.z - z) - base) <= 0.3:
-            # 93 racks in the corpora, all ZTransValue 2: tip racks, wastes, teaching blocks
-            note = (f"{p.z - z:+.2f} mm from the site: the rack's container base ({base:+g}), "
-                    "as if the site height was entered as the base's height")
+            # 93 racks in the corpora, all ZTransValue 2: tip racks, wastes, teaching blocks. Venus reads a
+            # ZTransValue 2 height as the container floor, so these sit on their site (FIRMWARE_EQUIVALENCE 2.4)
+            note = (f"{p.z - z:+.2f} mm from the site: the rack's container base ({base:+g}); "
+                    "ZTransValue 2 stores the floor, so the rack is on its site")
           else:
             note = f"{p.z - z:+.2f} mm from the site/stack height"
           add("z", note, abs(p.z - z), (round(p.z - z, 3),))
