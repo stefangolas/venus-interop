@@ -25,6 +25,8 @@ ARRAYTOOLS = ('namespace _Method { namespace ARRAYTOOLS {\n'
               'function ArrayVLookUp(variable & i_values[], variable & i_keys[], variable i_key, variable & o_arr[]) void '
               '{ variable stub; }\n'
               'function Lookup(variable & i_arr[], variable i_value) variable { variable v; return(v); }\n'
+              'function Update_Value_in_Array(variable & io_arr[], variable i_value, variable i_index) void '
+              '{ variable stub; }\n'
               '} }\n'
               # StringTokenizer\StrTokenize.hs_
               'namespace _Method { namespace STRTOKENIZE {\n'
@@ -35,7 +37,13 @@ VECTORCUSTOMDIALOGS = (
   'namespace _Method { namespace VECTORCUSTOMDIALOGS {\n'
   'namespace IconType { const variable Information(0); const variable Warning(1); const variable Question(2); '
   'const variable Error(3); }\n'
-  'namespace ButtonType { const variable Ok(0); const variable OkCancel(1); const variable YesNo(4); }\n'
+  'namespace ButtonType { const variable Ok(0); const variable OkCancel(1); const variable YesNo(4); '
+  'const variable AcceptCancel(5); }\n'
+  'namespace RadioButtonDialog { namespace WrapOrientation { const variable Vertical(1); } '
+  'namespace SortDirection { const variable Unsorted(0); } }\n'
+  'function RadioButtonDialog(variable i_title, variable i_buttons, variable i_x, variable i_y, variable i_top, '
+  'variable i_bottom, variable & i_labels[], variable & i_tips[], variable & i_editable[], variable & io_selected[], '
+  'variable & i_groups[], variable i_wrap, variable i_sort) variable { variable v; return(v); }\n'
   'function LoadingDialogSetResources(variable & i_columns[]) variable { variable v; return(v); }\n'
   'function LoadingDialog(variable i_title, variable i_buttons, variable i_x, variable i_y, variable i_timeout, '
   'variable i_top, variable i_bottom, variable i_image, variable i_small, variable i_flag, variable & i_col1[], '
@@ -44,6 +52,8 @@ VECTORCUSTOMDIALOGS = (
   'variable i_timeout, variable i_top, variable i_bottom, variable & i_items[]) variable { variable v; return(v); }\n'
   'function MessageDialog(variable i_title, variable i_icon, variable i_buttons, variable i_x, variable i_y, '
   'variable i_timeout, variable i_text) variable { variable v; return(v); }\n'
+  # the status window: TRUE, as the libraries' bind check wants it
+  'function AppendStatusText(variable i_text) variable { variable v; v = 1; return(v); }\n'
   'function ErrorDialog(variable i_title, variable i_icon, variable i_buttons, variable i_x, variable i_y, '
   'variable i_timeout, variable i_text, variable i_bottom) variable { variable v; return(v); }\n'
   '} }\n')
@@ -90,6 +100,11 @@ def _channel_pattern(run, p):  # the port's reading of it
   return 0
 
 
+def _update_value(run, p):  # the element at the 1-based index set to the value (inferred from its name)
+  p["io_arr"].value.items[int(p["i_index"].value) - 1] = p["i_value"].value
+  return 0
+
+
 def _lookup(run, p):  # the 1-based index of the first element equal to the value; 0 when none
   items = p["i_arr"].value.items
   return next((i for i, v in enumerate(items, start=1) if v == p["i_value"].value), 0)
@@ -103,6 +118,7 @@ def _tokenize(run, p):  # split at the delimiter, empty tokens dropped (the flag
 
 ARRAYTOOLS_MODELS = {"arraytools::get_distinct_from_array": _distinct, "arraytools::arrayvlookup": _vlookup,
                      "arraytools::lookup": _lookup, "strtokenize::strtokenize": _tokenize,
+                     "arraytools::update_value_in_array": _update_value,
                      "create_channel_pattern::create_channel_pattern": _channel_pattern,
                      "aliquot_for_easysteps_v2::calcaliquot_v2_1": _aliquot}
 
@@ -118,15 +134,16 @@ def _parsed(src: str, here: pathlib.Path, roots: tuple, stp_paths: tuple):
 
 def hsl_run(src: str, here: pathlib.Path, roots: Iterable[pathlib.Path], stp_paths: Iterable[pathlib.Path],
             layouts: dict, answers: Optional[dict] = None, allow_unresolved: Iterable[str] = (),
-            max_steps: int = 2_000_000, stops: Optional[str] = None) -> hsl_eval.Run:
+            max_steps: int = 2_000_000, stops: Optional[str] = None, files: Optional[dict] = None) -> hsl_eval.Run:
   """Preprocess, parse and run `src` (a method's text, as if at `here`); it must run to the end and
   call no function that neither the sources nor the run define (the interpreter would carry on
   with an unknown value, so a library missing from the roots goes unnoticed), except those in
   DISPLAY_ONLY and `allow_unresolved`. The same source is parsed once: a test whose cases differ
   only in their inputs can give them through functions answered per run (`answers["functions"]`).
-  `stops`: the run is to stop on an error whose text holds this (what Venus would raise)."""
+  `stops`: the run is to stop on an error whose text holds this (what Venus would raise). `files`:
+  the run's virtual files (path -> text), for what the library reads."""
   parser, stps, lines = _parsed(src, here, tuple(roots), tuple(sorted(stp_paths)))
-  run = hsl_eval.Run(parser, stps, layouts, answers=answers or {}, max_steps=max_steps)
+  run = hsl_eval.Run(parser, stps, layouts, files=files, answers=answers or {}, max_steps=max_steps)
   run.src = lines
   run.run()
   if stops is None:

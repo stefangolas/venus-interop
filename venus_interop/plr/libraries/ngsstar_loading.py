@@ -26,6 +26,7 @@ A component's own containers (the library's other branch) are not ported: Avenio
 from __future__ import annotations
 
 import math
+import pathlib
 from typing import Any, Optional
 
 from venus_interop.methods import sequences as sq
@@ -121,6 +122,15 @@ def _volume_text(v: float) -> str:
   return (s[:i + places] if i != -1 else s) + units
 
 
+
+def _dialog_number(v: float) -> str:
+  """_Reformat_ValuesForDialog on a float in uL: rounded to 3 places (2 above 3000), the text cut
+  at the point's index plus the places; no unit, no mL (unlike _volume_text)."""
+  places = 3 if v <= 3000 else 2
+  s = _text(mth_round(v, places))
+  i = s.find(".")
+  return s[:i + places] if i != -1 else s
+
 class NGSStarLoading:
   def __init__(self, deck, ngsstar: bool = True, star=None, operator=None, report=None, planner=None,
                faithful: bool = False):
@@ -133,6 +143,7 @@ class NGSStarLoading:
     from venus_interop.plr.libraries.star_tip_tools import StarTipTools
 
     self.v, self.star, self.operator, self.faithful = deck, star, operator, faithful
+    self.sample_ids: list[str] = []  # the input worklist's, for the sample tracking
     self.report = report if report is not None else RunReport()
     self.planner = planner or StarTipTools(deck, faithful=faithful)
     self.DATA_HandOverDataToSMT_NGSStarLoading(ngsstar=ngsstar)
@@ -504,6 +515,163 @@ class NGSStarLoading:
     if self.lock_unlock:
       await cover_locked(self.star, self._ask)
 
+  # -- the input worklist ---------------------------------------------------------------------
+
+  SELECT_BOTTOM = "Press Accept to confirm, Cancel to abort"
+
+  @staticmethod
+  def _workflow_text(kind: str, ids, points) -> str:
+    """The dialog's top text: "Define Workflow ", then the deactivated points, one a line."""
+    text = "Define Workflow "
+    for k, p in enumerate(points):
+      text += (f"Deactivated {kind} Points:\n\n" if k == 0 else "\n") + f"- [{ids[int(p) - 1]}] "
+    return text
+
+  def Display_SelectProcesses_Dialog(self, method_selection, process_ids, combinations, no_start, no_stop):
+    """The workflow the operator runs: where to start (the processes not in `no_start`, the first
+    of them preselected), then where to stop (the processes the start's combination lists, "1.2.3",
+    not in `no_stop`, the first preselected). Returns (start, stop, each process on or off): on
+    those of the combination that may be stopped at, then off before the start and after the stop.
+    Kept as the library has it: a process of the combination that may not be a stop point keeps
+    its earlier state (off, unless it is the start). Cancel aborts the run."""
+    ids = [str(i) for i in process_ids]
+    n = len(ids)
+    no_start, no_stop = [int(i) for i in no_start], [int(i) for i in no_stop]
+    starts = [i for i in range(1, n + 1) if i not in no_start]
+    start = self._choose(self._workflow_text("Starting", ids, no_start), [ids[i - 1] for i in starts],
+                         "Start Process", ids)
+    on = [i == start for i in range(1, n + 1)]
+    combination = [int(float(x)) for x in str(combinations[start - 1]).split(".") if x]  # StrTokenize, StrIVal
+    stops = []
+    for i in range(1, n + 1):
+      if i in combination:
+        if i not in no_stop:
+          stops.append(i)
+          on[i - 1] = True
+      else:
+        on[i - 1] = False
+    stop = self._choose(self._workflow_text("Stop", ids, no_stop), [ids[i - 1] for i in stops], "Stop Process", ids)
+    on = [o and start <= i <= stop for i, o in enumerate(on, start=1)]
+    return start, stop, on
+
+  def _choose(self, text: str, options: list[str], group: str, ids: list[str]) -> int:
+    """A radio-button dialog: the 1-based index (in `ids`) of the option chosen; the first option
+    preselected (an operator answering True takes it); Cancel (None) aborts."""
+    chosen = self._ask("choose", text, options=options, title=f"{group} - {self.SELECT_BOTTOM}")
+    if chosen is None or chosen is False:
+      raise RunAborted(f"{group}: cancelled")
+    if chosen is True:
+      chosen = options[0]
+    return ids.index(chosen) + 1
+
+  def Display_InputWorklist_Dialog(self) -> str:
+    """The input worklist chosen by the operator (a file dialog; asked again while none is given;
+    the operator's cancel aborts the run, as Venus's abort button does)."""
+    trial = 0
+    while True:
+      trial += 1
+      path = self._ask("ask_file", "Please select Input File Worklist", pattern="*")
+      if path:
+        self.worklist_path = path  # g_str_InputWorklistFilePath
+        return path
+      self._ask("message", f"Error during previous selection of a worklist Select again a worklist - Trial : {trial}")
+
+  def Retrieve_50mlTrough_ReagentsVolumesAndSequences(self):
+    """The reagents in 50 mL troughs, as Calculate sized them: (names, total volumes, sequences)."""
+    return list(self.rgt_reagent_name), list(self.rgt_total_volume), list(self.rgt_sequences)
+
+  MASTERMIX_COLUMNS = ["Name", "Volume (uL)", "Labware Type and [Volume per tube]"]
+  MASTERMIX_TEXT = "Prepare Mastermix according to instructions below. Press OK to Continue"
+
+  def Display_Mastermix_Dialog(self, log_folder=None):
+    """The master mixes to prepare, shown to the operator as a loading list and written as
+    `MastermixSummary.csv` (`;` between fields, in `log_folder`; Venus's is HAMILTON\\Logfiles):
+    every RunData row that is a master mix or one of its components (a component's name indented
+    `---  `, a blank row before each master mix after the first), its total volume (none where the
+    labware is "Empty"), and what follows "-->" in its reagent-and-labware text."""
+    import csv
+
+    rows, mixes = [], 0
+    for r in self.run_data.rows:
+      kind = r.get("DB_ReagentType")
+      if kind is None or kind in (REAGENT, "LabwareResource"):  # SQL's <> passes no empty cell either
+        continue
+      if kind == MASTERMIX:
+        mixes += 1
+        if mixes > 1:
+          rows.append(("", "", ""))
+      name = f"---  {r.get('DB_MasterMixComponentName', '')}" if kind == COMPONENT else r.get("DB_ReagentName", "")
+      combo = str(r.get("DB_ReagentNameANDLabwareType") or "")
+      i = combo.find("-->")
+      tail = combo[len(combo) - (len(combo) - i - 3):] if len(combo) - i - 3 > 0 else ""  # StrRight
+      volume = "" if "Empty" in tail else _dialog_number(float(r.get("DB_TotalVolume") or 0))
+      rows.append((name, volume, tail))
+    if not rows:
+      return
+    bottom = "A .csv file will be automatically created at following directory : \nC:\\Program Files (x86)\\HAMILTON\\Logfiles\\"
+    self._ask("show_table", self.MASTERMIX_TEXT, title=bottom, columns=self.MASTERMIX_COLUMNS, rows=rows,
+              images=[self.pictures + "MasterMix.png"])
+    # the dialog's answer is not read: Cancel goes on as OK does (as the library has it)
+    if log_folder is not None:
+      with (pathlib.Path(log_folder) / "MastermixSummary.csv").open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["Reagent Name", "Volume Required", "Description"])
+        w.writerows(rows)
+
+  WORKLIST_COLUMNS = ("Sample_ID", "Sample_Position", "Index1_ID", "Index1_Pos", "Index2_ID", "Index2_Pos")
+
+  def Display_Error_Dialog(self, message: str):
+    """The error shown to the operator ("Press OK to abort run"), then the run aborted."""
+    self._ask("message", message, title="Press OK to abort run")
+    raise RunAborted(message)
+
+  def Read_InputWorklist_ExcelOrCSVFormat(self, path, template):
+    """The samples of the input worklist: a CSV (`;` between fields, a header row naming
+    WORKLIST_COLUMNS), or an Excel workbook's Sheet1 (read with openpyxl, `.xlsx`; Venus reads `.xls`
+    through Jet, which openpyxl can't: give the workbook saved as `.xlsx` or as CSV). Rows without a
+    sample position are skipped. Returns (samples, indexes used, index 1 positions, index 1 ids,
+    index 2 positions, index 2 ids, the template's labware once per sample, the sample positions,
+    "plate" or "tube" for the indexes: a plate when the first index 1 position is A1 to H12). The
+    sample ids are kept (`self.sample_ids`) for the sample tracking.
+
+    Kept as the library has it: "indexes used" is 2 whenever there are samples, as every row adds an
+    index 2 entry, empty or not (single indexing is never reported); with no samples, the first
+    index position is read from an empty list (Venus: a runtime error)."""
+    import csv
+
+    path = str(path)
+    ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+    t = self.v.seq(template)
+    t.set_current_position(1)
+    lab = (t.current_item() or ("", ""))[0]
+    # left out: the status-window line ("Read input worklist : <file>")
+    try:
+      if ext == "csv":
+        with open(path, newline="", encoding="utf-8-sig") as f:
+          rows = list(csv.DictReader(f, delimiter=";"))
+      elif ext in ("xls", "xlsx"):
+        rows = _sheet_rows(path, "Sheet1")
+      else:
+        rows = None
+    except (OSError, ValueError, KeyError, ImportError) as e:  # ImportError: no openpyxl here
+      kind = "CSV" if ext == "csv" else "XLS"
+      self.Display_Error_Dialog(f"Protocol cannot open Input Worklist ({kind} format). Please review file structure "
+                                f"and content. System will abort ({e})")
+    if rows is None:
+      self.Display_Error_Dialog("Protocol cannot open Input Worklist (Not supported format). Please review file "
+                                "structure and content. System will abort")
+    rows = [{k: ("" if r.get(k) is None else str(r.get(k))) for k in self.WORKLIST_COLUMNS} for r in rows]
+    rows = [r for r in rows if r["Sample_Position"] != ""]
+    self.sample_ids = [r["Sample_ID"] for r in rows]
+    col = {k: [r[k] for r in rows] for k in self.WORKLIST_COLUMNS}
+    if not rows:
+      raise RunAborted("the input worklist holds no samples (Venus: the first index position of an empty list)")
+    plate = {f"{r}{c}" for c in range(1, 13) for r in "ABCDEFGH"}
+    index_format = "plate" if col["Index1_Pos"][0] in plate else "tube"
+    used = 2 if col["Index2_Pos"] else (1 if col["Index1_Pos"] else 0)
+    return (len(rows), used, col["Index1_Pos"], col["Index1_ID"], col["Index2_Pos"], col["Index2_ID"],
+            [lab] * len(rows), col["Sample_Position"], index_format)
+
   def _ask(self, kind: str, text: str, **kw):
     if self.operator is None:
       raise RunAborted(f"the operator is asked, and there is none: {text}")
@@ -676,6 +844,18 @@ async def cover_locked(star, ask) -> None:
   while await star.front_cover.request_state() == "open":
     ask("message", COVER_OPEN, title="Front cover monitoring")
   await star.front_cover.enable_control()
+
+
+def _sheet_rows(path: str, sheet: str) -> list[dict]:
+  """An Excel sheet's rows as dicts by its header row (openpyxl)."""
+  from openpyxl import load_workbook
+
+  ws = load_workbook(path, read_only=True, data_only=True)[sheet]
+  values = list(ws.iter_rows(values_only=True))
+  if not values:
+    return []
+  header = [str(h) if h is not None else "" for h in values[0]]
+  return [dict(zip(header, r)) for r in values[1:]]
 
 
 def _position_text(p: str) -> str:

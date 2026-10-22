@@ -38,6 +38,7 @@ the sequence check dialog, the tip scheduling for the loading screen.
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 from typing import Optional
 
 from venus_interop.methods import sequences as sq
@@ -188,6 +189,8 @@ class NGSStarProcesses:
     self._timers: dict[str, float] = {}
     self.report = report if report is not None else RunReport()
     self.operator, self.simulation, self.lock_unlock, self.prep = operator, simulation, lock_unlock, prep
+    self.max_tips_after_edit: dict[int, int] = {}
+    self.samples = 0
 
   # -- the run report --------------------------------------------------------------------------
 
@@ -878,6 +881,66 @@ class NGSStarProcesses:
       await self.sleep(max(0.0, left) * self.time_scale)
     if int(mode) in (1, 3) and not self.simulation:
       self.DATA_UpdateInformationIntoReportFile(done)
+
+  # -- the framework's set-up ------------------------------------------------------------------
+
+  # the layout's tip sequences the framework looks for, and the counter names it then writes to
+  TIP_SEQUENCES = {LVFT: "MlStar50ulTipWithFilter", SVFT: "MlStar300ulStandardVolumeTipWithFilter",
+                   HVFT: "MlStar1000ulHighVolumeTipWithFilter"}
+  COUNTERS = {LVFT: "50F_Counter", SVFT: "SVF_Counter", HVFT: "1000F_Counter"}
+
+  def DATA_HandoverSequencesAndDataToSMT(self, ML_STAR, transport_tool, kit_supplier, kit_title,
+                                         deactivate_pipetting=0, reduce_to_4_channels=0, email="", lock_unlock=0,
+                                         use_mph=0, platform=1, counter50="", counter300="", counter1000="",
+                                         report_folder=None):
+    """The framework's state for a run: 4 or 8 channels (their pattern, the CO-RE transport's
+    front channel), a Clinical NGS STARlet unless `platform` is 1, the front cover locking, the
+    transport tool; each tip type's layout sequence (`TIP_SEQUENCES`, where the layout has it) read
+    from its counter; the run report, named as Venus names its workbook
+    (`<date>_<time>_NGSStarReport_<kit>`), as CSV in `report_folder` (in memory when None).
+    Returns (the report's path, the 50, 300 and 1000 uL tip sequences).
+
+    Kept as the library has it: each counter is read under the name given and written, from then
+    on, under the framework's own (`COUNTERS`); Avenio gives those names. Left out: the e-mail
+    alerts (an address only switches them on), the process timer (a trace), the firmware command
+    `PXAA zp020` to all channels (a stored drive parameter PLR names no counterpart for: CONVENTIONS
+    §11), the deactivate-pipetting test mode (`deactivate_pipetting` must be 0), the MPH 1000 uL
+    sequence reduction (`use_mph`: 96-head runs not ported)."""
+    import time
+
+    from venus_interop.plr.libraries.ngsstar_report import RunReport
+
+    if int(deactivate_pipetting) or int(use_mph):
+      raise NotImplementedError("the framework's transport-test mode and its 96-head runs are not ported")
+    self.channels = 4 if int(reduce_to_4_channels) else 8
+    self.channel_pattern = "11110000" if self.channels == 4 else "11111111"
+    self.transport_pattern = "00110000" if self.channels == 4 else "00000011"
+    self.front_channel = self.channels
+    self.planner.channels = self.channels
+    self.clinical_starlet = int(platform) != 1
+    self.lock_unlock = bool(int(lock_unlock))
+    self.transport_tool = int(transport_tool)
+    self.kit_supplier, self.kit_title, self.email = kit_supplier, kit_title, email
+    given = {LVFT: counter50, SVFT: counter300, HVFT: counter1000}
+    for tip_type, name in self.TIP_SEQUENCES.items():
+      if name in self.v.sequences:
+        self.tips[tip_type] = name
+        self.planner.TipCounter_Read(ML_STAR, name, given[tip_type])
+        self.tip_counters[tip_type] = self.COUNTERS[tip_type]
+    self.DATA_TipCounterWrite(ML_STAR)
+    stamp = time.strftime("%Y%m%d_%H%M%S", self.report.clock())
+    path = None if report_folder is None else pathlib.Path(report_folder) / f"{stamp}_NGSStarReport_{kit_title}.csv"
+    self.report = RunReport(path, clock=self.report.clock)
+    return path, *(self.tips.get(t) for t in (LVFT, SVFT, HVFT))
+
+  def DATA_TrackDataFromLoadingSMT(self, tips50_after_edit=0, tips300_after_edit=0, tips1000_after_edit=0,
+                                   samples=0):
+    """Numbers the loading library hands over (the tips left after the operator's edit, the
+    samples), kept for the loading screen's tip scheduling, which is not ported."""
+    for tip_type, n in ((LVFT, tips50_after_edit), (SVFT, tips300_after_edit), (HVFT, tips1000_after_edit)):
+      if int(n):
+        self.max_tips_after_edit[tip_type] = int(n)
+    self.samples = int(samples)
 
   # -- tip counters ----------------------------------------------------------------------------
 

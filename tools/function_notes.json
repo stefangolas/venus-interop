@@ -106,5 +106,25 @@
   "HSLML_STAR::AspirationMonitoring_1000ulChannel_On": {
     "scope": "out",
     "note": "Venus's aspiration monitoring on 1000 uL channels: no PLR counterpart (commented where a port leaves it out)"
+  },
+  "NGSSTARPROCESSES::PIP_CleanUpTipAdapter": {
+    "scope": "out",
+    "note": "96-head tips: only when t_blnUseMPHInsteadOfChannels, which Avenio sets FALSE (main, line 332); commented in the translation"
+  },
+  "STAR_MPH96_TOOLS::TIP_OFFSET_CleanUpTips_Column": {
+    "scope": "out",
+    "note": "96-head tips: only when t_blnUseMPHInsteadOfChannels, which Avenio sets FALSE (main, line 332); commented in the translation"
+  },
+  "STAR_MPH96_TOOLS::MOVE_MPH96ToBack": {
+    "scope": "out",
+    "note": "96-head tips: only when t_blnUseMPHInsteadOfChannels, which Avenio sets FALSE (main, line 332); commented in the translation"
+  },
+  "INIT_WORKLIST_LOCATION::LockLibrary": {
+    "scope": "out",
+    "note": "only a trace line (the input folder's name)"
+  },
+  "NGSSTARPROCESSES::Abstract": {
+    "scope": "out",
+    "note": "only a trace comment (the library's authors and version)"
   }
 }

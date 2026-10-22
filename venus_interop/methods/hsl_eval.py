@@ -1339,8 +1339,13 @@ class Run:
     if isinstance(obj, HFile):
       return self._file_element(obj, m, args, arg_exprs, env)
     if isinstance(obj, Device):
-      if m == "getsequenceref":
-        return obj.sequences.get(str(args[0]).lower(), Unknown(f"sequence {args[0]}"))
+      if m == "getsequenceref":  # (name, sequence): the layout's sequence into the one given (its state)
+        found = obj.sequences.get(str(args[0]).lower())
+        if found is None:
+          return Unknown(f"sequence {args[0]}")
+        if len(args) > 1 and isinstance(args[1], sq.Sequence):
+          args[1].assign(found)
+        return found
       if m == "copyresetsequence":  # the layout's sequence, reset, into the given one
         orig = obj.originals.get(str(args[0]).lower())
         if orig is not None and isinstance(args[1], sq.Sequence):
@@ -1433,6 +1438,8 @@ class Run:
         return 1
       if m == "getfilename":  # the last part of the path, as given
         return pathlib.PureWindowsPath(str(args[0])).name if args else ""
+      if m == "getextensionname":  # the extension without its dot, as given ("" when none)
+        return pathlib.PureWindowsPath(str(args[0])).suffix[1:] if args else ""
       return Unknown(f"Scripting.FileSystemObject.{m}")
     if pid == "hamilton.hxcoreliquidclass":
       if m == "initcoreliquidclass":
@@ -1731,7 +1738,9 @@ class Run:
       path = str(args[0]).lower().replace("/", "\\")
       mode = _num(args[1]) if len(args) > 1 else 1
       f.path, f.mode, f.pos = path, mode, 0
-      if mode == 1:
+      # hslAppend (3) is read from the start as well: NGSStarLoading opens its CSV worklist so and
+      # reads it (what Venus's file object does then is unverified: CONVENTIONS §11)
+      if mode in (1, 3) and (mode == 1 or self._file_text(path) is not None):
         text = self._file_text(path)
         if text is None:
           return self._missing_file(path)
@@ -1746,7 +1755,7 @@ class Run:
     if m == "close":
       return 0  # Close returns 0 on success (the editor's code raises on != 0)
     if m == "eof":
-      return int(f.pos >= len(f.rows)) if f.mode == 1 else 1
+      return int(f.pos >= len(f.rows)) if f.mode in (1, 3) else 1
     if m == "readrecord":
       if f.pos >= len(f.rows):
         return 0
@@ -1760,7 +1769,9 @@ class Run:
           v = row[i] if i < len(row) else None
           cell.value = (0 if typ in ("i", "f") else "") if v is None else (_fmt(v) if typ == "s" else v)
           continue
-        cell.value = _num(row[i]) if i < len(row) else ""
+        # a field's declared type: a string field keeps its text ("007"), the others are numbers
+        raw = row[i] if i < len(row) else ""
+        cell.value = raw if f.types.get(name.lower()) == "s" else _num(raw)
       return 1
     if m == "readstring":
       if f.pos >= len(f.rows):
@@ -1777,8 +1788,11 @@ class Run:
                    [c.value if isinstance(c.value, (int, float, str)) else _fmt(c.value) for _, c in named])
       return 1
     if m in ("writerecord", "writestring", "updaterecord"):
+      # a record's fields joined by the file's delimiter (SetDelimiter; "," by default). Whether Venus
+      # writes a header line of the field names first is unverified (CONVENTIONS §11): none here
+      sep = f.delimiter if f.delimiter in (",", ";", "	") else ","
       self.written.setdefault(f.path, []).append(
-        str(args[0]) if args else ",".join(_fmt(c.value) for _, c in f.fields))
+        str(args[0]) if args else sep.join(_fmt(c.value) for _, c in f.fields))
       return 1
     if m == "seek":
       f.pos = 0
@@ -1987,7 +2001,11 @@ class Run:
         settings[key] = v.strip('"') if isinstance(v, str) else v
     self._event(command, guid, name, seq, {1: item} if item else {}, {}, seq.cur if seq else 0, 0, 0, "",
                 env, settings=settings)
-    return self._success(name, command, {})
+    out = self._success(name, command, {})
+    if command == "FirmwareCommand" and "firmware" in self.answers:  # result value 4: the instrument's reply
+      out.items.append(self.answers["firmware"](str(settings.get("firmware command string", "")),
+                                                str(settings.get("firmware parameter string", ""))))
+    return out
 
   def _setting(self, rec, raw: str, env):
     """A record value, where a bare name a variable holds (as the `/gripper` block keeps them) is

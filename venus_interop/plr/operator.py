@@ -31,8 +31,8 @@ class Operator:
   def __init__(self):
     self.asked: list[tuple[str, str, dict]] = []
 
-  def _note(self, kind: str, text: str, **details) -> None:
-    self.asked.append((kind, text, details))
+  def _note(self, call: str, text: str, **details) -> None:  # `details` may hold a `kind` (message's)
+    self.asked.append((call, text, details))
 
   def message(self, text: str, title: str = "", kind: str = "information") -> None:
     self._note("message", text, title=title, kind=kind)
