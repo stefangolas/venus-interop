@@ -1152,6 +1152,9 @@ class Run:
     if op in ("==", "!=", "<", "<=", ">", ">="):
       if isinstance(na, (int, float)) and isinstance(nb, (int, float)):
         x, y = na, nb
+      elif (isinstance(a, (int, float)) and isinstance(b, str) and not isinstance(nb, (int, float))) or           (isinstance(b, (int, float)) and isinstance(a, str) and not isinstance(na, (int, float))):
+        # a number against a text that is not one: Venus raises (seen in its simulation, 2026-10-22)
+        raise Stop(f"line {line}: left hand side of expression is not a number ({a!r} {op} {b!r})")
       else:
         x, y = str(a), str(b)
       r = {"==": x == y, "!=": x != y, "<": x < y, "<=": x <= y, ">": x > y, ">=": x >= y}[op]
@@ -1790,9 +1793,14 @@ class Run:
     if m in ("writerecord", "writestring", "updaterecord"):
       # a record's fields joined by the file's delimiter (SetDelimiter; "," by default). Whether Venus
       # writes a header line of the field names first is unverified (CONVENTIONS §11): none here
+      # As Venus writes them (seen in its simulation): a header line of the field names first, string
+      # fields quoted ("R1";"47.8"); numbers bare (unverified)
       sep = f.delimiter if f.delimiter in (",", ";", "	") else ","
-      self.written.setdefault(f.path, []).append(
-        str(args[0]) if args else sep.join(_fmt(c.value) for _, c in f.fields))
+      lines = self.written.setdefault(f.path, [])
+      if not args and not lines and m == "writerecord":
+        lines.append(sep.join(f'"{n}"' for n, _ in f.fields))
+      q = lambda n, v: f'"{_fmt(v)}"' if f.types.get(n.lower(), "s") == "s" else _fmt(v)  # noqa: E731
+      lines.append(str(args[0]) if args else sep.join(q(n, c.value) for n, c in f.fields))
       return 1
     if m == "seek":
       f.pos = 0
@@ -1913,14 +1921,17 @@ class Run:
       if command in ("TipEject", "XLTipEject") and not seq.items:
         self._event(command, guid, name, seq, {}, {}, 0, 0, counting, pat_s, env, note="default waste")
         return self._success(name, command, {})
-      # a pattern longer than the instrument's channels (cfg.1 when given) is cut at them: what Venus
-      # does with the rest is unverified (CONVENTIONS §11)
-      taken = sq.take(seq, pat_s[:int(self.answers.get("cfg.1") or 16)], int(counting), int(use))
+      # a pattern longer than the instrument's channels is cut at them; a shorter one is an error
+      # ("Invalid channel pattern: 2 defined, 8 expected"); both seen in Venus's simulation
+      n_ch = int(self.answers.get("cfg.1") or 8)
+      if len(pat_s) < n_ch:
+        raise Stop(f"line {line}: {command}: Invalid channel pattern: {len(pat_s)} defined, {n_ch} expected")
+      taken = sq.take(seq, pat_s[:n_ch], int(counting), int(use))
     vols = self._volumes(rec, taken.channels, env)
     settings = self._channel_settings(rec, taken.channels, top, env)
     self._event(command, guid, name, seq, taken.channels, vols, taken.first, taken.used, counting, pat_s, env,
                 settings=settings)
-    return self._success(name, command, taken.channels)
+    return self._channel_result(name, command, taken.channels, vols)
 
   # Top-level settings of a pipetting step worth recording beside its per-channel ones
   STEP_SETTINGS = ("TipType", "DispenseMode", "SameLiquid", "SideTouchMode")
@@ -2115,6 +2126,23 @@ class Run:
     self.events.append(StepEvent(len(self.events) + 1, command, guid, dev, seq.name if seq else "",
                                  dict(channels), vols, first, used, counting, pattern,
                                  tuple(self.stack), note, settings or {}))
+
+  def _channel_result(self, dev, command, channels, vols) -> HArray:
+    """A channel step's result as Venus returns it (seen in its simulation, 2026-10-22): result value 3
+    has a block for every channel of the instrument (`cfg.1`, else 8), numbered with two digits,
+    the unused ones empty ("[03,00,00,0,,,"); the step data is the volume for an aspirate or a
+    dispense ("50.0"), "0.0" for a tip pick-up, nothing for an eject."""
+    n = int(self.answers.get("cfg.1") or 8)
+    blocks = []
+    for ch in range(1, max(n, max(channels, default=0)) + 1):
+      if ch not in channels:
+        blocks.append(f"[{ch:02d},00,00,0,,,")
+        continue
+      lab, pos = channels[ch]
+      v = vols.get(ch)
+      data = (f"{float(v):.1f}" if isinstance(v, (int, float)) else "") if command in ("Aspirate", "Dispense")         else ("0.0" if command == "TipPickUp" else "")
+      blocks.append(f"[{ch:02d},00,00,0,{data},{lab},{pos}")
+    return HArray([dev, command, "0" + "".join(blocks)])
 
   @staticmethod
   def _success(dev, command, channels) -> HArray:

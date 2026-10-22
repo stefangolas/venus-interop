@@ -78,9 +78,10 @@ class Sequence:
     return self.cur
 
   def increment(self, inc: int) -> int:
-    """Increment(inc); also seq++ (inc = used) and seq-- (inc = -used)."""
+    """Increment(inc); also seq++ (inc = used) and seq-- (inc = -used). From position 0 (past the
+    end) it stays 0 (seen in Venus's simulation, 2026-10-22)."""
     n = self.cur + inc
-    self.cur = n if 0 < n <= self.end else 0
+    self.cur = n if self.cur > 0 and 0 < n <= self.end else 0
     return self.cur
 
   def get_next(self) -> int:

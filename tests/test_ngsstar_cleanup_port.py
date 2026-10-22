@@ -97,6 +97,7 @@ def _source(fn):
     "namespace _Method { method main() void {\n"
     + "".join(f"{N}t_seqTips{k} = ML_STAR.{TIPS[t]};\n" for k, t in (("300", 1), ("1000", 5), ("50", 23)))
     + f"{N}t_intNumberOfAllAvailableChannels = 8;\n{N}t_blnDeactivatePipettingStepsForTransportTests = 0;\n"
+    + f'{N}t_strChannelpattern = "11111111";\n'  # as the framework's set-up sets it
     + f"{N}t_blnSimulationModeON = TESTINPUT::Simulation();\n"
     + f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
     + f"{N}t_intTransportTool = 2;\n{N}t_intFrontChannelCORETransport = 7;\n"

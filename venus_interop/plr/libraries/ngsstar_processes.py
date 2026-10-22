@@ -23,8 +23,8 @@ the pipetting and transport functions every NGS STAR kit method is built on. Por
 Repaired, where the library is evidently wrong and Venus would hang, lose work or stop the run
 (`faithful=True` keeps the library's behaviour; the differential tests use it): PIP_MixOnly's
 containers folded onto one labware, and its 300 uL copy looping without end (both in its
-docstring); the clean-ups' batches without scale-up (_DATA_CalculateAndDefineBatchProcessCleanUp); the multi-dispense from a trough stopping on a column part full
-(_PIP_MultidispenseFromTroughToPlate); STAR Tip Tools' planner asking for tips with tips left
+docstring); the clean-ups' batches without scale-up (_DATA_CalculateAndDefineBatchProcessCleanUp);
+STAR Tip Tools' planner asking for tips with tips left
 (star_tip_tools).
 
 The tip type and dispense mode come from the liquid class in Venus's database (`liquid_classes`, a
@@ -43,7 +43,8 @@ from typing import Optional
 
 from venus_interop.methods import sequences as sq
 from venus_interop.plr import steps
-from venus_interop.plr.libraries.ngsstar_report import CORE_OK, ISWAP_OK, RunReport, number_text, trimmed_volume
+from venus_interop.plr.libraries.ngsstar_report import (CORE_OK, ISWAP_OK, PIPETTING_OK, RunReport, number_text,
+                                                        trimmed_volume)
 from venus_interop.plr.libraries.star_tip_tools import StarTipTools
 from venus_interop.plr.steps import CoreGrip, IswapGrip, Pipetting
 
@@ -70,8 +71,8 @@ MIX_ONLY_MAX = {SVFT: 270.0, HVFT: 900.0, LVFT: 45.0}
 MIX_ONLY_FLOOR = {SVFT: 15.0, HVFT: 50.0, LVFT: 10.0}
 MIX_ONLY_SIMULATED = {SVFT: 200.0, HVFT: 200.0, LVFT: 20.0}  # the mix volume in simulation mode
 MIX_ONLY_SHARE = 0.75  # of the volume measured in the container, mixed
-# _PIP_MultidispenseFromTroughToPlate, per tip type: CalcAliquot_v2_1's pre-dispense, reserve and tip
-# capacity (uL); the pre-dispense goes back into the trough first, the reserve with the drain after
+# _PIP_MultidispenseFromTroughToPlate, per tip type: CalcAliquot_v2_1's pre and post volumes and tip
+# capacity (uL); the pre volume goes back into the trough first, the post with the drain after
 ALIQUOT = {HVFT: (50.0, 50.0, 1000.0), SVFT: (10.0, 10.0, 300.0), LVFT: (5.0, 5.0, 50.0)}
 # _PIP_MultidispenseBeadsFromTubesToPlate's: its 1000 uL copy keeps the 20 uL in the tips (its
 # pre-dispense and drain switched off)
@@ -97,33 +98,35 @@ class Aliquots:
   aspirate_pattern: str
 
 
-def CalcAliquot_v2_1(remaining: int, volume: float, pre: float, reserve: float, capacity: float, channels: int,
-                     rows: int = 8) -> Aliquots:
-  """ALIQUOT_FOR_EASYSTEPS_V2::CalcAliquot_v2_1(dispense sequence, volume, pre, reserve, capacity,
-  &loops, channels, rows, &aspirate[], &mix[], &patterns[], &pattern). Its source is on no machine
-  here (`Aliquot\\Aliquot_for_EasySteps v2.hs_`): read from its arguments and from how the library
-  uses what it returns (an inference; the user was told, 2026-10-19). The dispense sequence's
-  positions from the current one (`remaining`) go a column (`rows` positions, no more than the
-  channels) per round, channel i on the column's i-th, for as many rounds as are left and as the
-  tip holds: floor((capacity - pre - reserve) / volume). A channel aspirates its dispenses' volume
-  plus the pre-dispense and the reserve. The mix volume is a guess (nothing the library does
-  constrains it): the channel's aspirate volume."""
+def CalcAliquot_v2_1(remaining: int, volume: float, pre: float, post: float, capacity: float, channels: int,
+                     installed: int = 8) -> Aliquots:
+  """ALIQUOT_FOR_EASYSTEPS_V2::CalcAliquot_v2_1(dispense sequence, volume, pre, post, capacity,
+  &dispenses, channels, installed channels, &aspirate[], &mix[], &patterns[], &pattern), as its
+  source has it (`Aliquot\Aliquot_for_EasySteps v2.hsi`, from the VenusPackages repository; an
+  inference until 2026-10-21). The positions from the dispense sequence's current one
+  (`remaining`) go `channels` per round, channel i on the round's i-th; as many rounds as the tip
+  holds, floor((capacity - pre - post) / volume), and no more than are left; with no more wells
+  than channels one round, whatever the tip holds. A channel aspirates its rounds' volume plus pre
+  and post (a part-full last round leaves the channels past it one fewer), and mixes 75 % of that
+  first. Patterns are `installed` long. No round at all (not one dispense fits the tip, more wells
+  than channels) and the library's loop never moves on: here an error."""
   import math
 
-  width = min(channels, rows)
-  per_tip = math.floor((capacity - pre - reserve) / volume) if volume > 0 else 0
-  if per_tip < 1:
-    raise ValueError(f"{volume} uL: not one dispense fits a {capacity:g} uL tip with {pre:g} + {reserve:g} uL")
-  loops = min(math.ceil(remaining / width), per_tip)
-  counts = [0] * channels
-  patterns = []
-  for k in range(loops):
-    on = [k * width + i < remaining for i in range(width)] + [False] * (channels - width)
-    patterns.append("".join("1" if c else "0" for c in on))
-    counts = [n + c for n, c in zip(counts, on)]
-  aspirate = [n * volume + pre + reserve if n else 0.0 for n in counts]
-  return Aliquots(loops, aspirate, list(aspirate), patterns, "".join("1" if n else "0" for n in counts))
-
+  pattern = lambda n: "".join("1" if k < n else "0" for k in range(installed))  # noqa: E731  CalcChannelPattern
+  per_tip = math.floor((capacity - pre - post) / volume)
+  rounds = math.ceil(remaining / channels)
+  loops = 1 if remaining <= channels else min(per_tip, rounds)
+  if loops < 1:
+    raise ValueError(f"{volume} uL: not one dispense fits a {capacity:g} uL tip with {pre:g} + {post:g} uL, and "
+                     "the library's multi-dispense would never move on")
+  last = remaining - (loops - 1) * channels  # the wells of the last round
+  counts = [loops if c < min(last, channels) else loops - 1 for c in range(channels)]
+  if remaining <= channels:
+    counts = [1 if c < remaining else 0 for c in range(channels)]
+  patterns = [pattern(min(channels, remaining - k * channels)) for k in range(loops)]
+  aspirate = [n * volume + pre + post if n else 0.0 for n in counts]
+  return Aliquots(loops, aspirate, [0.75 * a for a in aspirate], patterns,
+                  pattern(min(channels, remaining)))
 
 ISWAP, CORE_GRIPPER = 1, 2  # the framework's transport tools (t_intTransportTool)
 # The CO-RE transports' records (_Trp_MIDIwithCOREGripper, _Trp_HSPwithCOREGripper): grip speed
@@ -216,6 +219,17 @@ class NGSStarProcesses:
                      "Barcode": barcode, "Transport information": ISWAP_OK if tool == ISWAP else CORE_OK,
                      "Aspiration information": f" used tool : {name}"})
 
+  def _report_pipetting(self, sources, targets, volumes) -> None:
+    """_DATA_AnalyseStepReturnValueOfPipettingStepAndWriteToNGSStarReport: a stamped row per channel
+    that dispensed, its source (the aspirate's labware and position on that channel), the volume as
+    Venus's step return gives it (one decimal), its target, and the error tables' no-error text.
+    `sources` / `targets`: channel -> item; `volumes`: channel -> uL."""
+    for c in sorted(targets):
+      src, dst = sources.get(c, ("", "")), targets[c]
+      self.report.add({**self.report.stamp(), "LabID Source": src[0], "PosID Source": src[1],
+                       "Transfer Volume": f"{float(volumes[c]):.1f}", "LabID Target": dst[0], "PosID Target": dst[1],
+                       "Aspiration information": PIPETTING_OK, "Dispense information": PIPETTING_OK})
+
   def _take(self, seq: str, pattern: str, counting: int, use: int) -> dict:
     taken = sq.take(self.v.seq(seq), pattern, counting, use)
     return {ch - 1: item for ch, item in taken.channels.items()}
@@ -287,6 +301,7 @@ class NGSStarProcesses:
       ch = list(range(len(targets)))
       await steps.aspirate(self.p, self._wells(sources), [volume] * len(ch), ch, aspirate, lc)
       await steps.dispense(self.p, self._wells(targets), [volume] * len(ch), ch, dispense_step, lc)
+      self._report_pipetting(dict(enumerate(sources)), dict(enumerate(targets)), {c: volume for c in ch})
       if tip_exchange:
         await self.p.discard_tips(use_channels=held)
     self.v.seq(tips).set_max(self.v.seq(tips).total)
@@ -322,6 +337,9 @@ class NGSStarProcesses:
       for step, v in ((draw_all, first), (off_bottom, second)):
         await steps.aspirate(self.p, self._wells(wells), [v] * len(ch), ch, step, lc)
       await steps.dispense(self.p, self._wells(waste), [first + second] * len(ch), ch, drain, lc)
+      # the rows read the first aspirate (the wells) and the drain; a step's data is its volume setting
+      # (seen in Venus's simulation), and the drain record's is 0
+      self._report_pipetting(dict(enumerate(wells)), dict(enumerate(waste)), {c: 0.0 for c in ch})
       await self.p.discard_tips(use_channels=held)
       self.DATA_TipCounterWrite(ML_STAR)
     self.v.seq(tips).set_max(self.v.seq(tips).total)
@@ -438,10 +456,9 @@ class NGSStarProcesses:
     dispense per round (25 mm above the bottom; the plate's sequence counting on); the tips
     drained into the trough (50 mm). The library writes this once per tip type: the copies differ
     only in the tip type, the numbers (ALIQUOT) and the 50 uL copy's front cover around the refill
-    dialog.
-
-    Repaired (`faithful` keeps it): a plate that is not whole columns stops the run in the
-    library's report analysis after the part-full column's dispense (the comment at that place)."""
+    dialog. (A round on fewer channels than the aspirate does not stop the run: Venus's step
+    return holds a block for every channel, seen in its simulation; an earlier reading here, from
+    the interpreter's former model, took it for a library defect.)"""
     tip_type, _ = self._codes(liquid_class)
     tips, lc = self.tips[tip_type], self._lc(liquid_class)
     pre, reserve, capacity = (ALIQUOT_BEADS if beads else ALIQUOT)[tip_type]
@@ -477,14 +494,8 @@ class NGSStarProcesses:
         dch = sorted(wells)
         await steps.dispense(self.p, self._wells(wells[c] for c in dch), [volume] * len(dch), dch,
                              Pipetting(0, fluid_height=height), lc)
-        # left out: _DATA_AnalyseStepReturnValueOfPipettingStepAndWriteToNGSStarReport (report rows
-        # from the steps' per-position return values; their step data is empty in the interpreter, so
-        # neither side writes them yet). Repaired: it looks up each of the aspirate's channels in the
-        # dispense's return, so a round on fewer channels (a column part full) raises
-        # (StepReturn::GetLabwareId of position 0, invalidParameter) and stops the run
-        if self.faithful and len(dch) < len(ch):
-          raise RuntimeError(f"{dispense}: a dispense on {len(dch)} of the aspirate's {len(ch)} channels; the "
-                             "library's report analysis raises (StepReturn::GetLabwareId, invalid parameter)")
+        # the rows read the main aspirate (the trough) and this round's dispense
+        self._report_pipetting(taken, wells, {c: volume for c in dch})
       # the drain ("drain tip in jet mode"): what the tips still hold, the reserve
       left = [a.aspirate[c] - pre - volume * sum(p[c] == "1" for p in a.dispense_patterns) for c in ch]
       if not tubes:

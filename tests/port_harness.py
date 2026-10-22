@@ -110,10 +110,21 @@ def _lookup(run, p):  # the 1-based index of the first element equal to the valu
   return next((i for i, v in enumerate(items, start=1) if v == p["i_value"].value), 0)
 
 
-def _tokenize(run, p):  # split at the delimiter, empty tokens dropped (the flag's meaning: inferred)
+def _tokenize(run, p):  # as its source (VenusPackages): tokens trimmed, appended; FALSE drops empty ones
   text, delim = str(p["i_str"].value), str(p["i_delimiter"].value)
-  p["o_arr"].value = hsl_eval.HArray([t for t in text.split(delim) if t])
+  tokens = [t.strip() for t in text.split(delim)] if text and delim else []
+  keep = bool(int(_num_or_0(p["i_flag"].value)))
+  out = p["o_arr"].value
+  items = list(out.items) if isinstance(out, hsl_eval.HArray) else []
+  p["o_arr"].value = hsl_eval.HArray(items + [t for t in tokens if t or keep])
   return 0
+
+
+def _num_or_0(v):
+  try:
+    return float(v)
+  except (TypeError, ValueError):
+    return 0
 
 
 ARRAYTOOLS_MODELS = {"arraytools::get_distinct_from_array": _distinct, "arraytools::arrayvlookup": _vlookup,

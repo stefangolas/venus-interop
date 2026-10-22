@@ -23,6 +23,7 @@ COLUMNS = ["Date", "Time", "LabID Source", "PosID Source", "Transfer Volume", "L
 # The error translations' text for no error (main, slave and recovery codes all 0)
 ISWAP_OK = "transport ok."  # _DATA_TranslateiSWAPErrorCodes
 CORE_OK = "transport step ok."  # _DATA_TranslateChannelErrorCodes for a transport
+PIPETTING_OK = "pipetting step ok."  # _DATA_TranslateChannelErrorCodes for a pipetting step
 AUTOLOAD_OK = "loading step ok."  # _DATA_TranslateAutoLoadErrorCodes
 
 

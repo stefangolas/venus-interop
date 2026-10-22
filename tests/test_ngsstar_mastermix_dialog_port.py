@@ -61,8 +61,7 @@ def test_port_shows_the_master_mixes_as_the_library_does(avenio, lay, calls, tmp
   port, port_file, loading = port_dialog(lay, calls, samples, tmp_path)
   assert hsl and len(hsl[0][3]) > 3
   assert port == hsl
-  # the records; the port writes a header line too (whether Venus does is open: CONVENTIONS §11)
-  assert port_file[0] == "Reagent Name;Volume Required;Description" and port_file[1:] == hsl_file
+  assert port_file == hsl_file  # a quoted header line and quoted fields, as Venus writes them
   names, volumes, seqs = loading.Retrieve_50mlTrough_ReagentsVolumesAndSequences()
   assert (names, volumes) == (loading.rgt_reagent_name, loading.rgt_total_volume) and len(seqs) == len(names)
 

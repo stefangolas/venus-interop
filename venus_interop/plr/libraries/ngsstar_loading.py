@@ -614,7 +614,7 @@ class NGSStarLoading:
     # the dialog's answer is not read: Cancel goes on as OK does (as the library has it)
     if log_folder is not None:
       with (pathlib.Path(log_folder) / "MastermixSummary.csv").open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f, delimiter=";")
+        w = csv.writer(f, delimiter=";", quoting=csv.QUOTE_ALL)  # as Venus writes text fields
         w.writerow(["Reagent Name", "Volume Required", "Description"])
         w.writerows(rows)
 

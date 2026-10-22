@@ -93,6 +93,7 @@ SRC = (
   "namespace _Method { method main() void {\n"
   + "".join(f"{N}t_seqTips{k} = ML_STAR.{TIPS[t]};\n" for k, t in (("300", 1), ("1000", 5), ("50", 23)))
   + f"{N}t_intNumberOfAllAvailableChannels = 8;\n{N}t_blnDeactivatePipettingStepsForTransportTests = 0;\n"
+  + f'{N}t_strChannelpattern = "11111111";\n'  # as the framework's set-up sets it
   + f"{N}t_blnSimulationModeON = TESTINPUT::Simulation();\n{N}t_blnLockUnlockSystem = TESTINPUT::Lock();\n"
   + f'{N}t_strFullPathReportFile = "{REPORT_BOOK}";\n'
   + "".join(f"if (TESTINPUT::Source() == {i}) {{ if (TESTINPUT::Plate() == {j}) {{\n"
@@ -246,7 +247,7 @@ def test_port_multidispenses_as_the_library_does(avenio, lay, call):
 
 
 def test_the_split_is_a_column_a_round():
-  """The reading of CalcAliquot_v2_1: 20 wells of 30 uL with 300 uL tips are three columns, the
+  """CalcAliquot_v2_1 as its source has it: 20 wells of 30 uL with 300 uL tips are three columns, the
   third half full; 9 dispenses fit a tip (280 / 30), so one pass."""
   from venus_interop.plr.libraries.ngsstar_processes import CalcAliquot_v2_1
 
@@ -258,8 +259,10 @@ def test_the_split_is_a_column_a_round():
   assert a.loops == 4 and a.aspirate == [900.0] * 8
   a = CalcAliquot_v2_1(3, 50.0, 50.0, 50.0, 1000.0, 8)
   assert a.dispense_patterns == ["11100000"] and a.aspirate == [150.0] * 3 + [0.0] * 5
-  with pytest.raises(ValueError):
-    CalcAliquot_v2_1(8, 950.0, 50.0, 50.0, 1000.0, 8)
+  # no more wells than channels: one round, whatever the tip holds (as the source has it)
+  assert CalcAliquot_v2_1(8, 950.0, 50.0, 50.0, 1000.0, 8).loops == 1
+  with pytest.raises(ValueError, match="never move on"):  # more wells, and not one dispense fits a tip
+    CalcAliquot_v2_1(16, 950.0, 50.0, 50.0, 1000.0, 8)
 
 
 def test_every_well_gets_the_volume_once(lay):
@@ -286,7 +289,7 @@ def test_repaired_a_part_full_column_carries_on(lay):
   assert [e[0] for e in port][-2:] == ["Dispense", "TipEject"]
   aspirate = next(e for e in port if e[0] == "Aspirate")
   assert aspirate[3]["volumes"] == [110.0] * 4 + [80.0] * 4
-  assert aspirate[3]["venus"].mix_volume == (110.0,) * 4 + (80.0,) * 4
+  assert aspirate[3]["venus"].mix_volume == (82.5,) * 4 + (60.0,) * 4  # 75 % of the aspirate
 
 
 def test_from_tubes_the_1000_uL_copy_keeps_its_20_uL(lay):
