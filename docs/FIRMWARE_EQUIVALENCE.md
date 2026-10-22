@@ -244,7 +244,14 @@ how to align the two for a test.
     and the export writes `MaxDepth` (`to_venus`). PLR's own 1000 µL rack now round-trips through
     Venus's `HT_L.rck` exactly.
   - Still different: `tp` on 300 µL tips, PLR's collar (10) against Venus's `Depth − MaxDepth` (8).
-- `td` is the pick-up method.
+- `td` is the pick-up method: 0 = the tip type's own (`C0TT`'s `tu`), 1 = out of rack, 2 = out of
+  wash liquid (Hamilton's firmware spec, quoted in PLR's legacy backend). Venus sends 1; PLR sends
+  `TipPickupMethod.value`, whose 0 (out of rack) means "the tip type's" in `td`. **PLR bug:** the one
+  enum serves `tu` (0 rack, 1 wash) and `td`, so `OUT_OF_WASH_LIQUID` sends `td1`, out of rack.
+- **One command per pick-up.** Venus sends one `C0TP` for a step, whatever columns its channels'
+  tips are in; the firmware works through them. PLR's planner (`plan_batches`) splits a pick-up
+  whose channels cross in Y, even across columns. `PLR_VENUS_FAITHFUL_CFG` makes it one command per
+  call and tip model (`faithful._one_command`).
 
 ### 2.8 Stored state: tip counters, sequences, files
 - **Tip counters**
@@ -406,7 +413,7 @@ commands, most of them position queries.
 
 **Match exactly:**
 - the counts of aspirate `C0AS` (64), dispense `C0DS` (64), tip eject `C0TR` (18) and CO-RE gripper
-  commands `C0ZP/ZR` (7) and `C0ZS/ZT` (3); tip pick-up `C0TP` is 18 vs 19;
+  commands `C0ZP/ZR` (7) and `C0ZS/ZT` (3); tip pick-up `C0TP` 18 (was 18 vs 19, fixed below);
 - in every paired command, every X/Y position and channel pattern;
 - the volumes, except the rounding noted below.
 
@@ -427,7 +434,8 @@ commands, most of them position queries.
 | `th/te` on the CO-RE gripper | grip/place 275.0 (`ZSwapTraverseHeight`); tools `C0ZT/ZS` 245.0 (`TraverseHeight`) | was 280.0 for all | **Fixed** (§2.10), all 20 commands |
 | `C0ZR` `te` | 150.4 to 220.3, one per place | 275.0 | Open: depends on the placed plate, not a traverse setting |
 | `tp/tz` (+2.1 mm on 1000 µL) | rack + `MaxDepth` / `Depth` | was rack + tip length − 8, + 10 | **Fixed** (§2.7). Pick-up `tp/tz/th` now match |
-| `tt`, `td` | slot 05, td1 | slot 01, td0 | Tip types (§2.7) |
+| `tt`, `td` | slot 05, td1 | slot 01, td0 | **Expected** (§2.7): the same tip (`tf1 tl0871 tv10650 tg3 tu0` both); `td1` (out of rack) and `td0` (the tip type's `tu0`, out of rack) pick up alike |
+| `C0TP` count 18 vs 19 | one command, channels 1-4 at X 770.5 (rows E-H), 5-8 at X 779.5 (rows A-D) | two: PLR's planner splits channels that cross in Y | **Fixed** (§2.7): under `PLR_VENUS_FAITHFUL_CFG`, one `C0TP` per call and tip model. 18 of 18, every position |
 | `C0TR` | spread over the waste, `tz` 187.0 | was tight at the centre, `tz` 235.9 | **Fixed** (§2.11): all fields match |
 | `C0Z*` `pa/pb yo yg yv yw zj` | channels 7/8 | channels 6/7 | Gripper (§2.12) |
 | 96-head | `C0EI/EM/EV` | `H0` module commands | Command family: check the move targets |

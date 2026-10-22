@@ -109,3 +109,23 @@ def test_venus_heights_from_max_depth():
   assert "liquid_heights" not in steps.venus_heights(pip, [well], steps.Pipetting(5, submerge=2.0), {})
   given = steps.venus_heights(pip, [well], step, {"minimum_allowed_z_positions_during": [150.0]})
   assert "minimum_allowed_z_positions_during" not in given  # the port's own value is kept
+
+
+def test_one_pick_up_command_per_call():
+  # Marionette: Venus picks 8 tips over two columns in one C0TP; PLR's planner split it in two
+  pytest.importorskip("pylabrobot")
+  from pylabrobot.hamilton.star.driver.features import pipettes as module
+
+  planned = []
+
+  class Planned(Pipettes):
+    async def pick_up_tips(self, spots, minimum_traverse_height_start=None):
+      planned.append(module.plan_batches)
+
+  s = star()
+  s.pipettes = Planned()
+  original = module.plan_batches
+  faithful.apply(s, faithful.VenusProfile.stock())
+  asyncio.run(s.pipettes.pick_up_tips([]))
+  assert planned[0] is not original  # one batch per call while it runs
+  assert module.plan_batches is original  # and the driver's planner back after

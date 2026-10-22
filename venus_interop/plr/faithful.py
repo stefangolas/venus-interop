@@ -10,6 +10,7 @@ One switch, the environment variable PLR_VENUS_FAITHFUL_CFG:
 `apply(star)` after `star.setup()` puts the profile on the device. A height a port passes is
 always kept; only what it leaves as None is filled. Covered so far:
   - traverse heights: channels, tip pick-up and eject, the CO-RE gripper, the 96-head;
+  - one C0TP per tip pick-up call, as a Venus step sends it (`_one_command`);
   - pipetting heights (`steps.venus_heights`): the minimum height and, with cLLD off, the liquid
     height, from the containers' MaxDepth.
 Venus-faithful LLD is to join this profile, under the same variable.
@@ -82,6 +83,28 @@ def _fill(method, **defaults):
   return wrapper
 
 
+def _one_command(method):
+  """`pick_up_tips` sending one C0TP per tip model, as a Venus Tip Pick Up step does: the firmware
+  works through the columns itself. PLR's planner splits a pick-up whose channels cross in Y, even
+  in different columns (Marionette: channels 1-4 at X 770.5, rows E-H, 5-8 at X 779.5, rows A-D;
+  one command in Venus, two in PLR)."""
+  from pylabrobot.hamilton.star.driver.features import pipettes as module
+  from pylabrobot.lib.liquid_handling.pipette_batch_scheduling import ChannelBatch
+
+  def one_batch(use_channels, containers, wrt_resource, resource_offsets=None, **_):
+    xs = [c.get_location_wrt(wrt_resource, "c", "c").x for c in containers]
+    return [ChannelBatch(x_position=min(xs), indices=list(range(len(containers))), channels=list(use_channels))]
+
+  @functools.wraps(method)
+  async def wrapper(*args, **kwargs):
+    planner, module.plan_batches = module.plan_batches, one_batch
+    try:
+      return await method(*args, **kwargs)
+    finally:
+      module.plan_batches = planner
+  return wrapper
+
+
 def _at_height(owner, method, height: float):
   """`method` run with `owner.default_minimum_traverse_height` at `height` (for commands whose
   height comes only from that default)."""
@@ -109,7 +132,7 @@ def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
     pip.default_minimum_traverse_height = p.traverse_height
     # tip commands travel as high as the tips allow when given no height; Venus travels at its own
     if not getattr(pip.pick_up_tips, "venus_faithful", False):
-      pip.pick_up_tips = _fill(pip.pick_up_tips, minimum_traverse_height_start=p.traverse_height)
+      pip.pick_up_tips = _fill(_one_command(pip.pick_up_tips), minimum_traverse_height_start=p.traverse_height)
       pip.drop_tips = _fill(pip.drop_tips, minimum_traverse_height_start=p.traverse_height,
                             minimum_traverse_height_end=p.traverse_height)  # discard_tips goes through it
   grippers = star.core_grippers
