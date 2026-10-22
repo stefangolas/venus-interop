@@ -43,6 +43,7 @@ Run the PLR-side scripts with the repo's Python, and `run_probe.py` with `paths.
 | `sweep.py HASH ...` | Venus's position of every labware and position, for corpus layouts |
 | `compare_sweep.py [HASH ...]` | those positions against the importer's; writes `deltas.tsv` |
 | `select_sweep.py [HASH ...]` | the fewest layouts that cover the labware combinations not yet swept |
+| `trim_sweep.py HASH TAG PATTERN ...` | sweeps a layout with labware taken out (file substrings, or `id:<Id>`): to find what makes it fail |
 
 Probes in `probes/` (our own; `sign.py` adds the footer when staged):
 - `marionette_reload_tips.hsl`: the operator's tip reload before each Marionette run;
@@ -107,6 +108,14 @@ python tools/venus_sim/compare_sweep.py                                # all of 
   `<work>/sweep/deltas.tsv`. A group is a candidate rule: test it against every row before
   changing the importer, then add a test with Venus's numbers (as
   `tests/test_plr.py::test_ztrans_value_says_what_ztrans_measures` does).
+- **When a layout fails** (`NOT COMPLETE`), read `<work>/sweep/out/<hash>.out`:
+  - **empty** (the 32-bit Python crashed, no Venus error): a missing cover `.lid` (the closure now
+    copies covers), or a probe too large (`sweep.MAX_CALLS` splits it). For anything else, bisect
+    with `trim_sweep.py`, always keeping the wastes, or the next class hides the crash;
+  - **"The instrument configuration ... does not match"**: modules or wastes the simulator config
+    and the layout disagree on (FIRMWARE_EQUIVALENCE §2.2), e.g. a layout without the 96-head's
+    waste;
+  - **`ERR|<labware>|...` lines** with the rest measured: Venus rejects that one labware.
 - **Not covered:** heights that exist only in firmware (`MaxDepth`, `LSHt`, the pick-up stroke,
   gripper widths) need the firmware test or a probe. Decks built in PLR and exported
   (`deck_export`) aren't swept yet: `sweep.py` takes corpus layouts only.

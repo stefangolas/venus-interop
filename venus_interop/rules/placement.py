@@ -40,8 +40,12 @@ def rail_site_id(width_tracks: int, rail: int) -> str:
 
 
 def a1_offset(rack: Rack) -> tuple[float, float]:
-  """TForm.3 minus the rack corner: the back-left (A1) position, from BndryX/BndryY at the front-left."""
+  """TForm.3 minus the rack corner: position 1, from BndryX/BndryY at the front-left. Position 1 is
+  the back-left (A1), or with IX.Start = 1 the front-left itself (Venus's positions, the sweep of
+  2026-10-22: Ans_96_C18_SPE)."""
   bx, by = rack.boundary
+  if rack.fields.get("IX.Start", "0") == "1":
+    return bx, by
   return bx, by + ((rack.rows or 1) - 1) * rack.dy
 
 
@@ -100,30 +104,38 @@ VALIDATED = {("1", "0"), ("0", "1"), ("0", "0")}
 
 
 def naming_confidence(rack: Rack) -> str:
-  """'validated' | 'single example' | 'unverified' (IX.Start = 1: its meaning is not known yet)."""
+  """'validated' | 'single example' | 'unverified'."""
   if not rack.rows or not rack.columns or rack.rows == 1 or rack.columns == 1:
     return "validated"  # IX.Inc and IX.Start cannot change a single row or column
-  if rack.fields.get("IX.Start", "0") != "0":
+  if rack.fields.get("IX.Start", "0") not in ("0", "1"):
     return "unverified"
+  if rack.fields.get("IX.Start", "0") == "1":
+    return "single example"  # one rack, its positions measured in Venus (Ans_96_C18_SPE)
   return "validated" if (rack.index_mode, rack.fields.get("IX.Inc")) in VALIDATED else "single example"
 
 
-def default_positions(rack: Rack) -> list[str]:
-  """Positions of a rack's default sequence, named by its IX.* settings."""
+def default_grid(rack: Rack) -> list[tuple[str, int, int]]:
+  """A grid rack's default sequence as (name, row, column), named by its IX.* settings. Row 1 is
+  position 1's row: the back row, or the front row with IX.Start = 1 (see `a1_offset`)."""
   rows, cols = rack.rows, rack.columns
-  if not rows or not cols:
-    return [str(i) for i in range(1, rack.hole_count + 1)]
   key = (rack.index_mode, rack.fields.get("IX.Inc", "0"))
   if key not in NAMING or rack.fields.get("IX.First", "1") != "1":
     raise UnsupportedNaming(f"{rack.path}: IX.Index/Inc/First = {key}, {rack.fields.get('IX.First')}")
   cm = [(r, c) for c in range(1, cols + 1) for r in range(1, rows + 1)]
   if key == ("1", "0"):
-    return [f"{row_name(r)}{c}" for r, c in cm]
+    return [(f"{row_name(r)}{c}", r, c) for r, c in cm]
   if key == ("0", "1"):
-    return [str((c - 1) * rows + r) for r, c in cm]
+    return [(str((c - 1) * rows + r), r, c) for r, c in cm]
   if key == ("0", "0"):
-    return [str((r - 1) * cols + c) for r, c in cm]
-  return [f"{row_name(c)}{r}" for r in range(1, rows + 1) for c in range(1, cols + 1)]
+    return [(str((r - 1) * cols + c), r, c) for r, c in cm]
+  return [(f"{row_name(c)}{r}", r, c) for r in range(1, rows + 1) for c in range(1, cols + 1)]
+
+
+def default_positions(rack: Rack) -> list[str]:
+  """Positions of a rack's default sequence, named by its IX.* settings."""
+  if not rack.rows or not rack.columns:
+    return [str(i) for i in range(1, rack.hole_count + 1)]
+  return [name for name, _, _ in default_grid(rack)]
 
 
 def default_sequence(labware_id: str, rack: Rack) -> list[tuple[str, str]]:

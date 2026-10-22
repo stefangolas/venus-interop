@@ -8,9 +8,11 @@ One switch, the environment variable PLR_VENUS_FAITHFUL_CFG:
   <path>           the values in that instrument .cfg (Config\\ML_STAR.cfg, ML_Starlet.cfg, ...)
 
 `apply(star)` after `star.setup()` puts the profile on the device. A height a port passes is
-always kept; only what it leaves as None is filled. Covered so far: traverse heights (channels, tip
-pick-up and eject, the CO-RE gripper, the 96-head). Venus-faithful LLD is to join this profile,
-under the same variable.
+always kept; only what it leaves as None is filled. Covered so far:
+  - traverse heights: channels, tip pick-up and eject, the CO-RE gripper, the 96-head;
+  - pipetting heights (`steps.venus_heights`): the minimum height and, with cLLD off, the liquid
+    height, from the containers' MaxDepth.
+Venus-faithful LLD is to join this profile, under the same variable.
 """
 from __future__ import annotations
 
@@ -103,6 +105,7 @@ def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
     return None
   pip = star.pipettes
   if pip is not None:
+    pip.venus_profile = p  # steps.venus_heights: Venus's minimum and liquid heights
     pip.default_minimum_traverse_height = p.traverse_height
     # tip commands travel as high as the tips allow when given no height; Venus travels at its own
     if not getattr(pip.pick_up_tips, "venus_faithful", False):

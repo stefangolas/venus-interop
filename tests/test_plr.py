@@ -94,6 +94,38 @@ def test_a_negative_container_base_hangs_below_the_rack(ztv, base, base_mm, floo
   assert floor == pytest.approx(186.15 + floor_above_ztrans)
 
 
+def test_rotated_racks_turn_about_position_1():
+  # Venus's positions (the sweep, 2026-10-22): Nun_96_Fl_Lb at Angle 90 in pyh_star_oem_test, and
+  # Ans_96_C18_SPE (portrait, IX.Start 1, letters on columns) at Angle 90 in bca7c85b1aba
+  store = DefinitionStore()
+  store.add("NUNC.rck", Rack("nunc.rck", "RECTRACK", {
+    "Rows": "8", "Columns": "12", "Dx": "9", "Dy": "9", "BndryX": "14", "BndryY": "11.5",
+    "Dim.Dx": "127", "Dim.Dy": "86", "Dim.Dz": "14.5", "IX.Index": "1", "IX.Inc": "0"}))
+  store.add("ANS.rck", Rack("ans.rck", "RECTRACK", {
+    "Rows": "12", "Columns": "8", "Dx": "9", "Dy": "9", "BndryX": "11.5", "BndryY": "14",
+    "Dim.Dx": "86", "Dim.Dy": "127", "Dim.Dz": "40", "IX.Index": "1", "IX.Inc": "1", "IX.Start": "1",
+    "IX.First": "1"}))
+  turned = {"Angle": "90", "TForm.1.X": "0", "TForm.1.Y": "-1", "TForm.2.X": "1", "TForm.2.Y": "0",
+            "Template": "default", "ZTransValue": "2"}
+  entries = {"Deck": "ML_STAR2.dck", "Labware.Cnt": "2", "Seq.Cnt": "0"}
+  for n, (i, f, x, y) in enumerate([("nunc", "NUNC.rck", 1074.5, 377.7), ("ans", "ANS.rck", 545.5, 530.0)], 1):
+    entries.update({f"Labware.{n}.{k}": v for k, v in turned.items()})
+    entries.update({f"Labware.{n}.Id": i, f"Labware.{n}.File": f, f"Labware.{n}.TForm.3.X": str(x),
+                    f"Labware.{n}.TForm.3.Y": str(y), f"Labware.{n}.ZTrans": "200"})
+  cfg = hxcfg.CfgFile(sections=[hxcfg.Section("DECKLAY", 5, "ML_STAR", entries=sorted(entries.items()))])
+  lay = Layout.from_cfg(cfg)
+  deck = plr_import.lay_to_plr(lay, store)
+  venus = {"nunc": {"A1": (1074.5, 377.7), "B1": (1065.5, 377.7), "A2": (1074.5, 368.7), "H12": (1011.5, 278.7)},
+           "ans": {"A1": (545.5, 530.0), "B1": (545.5, 521.0), "A2": (554.5, 530.0), "H12": (644.5, 467.0)}}
+  for i, positions in venus.items():
+    plate = deck.get_resource(i)
+    for name, xy in positions.items():
+      c = plate.get_item(name).get_location_wrt(deck, "c", "c")
+      assert (c.x, c.y) == pytest.approx(xy), (i, name)
+  data = write_layout(lay)
+  assert write_layout(plr_export.plr_to_lay(through_json(deck), store)) == data
+
+
 def test_a_rack_listing_its_positions_gets_a_well_at_each():
   # rgt_cont_60ml_BC_A00.rck: no Rows/Columns, eight positions listed from the first's centre
   # (BndryX/Y), a gap between 4 and 5; no container file here, so the wells take the pitch

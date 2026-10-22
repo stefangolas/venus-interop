@@ -62,7 +62,8 @@ def test_default_positions():
   assert rules.default_positions(across_rows)[:3] == ["1", "13", "25"]
   portrait = rack(Rows=12, Columns=8, IX_Index=1, IX_Inc=1, IX_Start=1)  # ans_96_c18_spe
   assert rules.default_positions(portrait)[:9] == ["A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1", "A2"]
-  assert rules.naming_confidence(portrait) == "unverified"
+  assert rules.naming_confidence(portrait) == "single example"  # measured in Venus: one rack
+  assert rules.naming_confidence(rack(Rows=12, Columns=8, IX_Index=1, IX_Inc=1, IX_Start=2)) == "unverified"
   assert rules.naming_confidence(across_rows) == "validated"
   with pytest.raises(rules.UnsupportedNaming):
     rules.default_positions(rack(Rows=8, Columns=12, IX_Index=1, IX_Inc=0, IX_First=0))

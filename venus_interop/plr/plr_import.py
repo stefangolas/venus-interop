@@ -7,10 +7,11 @@ which lets `plr_export.plr_to_lay` reproduce the original file byte for byte.
 from __future__ import annotations
 
 import dataclasses
+import math
 import warnings
 from typing import Optional
 
-from pylabrobot.resources import Carrier, Coordinate, Lid, Plate, Resource, ResourceHolder, TipRack, TipSpot, Well
+from pylabrobot.resources import Carrier, Coordinate, Lid, Plate, Resource, ResourceHolder, Rotation, TipRack, TipSpot, Well
 from pylabrobot.resources.hamilton import HamiltonSTARDeck
 from pylabrobot.resources.hamilton import tip_creators
 from pylabrobot.resources.utils import create_ordered_items_2d
@@ -83,12 +84,30 @@ def z_above_bottom(z_mode: int, rack: Optional[Rack], store: DefinitionStore) ->
   return base + (ctr.num("BaseMM") if ctr is not None else 0.0)
 
 
+def turn(p: Placement) -> tuple[float, float]:
+  """(cos, sin) of a placement's rotation about Z, from TForm.1 (where the labware's X axis
+  points). Venus's Angle 90 is (0, -1): a quarter turn clockwise seen from above."""
+  if "TForm.1.X" not in p.fields:
+    return 1.0, 0.0
+  return p._num("TForm.1.X"), p._num("TForm.1.Y")
+
+
+def rotation_z(p: Placement) -> float:
+  """The placement's rotation as PLR's Rotation.z, in degrees (counter-clockwise): -Angle."""
+  c, s = turn(p)
+  return round(math.degrees(math.atan2(s, c)), 6) % 360
+
+
 def venus_corner(p: Placement, store: DefinitionStore) -> tuple[float, float, float]:
-  """Front-left-bottom corner of a placement in deck coordinates, as Venus places it."""
+  """The placement's origin in deck coordinates, as Venus places it: the front-left-bottom corner,
+  or for rotated labware the point that corner turns to. Venus turns a rack about its position 1
+  (TForm.3): every rotated labware in the sweep, exact (docs/FIRMWARE_EQUIVALENCE.md section 2.4)."""
   x, y, _ = p.tform
   rack = store.rack(p.file)
   if rack is not None:
-    x, y = rules.rack_corner((x, y), rack)
+    dx, dy = rules.a1_offset(rack)
+    c, s = turn(p)
+    x, y = x - (c * dx - s * dy), y - (s * dx + c * dy)
   return x, y, p.z - z_above_bottom(p.z_mode, rack, store)
 
 
@@ -225,9 +244,29 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
       key = f"{chr(ord('A') + ys.index(y))}{xs.index(x) + 1}"
       items[key] = Well(f"{name}_well_{key}", size_x=wx, size_y=wy, **well)
       items[key].location = Coordinate(round(bx + x - wx / 2, 4), round(by + y - wy / 2, 4), dz)
-    return Plate(name, sx, sy, sz, ordered_items=items)
+    return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr)
+  if rack.fields.get("IX.Start", "0") == "1":
+    # position 1 at the front-left and rows counting back (rules.placement.a1_offset): the wells
+    # take Venus's names, in Venus's order (a portrait plate named as the landscape plate it is
+    # turned into)
+    items = {}
+    for key, r, c in rules.default_grid(rack):
+      items[key] = Well(f"{name}_well_{key}", size_x=wx, size_y=wy, **well)
+      items[key].location = Coordinate(round(bx + (c - 1) * rack.dx - wx / 2, 4),
+                                       round(by + (r - 1) * rack.dy - wy / 2, 4), dz)
+    return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr)
   items = create_ordered_items_2d(Well, **well, **_grid(name, rack, wx, wy, dz))
-  return Plate(name, sx, sy, sz, ordered_items=items)
+  return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr)
+
+
+def _with_heights(plate: Plate, ctr) -> Plate:
+  """The container's MaxDepth and LSHt on each well (metadata["venus"]): the heights Venus measures
+  its minimum height and LLD search start from, over the floor (docs/FIRMWARE_EQUIVALENCE.md
+  section 2.4). PLR has no field for them; `steps` uses them when PLR_VENUS_FAITHFUL_CFG is set."""
+  if ctr is not None:
+    for w in plate.get_all_items():
+      w.metadata[VENUS] = {"max_depth": ctr.num("MaxDepth"), "lld_search_height": ctr.num("LSHt")}
+  return plate
 
 
 def _grid(name: str, rack: Rack, wx: float, wy: float, dz: float) -> dict:
@@ -313,6 +352,16 @@ def _attach(deck: Resource, parent: Resource, r: Resource, corner: tuple[float, 
   if isinstance(parent, Carrier):  # carriers only take sites
     parent = _extra_site(parent, r.name, corner)
   o = parent.get_absolute_location()
+  # under a rotated parent (labware nested under a turned plate): its location in the parent's
+  # frame, its rotation relative to the parent's, so it ends up where and how Venus has it
+  turned = parent.get_absolute_rotation().z % 360
+  if turned:
+    c, s = math.cos(math.radians(turned)), math.sin(math.radians(turned))
+    ddx, ddy = x - o.x, y - o.y
+    r.rotation = Rotation(z=(r.rotation.z - turned) % 360)
+    Resource.assign_child_resource(parent, r, location=Coordinate(round(c * ddx + s * ddy, 4),
+                                                                  round(-s * ddx + c * ddy, 4), z - o.z))
+    return
   Resource.assign_child_resource(parent, r, location=Coordinate(x - o.x, y - o.y, z - o.z))
 
 
@@ -340,9 +389,11 @@ def lay_to_plr(layout: Layout, store: DefinitionStore, name: str = "deck") -> Ha
   def place(p: Placement) -> Resource:
     if p.id in built:
       return built[p.id]
-    if p.angle != 0:
-      warnings.warn(f"{p.id}: rotated labware (Angle {p.angle}) is placed unrotated")
     r = build_resource(p, store)
+    if rotation_z(p):
+      r.rotation = Rotation(z=rotation_z(p))
+      if store.rack(p.file) is None:
+        warnings.warn(f"{p.id}: rotated {p.kind} (Angle {p.angle}): turned about its TForm.3, unverified in Venus")
     x, y, z = venus_corner(p, store)
     parent_p = by_id.get(p.template) if p.template != "default" else None
     parent: Resource = deck
@@ -363,7 +414,11 @@ def lay_to_plr(layout: Layout, store: DefinitionStore, name: str = "deck") -> Ha
       lx, ly, _ = p.lid.tform  # a lid's TForm.3 is its corner
       lid.metadata[VENUS]["lid_of"] = p.id
       o = r.get_absolute_location()
-      loc = Coordinate(lx - o.x, ly - o.y, p.lid.z - o.z)
+      # in the plate's own frame: a rotated plate turns its lid with it, the stored corner stays put
+      # (where Venus puts a rotated plate's lid is unmeasured)
+      c, s = turn(p)
+      ddx, ddy = lx - o.x, ly - o.y
+      loc = Coordinate(round(c * ddx + s * ddy, 4), round(-s * ddx + c * ddy, 4), p.lid.z - o.z)
       try:
         r.assign_child_resource(lid, location=loc)
       except (ValueError, TypeError):

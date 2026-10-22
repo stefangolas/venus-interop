@@ -154,8 +154,13 @@ how to align the two for a test.
   - **Tip pick-up:** see §2.7 (the same `MaxDepth`, with base and no `BaseMM` in Hamilton's tip
     containers).
   - These three firmware rules were exact on three plates (`Media_source`, `Reagent_Stock_Plate`,
-    `Growth_Plate`). **Not yet applied:** the converter should carry `MaxDepth` and `LSHt`, and the
-    steps should pass minimum height, search start and fixed height as Venus measures them.
+    `Growth_Plate`). **Applied (2026-10-22)** under `PLR_VENUS_FAITHFUL_CFG`: the importer puts
+    `MaxDepth` and `LSHt` on each well (`metadata["venus"]`), and `steps.venus_heights` passes
+    `zx` and, with cLLD off, `zl`. Venus measures `zl` from `zx` as sent (rounded to 0.1 mm):
+    dispenses at 0.3 mm read `zx` 181.0, `zl` 181.3. Marionette: `zx` matches on all 128
+    aspirates and dispenses, `zl` on all 24 without LLD. `lp` waits for the faithful LLD (the
+    driver sets it from the container top, with no argument for it). Test:
+    `test_venus_heights_from_max_depth`.
 - **A negative `Cntr.1.base` is used as it is** (resolved 2026-10-22). The containers hang below the
   rack's bottom: filter and binding plates (spouts below the skirt), the 96/384-head wastes (the chute
   below the deck). These were the pilot's 25 "exceptions", and 11 more in the wider sweep; each was
@@ -170,10 +175,22 @@ how to align the two for a test.
   - **Lesson:** two misses that "Venus treats specially" were one rule applied inconsistently in our
     code. Before calling something a Venus special case, check every place our code reads the same
     field.
-- **Rotation** (`Angle` 90/180/270): the importer places rotated labware unrotated, with a
-  warning. The sweep measures this at up to 198 mm off in X/Y: every X/Y miss in the pilot (11
-  labware) is a rotated one. Venus rotates about the labware's position-1 point (`TForm`). Derive
-  the rule from these 11, then implement it.
+- **Rotation** (`Angle` 90/180/270; resolved 2026-10-22). Venus turns a rack about its position 1
+  (`TForm.3`) by the matrix in `TForm.1/2`: a position `(lx, ly)` from position 1 in the rack's own
+  frame lands at `TForm.3 + lx·TForm.1 + ly·TForm.2`. `Angle` 90 is `TForm.1 = (0, −1)`: a quarter
+  turn clockwise seen from above, PLR's `Rotation(z=−90)`.
+  - **Import:** `plr_import.venus_corner` turns the origin about position 1, and `place` sets
+    `Rotation(z = −Angle)`. Labware nested under a turned plate is placed in that plate's frame,
+    with its rotation relative to the plate's (`_attach`).
+  - **Position 1 with `IX.Start = 1`** is the front-left position, and rows count toward the back
+    (`rules.placement.a1_offset`, `default_grid`). This was CONVENTIONS §3's open question. The
+    wells take Venus's names, so a portrait plate turned 90° is the landscape plate it shows
+    (`Ans_96_C18_SPE`: `A1` back-left, letters toward the front).
+  - **Evidence:** all 11 rotated labware in the sweep are exact (0.000 mm), and so are the 3
+    nested under them. With this, the 73 swept layouts are 1,836 of 1,836 exact. Test:
+    `test_rotated_racks_turn_about_position_1`.
+  - **Not measured:** rotated carriers (warned on import), and a rotated plate's lid (its stored
+    corner is kept).
 - **PLR:** `DefinitionStore` reads the same files.
 - **Align:** give both the same files:
   - `labware_closure.py` copies a layout's missing files and everything they refer to from the
@@ -402,9 +419,9 @@ commands, most of them position queries.
 | `dm` | 3 | 4 | Liquid class or step dispense mode (§2.5, §2.6) |
 | `lm` (AS 64/64, DS 40/64), `th`, `zl`, extra `P?Z*` traffic | firmware cLLD (`lm1`) | driver searches itself, then `lm0` from the found surface | **Structural** (§2.10): the PLR driver has no firmware-LLD option |
 | `fp` | 0.2 mm | 0.1 mm | Step settings or liquid class: open |
-| `zx` | floor + `MaxDepth` (132.9, 138.2, 181.0) | the cavity bottom | **Explained** (§2.4): carry `MaxDepth`. `Media_source` matched only by coincidence (its `ZTransValue` 0 offset equals its `MaxDepth`) |
-| `lp` | floor + `LSHt` (172.9, 178.2, 199.5) | PLR's container top | **Explained** (§2.4): carry `LSHt` |
-| `zl` | `zx` + the step's height | from the cavity bottom | **Explained** (§2.4) |
+| `zx` | floor + `MaxDepth` (132.9, 138.2, 181.0) | was the cavity bottom | **Fixed** (§2.4): 128 of 128 |
+| `lp` | floor + `LSHt` (172.9, 178.2, 199.5) | PLR's container top | **Explained** (§2.4); `LSHt` is on the wells, sent by the faithful LLD (§2.10) |
+| `zl` | `zx` as sent + the step's height, LLD or not | was from the cavity bottom | **Fixed** without LLD (24 of 24 dispenses); with LLD it's the structural row above |
 | `zu zr` | no second section | cone 3.2 mm | Labware geometry: open |
 | `th/te` on tip commands | 245.0 | was 247.6 | **Fixed** (§2.10): `PLR_VENUS_FAITHFUL_CFG` fills `TraverseHeight` |
 | `th/te` on the CO-RE gripper | grip/place 275.0 (`ZSwapTraverseHeight`); tools `C0ZT/ZS` 245.0 (`TraverseHeight`) | was 280.0 for all | **Fixed** (§2.10), all 20 commands |
@@ -456,7 +473,15 @@ wrong about what Venus does.
   - **"The instrument configuration ... does not match the configuration reported by the
     instrument"**: the layout expects modules the simulated STARlet doesn't report. Declare them in
     the simulator config (§2.2), per layout;
-  - **an empty output** (2 layouts): not diagnosed. Rerun one by hand with `run_probe.py`.
+  - **an empty output: Venus crashed while analysing the probe, with no error.** Two causes, both
+    found by bisecting with `trim_sweep.py` (2026-10-22):
+    - **a cover `.lid` missing from the install** (`Nunc binding ontop ... supporting plate.lid`).
+      `labware_closure.py` copied only the placements' files, not their covers'. It now copies
+      both;
+    - **a probe too large:** 16,759 position calls (860 KB) crash, 8,932 run. `sweep.py` splits a
+      probe into parts of `MAX_CALLS` (8,000) on the whole layout.
+    Bisect with the wastes always kept: without the 96-head's waste the run stops at the
+    configuration check, which hides the crash.
 - **Beyond the pilot (2026-10-22):** the corpus has 149 STAR-family layouts, but it repeats
   itself. 20 more layouts in corpus order added 543 labware, 523 exact and 20 slide wastes: nothing
   new. So the sweep now runs on a covering set (`select_sweep.py`): the fewest layouts that hold
@@ -513,10 +538,13 @@ wrong about what Venus does.
   - labware may be added to the Venus install as tests need it (with the manifest).
 - **Next, spatial:**
   1. ~~apply the `ZTransValue` floor rule in `venus_corner` and the export~~ (done, 2026-10-22);
-  2. carry `MaxDepth` and `LSHt` and use them for `zx`, `lp` and `zl`;
-  3. derive and implement rotation;
+  2. ~~carry `MaxDepth` and `LSHt` and use them for `zx` and `zl`~~ (done 2026-10-22); `lp` with the faithful LLD;
+  3. ~~derive and implement rotation~~ (done 2026-10-22: 1,836 of 1,836 exact);
   4. ~~explain the slide-waste and filter-plate exceptions~~ (a negative base, done 2026-10-22);
-  5. run the full corpus sweep;
+  5. ~~run the full corpus sweep~~ (done 2026-10-22, a covering set: 73 layouts, **2,065 of 2,065
+     labware exact**; `select_sweep.py` finds nothing left). Two layouts still don't run and add
+     nothing new: `f51e8a63c748` (no 96-head waste: the configuration check) and `dbeb40b4b449`
+     (Venus rejects `Nunc_8WellDish_0001`; the rest measured);
   6. firmware probes per labware family for the derived heights;
   7. runtime snapshots: position dumps inserted after each transport and `HSLLabwrAccess` edit in a
      staged method, against the PLR deck after the same port call.

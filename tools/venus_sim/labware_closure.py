@@ -62,7 +62,10 @@ def copy(need: list[str]) -> None:
 
 if __name__ == "__main__":
   lay = layout.read_layout(pathlib.Path(sys.argv[1]))
-  need = closure(sorted({str(p.fields.get("File")) for p in lay.labware if p.fields.get("File")}))
+  # the placements' files and their covers' (the _COVER section): Venus crashes, with no error, on
+  # a cover whose .lid is missing (the sweep, 2026-10-22: Nunc binding ontop ... supporting plate.lid)
+  files = [p.fields.get("File") for p in lay.labware] + [p.lid.fields.get("File") for p in lay.labware if p.lid]
+  need = closure(sorted({str(f) for f in files if f}))
   print(len(need), "files to add, none already present:")
   for rel in need:
     print("  ", rel)

@@ -104,6 +104,29 @@ def plr_arguments(step: Pipetting, n: int, aspirate: bool, mix_flow: Optional[fl
   return out
 
 
+def venus_heights(pipettes, wells, step: Pipetting, extra: dict) -> dict[str, Any]:
+  """Venus's heights for the wells, as the step's PLR arguments, when the pipettes carry a Venus
+  profile (`faithful.apply`, PLR_VENUS_FAITHFUL_CFG); none otherwise. As Venus's firmware shows
+  (docs/FIRMWARE_EQUIVALENCE.md section 2.4): the minimum height `zx` is the floor + the
+  container's MaxDepth, and with cLLD off the liquid height `zl` is the step's fluid height above
+  `zx`. A well without the imported MaxDepth keeps PLR's (the floor). The LLD search start (floor +
+  LSHt) waits for the faithful LLD."""
+  if getattr(pipettes, "venus_profile", None) is None:
+    return {}
+  offsets = extra.get("resource_offsets") or [None] * len(wells)
+  depths = [w.metadata.get("venus", {}).get("max_depth", 0.0) for w in wells]
+  floors = [w.get_location_wrt(w.get_root(), "c", "c", "cavity_bottom").z + (o.z if o is not None else 0.0)
+            for w, o in zip(wells, offsets)]
+  minimum = [round(f + d, 2) for f, d in zip(floors, depths)]
+  out: dict[str, Any] = {"minimum_allowed_z_positions_during": minimum}
+  if not step.effective().clld:
+    # from zx as sent (the driver's 0.1 mm, round(z * 10)): Venus measures zl from it (Marionette's
+    # dispenses at 0.3 mm: zx 181.0, zl 181.3, where from the unrounded zx it would be 181.4)
+    sent = [round(m * 10) / 10 for m in minimum]
+    out["liquid_heights"] = [round(s + step.fluid_height - f, 4) for s, f in zip(sent, floors)]
+  return {k: v for k, v in out.items() if extra.get(k) is None}
+
+
 async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_class: Optional[Any] = None,
                    **extra):
   """A Venus Aspirate step on PLR: the wells per channel, the step's settings, the class if known."""
@@ -113,6 +136,7 @@ async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
                      mix_flow=getattr(liquid_class, "aspiration_mix_flow_rate", None))
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
+  kw.update(venus_heights(pipettes, wells, step, extra))
   await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
 
 
@@ -124,6 +148,7 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
                      mix_flow=getattr(liquid_class, "dispense_mix_flow_rate", None))
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
+  kw.update(venus_heights(pipettes, wells, step, extra))
   await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
 
 

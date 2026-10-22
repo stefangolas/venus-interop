@@ -86,7 +86,7 @@ Venus deck coordinates are PLR deck coordinates, with the same origin, axes and 
 | Lid XY | lid corner = plate corner + ((plate.Dx − lid.Dx)/2, (plate.Dy − lid.Dy)/2): centred | 350/382 |
 | Lid Z | **no rule in the data**: keep the stored value. For decks built in PLR, use lid base = plate base + `RackBaseToCoverBase` (*unverified*) | None of four candidate formulas fits any of the 383 lids with definitions. Identical plate-and-lid pairs on Z-from-site placements sit at different offsets (Agilent reservoir + the same lid: +43.05, +40.25, +39.95), so these values were set by hand. On rack-based nests (`ZTransValue = 1`) the plate sits 1.3 mm lower but its lid doesn't move. |
 | Site order | Venus site 1 is at the back. PLR carriers count sites from the front (`PLT_CAR_L5AC_A00`: index 0 at y = 8.5). The converter orders PLR sites front to back; each holder is named `<carrier>_site_<Venus site id>`. | MULTIFLEX_ASSEMBLY.md, KAPA notes, PLR |
-| Rotation | `Angle ≠ 0` is not analysed; such labware is imported unrotated, with a warning | 3 racks |
+| Rotation | turned about position 1 (`TForm.3`) by `TForm.1/2`; PLR `Rotation(z = −Angle)`. Measured in Venus (FIRMWARE_EQUIVALENCE §2.4) | 11 racks in the sweep, exact |
 | Venus `.x` frames | Y up | `plr/xfile.py` swaps to Z up and reverses the winding |
 
 The old rule `Dim.Dy − BndryY` for the A1 offset is wrong in general; it only holds for symmetric 96-well plates. `plr-viz3d-scratch/hamilton_library/mfx_reference.py` still uses it.
@@ -153,7 +153,7 @@ So `ZTransValue` 0 or 1 is reliable: the rack is on its site or on a stack (18 e
 | – | – | no Rows/Columns → `1 … HoleCnt` | troughs, tools | – |
 
 - `IX.First` is 1 everywhere; any other value raises `UnsupportedNaming`.
-- `IX.Start = 1` appears only on portrait racks. It probably selects the A1 corner; *unverified*.
+- `IX.Start = 1` appears only on portrait racks. Position 1 is then the front-left position and rows count toward the back (measured in Venus on `Ans_96_C18_SPE`, FIRMWARE_EQUIVALENCE §2.4).
 - Every stored position name in the corpus is a valid generated name (2511/2511).
 - Stored sequences that differ from the generated default (625) are user edits:
   - 291: the rack's own sequence was deleted and the rack is in a shared one (tips);
@@ -285,7 +285,7 @@ PLR main at 0f03af3 (`1.0.0b1`).
 | `Carrier` takes only site holders | Some racks use sites the definition lacks | Add a holder flagged `extra` |
 | Lids may be at most 1.0 mm smaller than their plate | Venus's Greiner 384 lid is 1.3 mm short against Venus's own rounded plate | Plain `venus_lid` resource on import. In generated definitions the SBS snap fixes it. |
 | `hamilton_tip_4000uL_filter`, `hamilton_tip_5000uL` raise "Tip diameter is not defined" | 4 and 5 mL tips | Tip built from the `.ctr` |
-| No rotation on assignment | Rotated Venus labware | Placed unrotated, with a warning |
+| Rotation about the resource's origin | Rotated Venus labware | The origin is turned about position 1 so the positions land where Venus has them (`plr_import.venus_corner`) |
 | Embedded tip racks sit `sinking_depth` (6 mm) below their site, centred over a smaller holder | Venus puts the rack's `ZTrans` on the site and its corner at the site's X/Y | Export: `ZTrans` = rack z + sinking depth, and the site is found from where the rack actually is |
 | A tip spot is where the pick-up ends (the driver's `tz`) | Venus ends a pick-up at `Cntr.1.base` + the `.ctr`'s `MaxDepth` and begins it at base + `Depth` (probed in simulation, FIRMWARE_EQUIVALENCE §2.7) | spot z = base + `MaxDepth` (base + tip length − fitting depth where the `.ctr` has none); export writes `MaxDepth` = spot − base |
 | A well's `material_z_thickness` is material under the cavity floor | The `.ctr`'s `BaseMM`: Venus's floor is base + `BaseMM` (FIRMWARE_EQUIVALENCE §2.4) | `material_z_thickness` = `BaseMM`, both ways |
@@ -469,7 +469,6 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 | Question | How to settle it |
 |---|---|
 | Lid Z rule | Test `RackBaseToCoverBase` and the 4 mm offset on the 436 corpus lids |
-| `IX.Start = 1` (A1 corner on portrait racks) | Venus, or a portrait layout with a known plate |
 | 384-tip racks, piercing and slim tips | PLR has no equivalent; generated |
 | Column reservoirs (Agilent 12/6/4/2) | Venus doesn't mark shared liquid; group positions by container width |
 | Authored model registration | Compare with Venus's 3D view, or with `3D*Offset` |
