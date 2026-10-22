@@ -15,7 +15,8 @@ import pytest
 from port_harness import hsl_run
 from test_ngsstar_processes_port import LIBS, NGS, avenio, lay  # noqa: F401
 
-pytestmark = pytest.mark.skipif(NGS is None, reason="VENUS_INTEROP_NGS not set")
+pytestmark = pytest.mark.skipif(NGS is None or not LIBS,
+                                reason="VENUS_INTEROP_NGS and VENUS_INTEROP_HAMILTON_LIBS not set")
 
 # What this test checks against the HSL (read by tools/trace_method.py --status)
 LIBRARY = "TIP_PRESENT_CHECK_5ML_1ML"

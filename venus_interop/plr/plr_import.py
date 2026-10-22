@@ -174,10 +174,15 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
   if rack.is_tip_rack:
     creator, how = _tip_creator(rack, store)
     probe = creator("probe")
-    # Venus's container base is the tip's bottom; PLR's tip spot is the seat, a tip length minus the
-    # fitting depth higher (CONVENTIONS.md section 5)
+    # where the pick-up ends, which is what PLR's tip spot is (the driver's end of pick-up): Venus
+    # ends it at the container base + the .ctr's MaxDepth (its start is the base + Depth), as its
+    # firmware shows (docs/FIRMWARE_EQUIVALENCE.md section 2.7); a tip length minus the fitting
+    # depth over the base where the .ctr gives no MaxDepth
+    tip_ctr = store.ref(rack, "Cntr.1.file")
+    seat = tip_ctr.num("MaxDepth") if tip_ctr is not None else 0.0
+    seat = seat or probe.get_size_z() - probe.fitting_depth
     items = create_ordered_items_2d(TipSpot, make_tip=creator, **_grid(name, rack, wx, wy,
-                                    rack.num("Cntr.1.base") + probe.get_size_z() - probe.fitting_depth))
+                                    rack.num("Cntr.1.base") + seat))
     tr = TipRack(name, sx, sy, sz, ordered_items=items)
     tr.metadata[VENUS] = {"tip": how}
     return tr
@@ -192,8 +197,10 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
   volume_fns = {}
   if geometry is not None and geometry.segments and all(generate._EQN.match(s.eqn) for s in geometry.segments):
     volume_fns = _volume_functions(geometry)
-  # the well stands on Venus's container base, which is the cavity floor: no material below it
-  well = dict(size_z=depth, cross_section_type=shape, material_z_thickness=0.0, **volume_fns)
+  # the well stands on Venus's container base; the .ctr's BaseMM is material under the cavity floor,
+  # which Venus's minimum height and eject heights stand on (docs/FIRMWARE_EQUIVALENCE.md section 2.4)
+  base_mm = ctr.num("BaseMM") if ctr is not None else 0.0
+  well = dict(size_z=depth, cross_section_type=shape, material_z_thickness=base_mm, **volume_fns)
   if listed:
     # positions listed one by one, in Venus's order: named by column (X) and row (Y, back first)
     xs = sorted({x for x, _ in rack.positions})
@@ -401,8 +408,8 @@ def import_deltas(layout: Layout, deck: Resource, store: DefinitionStore) -> lis
                        decision="Tip spot heights depend on this guess."))
     if isinstance(r, TipRack):
       out.append(Delta(p.id, "convention", "tip spot height",
-                       detail="Venus's container base is the tip's bottom; a PLR tip spot is its seat.",
-                       decision="spot z = base + (tip length - fitting depth), with pylabrobot's tip; exact both ways."))
+                       detail="Venus ends a pick-up at the container base + the .ctr's MaxDepth; a PLR tip spot is where it ends.",
+                       decision="spot z = base + MaxDepth (base + tip length - fitting depth without one)."))
     if p.lid is not None:
       lid = deck.get_resource(p.lid.id)
       if lid.category == "venus_lid":

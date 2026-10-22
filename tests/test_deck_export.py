@@ -118,10 +118,12 @@ def test_every_round_trip_difference_is_in_the_ledger(prefer, tmp_path):
         unexplained.append((name, quantity, round(size, 4)))
   assert not unexplained, unexplained
   diffs = {name: differences(deck, back, name) for name in ["tips_300", "tips_1000", "assay_plate", "dwp", "buffer"]}
+  # the stock tip racks too: PLR's 1000 uL rack and Venus's HT_L.rck agree once a tip spot is the
+  # container base + MaxDepth, where Venus ends its pick-up (they differed by 2.1 mm under the old
+  # "tip length - fitting depth" rule); the stock racks' hole sizes still differ, in the ledger
   if prefer == "exact":
     assert all(not v for v in diffs.values()), diffs
-  else:  # the stock tip racks bring Venus's numbers back with them
-    assert dict(diffs["tips_1000"])["tip bottom"] == pytest.approx(2.1, abs=0.01)
+  assert all("tip bottom" not in dict(diffs[name]) for name in ["tips_300", "tips_1000"]), diffs
   # and the import recorded its interpretations
   kinds = {(d["resource"], d["quantity"]) for d in back.metadata["venus"]["deltas"]}
   assert ("tips_300", "tip spot height") in kinds

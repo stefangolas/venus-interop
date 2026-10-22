@@ -1,0 +1,20 @@
+// Operator tip reload for Marionette, as production does it before a run: full racks on every tip
+// sequence the method counts, written to its counters through Hamilton's TipCounting library
+// (TipCount::Write2, the same call the method makes at its end). Run headless before each run.
+#include "HSLTipCountingLib.hsl"
+#include "HSLTrcLib.hsl"
+global device ML_STAR ("Fitness Selection.Marionette protease.v5.lay", "ML_STAR", hslTrue);
+function reload(sequence & tips, variable counter) void
+{
+   sequence full;
+   ML_STAR.CopyResetSequence(tips.GetName(), full);
+   TipCount::Write2(full, counter, ML_STAR);
+   Trace("reload_tips: ", counter, " <- ", tips.GetName(), " count ", full.GetCount(), " from ", full.GetCurrentPosition());
+}
+method main() void
+{
+   reload(ML_STAR.Tips_1000_Channels, "Tips_for_ch_1000_auto");
+   reload(ML_STAR.Tips_300_Channels, "Tips_for_ch_300_auto");
+   reload(ML_STAR.Tips_50_Channels, "Tips_for_ch_50_auto");
+   reload(ML_STAR.Tips_1000_Offset_pickup, "Tips_for_offset_pickup");
+}

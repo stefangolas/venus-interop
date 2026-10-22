@@ -1,0 +1,5 @@
+#include "HSLTrcLib.hsl"
+method main() void
+{
+   Trace("venus-sim probe p0: hello from a headless run");
+}

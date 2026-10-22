@@ -117,6 +117,8 @@ class LabwareSpec:
   pitch: tuple[float, float] = (0.0, 0.0)
   a1_front_left: tuple[float, float] = (0.0, 0.0)  # centre of the front-left position (Venus BndryX/Y)
   floor: float = 0.0  # container floor above the labware's bottom (Cntr.1.base)
+  base_mm: float = 0.0  # material under the cavity floor (the .ctr's BaseMM), which Venus counts
+  max_depth: float = 0.0  # where Venus ends a tip pick-up, over the container base (the .ctr's MaxDepth)
   container: Optional[Container] = None
   tip_creator: Optional[str] = None
   tip_filter: bool = False
@@ -196,7 +198,9 @@ def spec_for(d: Definition, store: DefinitionStore, name: Optional[str] = None) 
   ctr_def = store.ref(d, "Cntr.1.file")
   ctr = container(ctr_def) if ctr_def is not None else None
   s = LabwareSpec(name, "plate", d.path, d.dim, desc, rows=d.rows or 1, columns=d.columns or 1,
-                  pitch=(d.dx, d.dy), a1_front_left=d.boundary, floor=d.num("Cntr.1.base"), container=ctr)
+                  pitch=(d.dx, d.dy), a1_front_left=d.boundary, floor=d.num("Cntr.1.base"), container=ctr,
+                  base_mm=ctr_def.num("BaseMM") if ctr_def is not None else 0.0,
+                  max_depth=ctr_def.num("MaxDepth") if ctr_def is not None else 0.0)
   if ctr is None:
     s.notes.append("container definition not found: wells sized to the pitch")
   if not d.rows or not d.columns:
@@ -329,8 +333,11 @@ def emit(spec: LabwareSpec) -> str:
       f"  return Tip(name, diameter={_f(wx)}, size_z={_f(depth)}, has_filter={spec.tip_filter},\n"
       f"    maximal_volume={_f(spec.tip_max_volume if spec.tip_max_volume is not None else (ctr.max_volume if ctr else 0))},"
       f" fitting_depth={_f(spec.tip_fitting_depth)}, model={n + '_tip'!r})\n")
-    seat = (f"  _probe = {creator}('probe')\n"
-            f"  _seat = {_f(spec.floor)} + _probe.get_size_z() - _probe.fitting_depth  # Venus base = tip bottom\n")
+    # a tip spot is where the pick-up ends: Venus's container base + MaxDepth (plr_import.build_rack)
+    seat = (f"  _seat = {_f(spec.floor + spec.max_depth)}  # Venus ends the pick-up at base + MaxDepth\n"
+            if spec.max_depth else
+            f"  _probe = {creator}('probe')\n"
+            f"  _seat = {_f(spec.floor)} + _probe.get_size_z() - _probe.fitting_depth  # base + tip length - fitting depth\n")
     return tip + head + "TipRack:\n" + doc + seat + (
       f"  return TipRack(name, {_f(sx)}, {_f(sy)}, {_f(sz)}, model={n!r},\n"
       f"    ordered_items=create_ordered_items_2d(\n      TipSpot,\n{grid}      make_tip={creator},\n    ),\n  )\n")
@@ -346,7 +353,8 @@ def emit(spec: LabwareSpec) -> str:
   return pre + head + "Plate:\n" + doc + (
     f"  return Plate(name, {_f(sx)}, {_f(sy)}, {_f(sz)}, model={n!r},\n"
     f"    ordered_items=create_ordered_items_2d(\n      Well,\n{grid}      size_z={_f(depth)},\n"
-    f"      bottom_type={bottom},\n      cross_section_type={section},\n{vol}    ),\n  )\n")
+    f"      bottom_type={bottom},\n      cross_section_type={section},\n"
+    f"      material_z_thickness={_f(spec.base_mm)},\n{vol}    ),\n  )\n")
 
 
 def emit_alias(name: str, factory: str, source: str) -> str:

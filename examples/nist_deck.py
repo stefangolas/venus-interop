@@ -14,6 +14,7 @@ from typing import List, Optional, Sequence
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from venus_interop.plr import steps  # noqa: E402
 from venus_interop.plr.venus_deck import Gripper, VenusDeck, corpus_index  # noqa: E402,F401
 
 from pylabrobot.resources import Coordinate, Resource, ResourceHolder, Trash  # noqa: E402
@@ -33,10 +34,14 @@ def install(v: VenusDeck, slide_waste: Optional[str] = None,
   spots = [w.get_location_wrt(waste.parent, "c", "c", "b") for w in waste.get_all_items()]
   ys = [s.y for s in spots]
   parent = waste.parent
+  # Venus ejects onto the waste's container floor, over its first to last positions
+  items = waste.get_all_items()
+  floor = items[0].get_location_wrt(v.deck, "c", "c", "cavity_bottom").z
+  first, last = (w.get_location_wrt(v.deck, "c", "c", "b") for w in (items[0], items[-1]))
   parent.unassign_child_resource(waste)
-  parent.assign_child_resource(
-    Trash(v.deck.get_component_name("trash"), size_x=0, size_y=max(ys) - min(ys) + 20, size_z=0),
-    location=Coordinate(spots[0].x, min(ys) - 10, spots[0].z))
+  trash = Trash(v.deck.get_component_name("trash"), size_x=0, size_y=max(ys) - min(ys) + 20, size_z=0)
+  trash.metadata[steps.WASTE_EJECT] = steps.waste_eject_geometry((first.x, first.y), (last.x, last.y), floor)
+  parent.assign_child_resource(trash, location=Coordinate(spots[0].x, min(ys) - 10, spots[0].z))
   if slide_waste is not None:
     box = v.deck.get_resource(slide_waste)
     v.replace(slide_waste, lambda: Trash(v.deck.get_component_name("trash_core96"),

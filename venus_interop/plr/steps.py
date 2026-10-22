@@ -183,3 +183,36 @@ def iswap_grip_arguments(grip: IswapGrip) -> dict:
     observe("IswapGrip", None, grip)
   return dict(pickup_distance_from_top=grip.height, width=grip.width,
               open_margin=round(grip.opening - grip.width, 4), grip_strength=grip.force)
+
+
+# Venus's tip eject to the default waste (the deck's waste2.rck, MlStarIsSpecialEject), as its
+# firmware shows it (probed in simulation, docs/FIRMWARE_EQUIVALENCE.md section 2.11): channel n
+# goes to the n-th of as many points as the instrument has channels, spread evenly from the waste's
+# first position to its last, whichever channels eject; the tips are let go from 10 mm above the
+# waste's container bottom down to it (PLACE_SHIFT), travelling at 245 mm
+WASTE_EJECT = "venus_waste_eject"
+
+
+def waste_eject_geometry(first, last, bottom: float) -> dict:
+  """What `eject_to_waste` needs, kept on the deck's trash: the waste's first and last positions
+  (x, y) and its container bottom (z, including the container's BaseMM)."""
+  return {"x": first[0], "first_y": first[1], "last_y": last[1], "bottom": bottom}
+
+
+async def eject_to_waste(pipettes, use_channels: list[int]) -> None:
+  """Eject the channels' tips into the default waste as Venus does; PLR's own `discard_tips` where
+  the deck's trash carries no Venus waste geometry."""
+  from pylabrobot.resources import Coordinate
+  from pylabrobot.resources.hamilton.tip_creators import TipDropMethod
+
+  deck = getattr(getattr(pipettes, "_driver", None), "deck", None)
+  g = deck.get_trash_area().metadata.get(WASTE_EJECT) if deck is not None else None
+  if g is None:
+    await pipettes.discard_tips(use_channels=use_channels)
+    return
+  n = pipettes.num_channels
+  step = (g["last_y"] - g["first_y"]) / (n - 1)
+  await pipettes.drop_tips([Coordinate(g["x"], g["first_y"] + ch * step, g["bottom"]) for ch in use_channels],
+                           use_channels=use_channels, drop_method=TipDropMethod.PLACE_SHIFT,
+                           begin_tip_deposit_process=g["bottom"] + 10.0, end_tip_deposit_process=g["bottom"],
+                           minimum_traverse_height_start=245.0, minimum_traverse_height_end=245.0)

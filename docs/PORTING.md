@@ -25,6 +25,13 @@ and pipetting physics (liquid-class correction, how LLD settings become firmware
 own. Settings whose meaning is still open (CONVENTIONS §11) are a best reading. Say so wherever a
 port is described as matching Venus.
 
+**The acceptance check is firmware equivalence in Venus's own simulation**, and above all the
+spatial layer. [FIRMWARE_EQUIVALENCE.md](FIRMWARE_EQUIVALENCE.md) is the procedure: configuration
+map, comparison, the position sweep, the spatial rules found, heuristics, open work. The harness is
+`tools/venus_sim` (setup in its README). The interpreter and per-function tests above are
+scaffolding: they show a port calls what the library calls. Venus's simulation shows what the
+instrument would do.
+
 ## What a port is
 
 - One Python module per Venus library. Entry points keep their **Venus names and arguments**
@@ -373,6 +380,14 @@ function runs that the port folds in. Counted over the function bodies.
 
 ### Libraries inferred, not read
 
+**Most of these now have a source:** github.com/theonetruenerd/VenusPackages (unofficial, ~90 Venus
+library `.pkg` files; `python -m venus_interop.files.pkg extract` unpacks them; downloaded to
+`.local/session_state/venuspackages/`, not committed) holds Aliquot_for_EasySteps_v2, ArrayTools,
+StrTokenize (all four ArrayTools readings and the StrTokenize flag confirmed; StrTokenize also trims
+and appends), and HSLLabwareStateLib, HSLBarcodeReader, VirtualLabware_V2, Labware_Properties,
+HSLAppsLib, CheckCarrierPresence, SequenceTools_V3, Tools_Library. Next: put the extracted
+`Library` folders on the HSL tests' roots so the real HSL runs instead of the models.
+
 Where a library's source is on no machine here, the port reads it from its name and its uses,
 says so in its docstring, and the HSL tests answer it with the same reading (`port_harness`):
 
@@ -382,7 +397,7 @@ says so in its docstring, and the HSL tests answer it with the same reading (`po
 | `ARRAYTOOLS::get_distinct_from_array(in[], &out[])` | the distinct values, in order of first appearance |
 | `ARRAYTOOLS::ArrayVLookUp(values[], keys[], key, &out[])` | the values whose key equals `key`, in order |
 | `ARRAYTOOLS::Lookup(arr[], value)` | the 1-based index of the first element equal to `value`; 0 when none (Load_Carrier's "is this carrier in RunData", _SortElements' "is this a single digit") |
-| `ALIQUOT_FOR_EASYSTEPS_V2::CalcAliquot_v2_1(dispense seq, volume, pre, reserve, capacity, &loops, channels, rows, &aspirate[], &mix[], &patterns[], &pattern)` | the dispense sequence's positions from the current one, a column (`rows`, no more than the channels) per round, channel i on its i-th; rounds = min(columns left, floor((capacity - pre - reserve) / volume)); a channel aspirates its dispenses' volume + pre + reserve (the pre-dispense goes back into the trough, the reserve is drained after); patterns per round and for the aspirate = the channels with a dispense. Guessed: the mix volume (the aspirate volume). Calls: 1000 uL (50, 50, 1000), 300 uL (10, 10, 300), 50 uL (5, 5, 50); the bead variant (20, 0, 1000). Told the user 2026-10-19; open points in CONVENTIONS §11 |
+| `ALIQUOT_FOR_EASYSTEPS_V2::CalcAliquot_v2_1(...)` | **Read from its source since 2026-10-21** (the VenusPackages repository, below): the reading held for the rounds and aspirate volumes; the mix is 75 % of the aspirate (was guessed 100 %); the 8th argument is the installed channels (the patterns' length), not rows; no more wells than channels is one round whatever the tip holds. The port follows the source |
 | `ARRAYTOOLS::Update_Value_in_Array(&arr[], value, index)` | the element at the 1-based `index` set to `value` (the workflow dialog's process flags) |
 | `STRTOKENIZE::StrTokenize(text, delimiter, &tokens[], flag)` | `text` split at `delimiter`. The flag's meaning is a guess: every call passes FALSE, taken as "empty tokens dropped" (`"1,2,"` gives two). Where it matters: a position list ending in a comma (the 1000 uL carrier's) |
 

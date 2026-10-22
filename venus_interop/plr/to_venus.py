@@ -252,9 +252,18 @@ def rack_files(r: ItemizedResource, folder: str, name: str) -> VenusFiles:
     for i, (k, v) in enumerate(props.items(), 1):
       rck[f"Property.{i}"], rck[f"PropertyValue.{i}"] = k, v
   depth = item.get_size_z() or max(sz - floor, 0.0)
+  if isinstance(first, TipSpot):
+    # Venus ends a pick-up at the container base + MaxDepth, PLR's spot (docs/FIRMWARE_EQUIVALENCE.md
+    # section 2.7); it begins it at the base + Depth, which stays the tip length (the importer reads
+    # the tip from it), so a fitting depth over the spot rather than PLR's collar height
+    seat = length - tip.fitting_depth
+    notes.append("Venus begins the pick-up a fitting depth over the spot, PLR a collar height")
   ctr = _container_fields(item, ctr_rel, depth)
   if isinstance(first, TipSpot):  # the container's footprint is the rack's hole, as the importer reads it
+    ctr["MaxDepth"] = fmt(round(seat, 4))
     ctr["Dim.Dx"], ctr["Dim.Dy"] = fmt(first.get_size_x()), fmt(first.get_size_y())
+  else:  # material under the cavity floor, which Venus counts as the container's BaseMM
+    ctr["BaseMM"] = fmt(_floor(item))
     rck["Hole.X"], rck["Hole.Y"], rck["Hole.Z"] = fmt(first.get_size_x()), fmt(first.get_size_y()), fmt(first.get_size_x())
   return VenusFiles(f"{folder}\\{name}.rck",
                     {f"{folder}\\{name}.rck": _cfg("RECTRACK", 3, rck), ctr_rel: _cfg("CONTAINER", 3, ctr)}, notes)
@@ -263,7 +272,7 @@ def rack_files(r: ItemizedResource, folder: str, name: str) -> VenusFiles:
 def _floor(c: Resource) -> float:
   """Container floor above its own bottom; 0 where pylabrobot leaves it undefined (it raises)."""
   try:
-    return float(c.material_z_thickness or 0)
+    return float(getattr(c, "material_z_thickness", 0) or 0)
   except NotImplementedError:
     return 0.0
 

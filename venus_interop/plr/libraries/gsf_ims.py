@@ -125,7 +125,7 @@ class GsfIms:
     await self.p.pick_up_tips([taken[c] for c in ch], use_channels=ch)
 
   async def tip_eject(self, number_channels: int):
-    await self.p.discard_tips(use_channels=list(range(number_channels)))
+    await steps.eject_to_waste(self.p, list(range(number_channels)))
 
   # -- the pattern -----------------------------------------------------------------------------
 

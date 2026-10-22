@@ -285,7 +285,8 @@ PLR main at 0f03af3 (`1.0.0b1`).
 | `hamilton_tip_4000uL_filter`, `hamilton_tip_5000uL` raise "Tip diameter is not defined" | 4 and 5 mL tips | Tip built from the `.ctr` |
 | No rotation on assignment | Rotated Venus labware | Placed unrotated, with a warning |
 | Embedded tip racks sit `sinking_depth` (6 mm) below their site, centred over a smaller holder | Venus puts the rack's `ZTrans` on the site and its corner at the site's X/Y | Export: `ZTrans` = rack z + sinking depth, and the site is found from where the rack actually is |
-| A tip spot is the tip's seat | Venus's `Cntr.1.base` is the tip's bottom | spot z = base + (tip length − fitting depth), and the inverse on export |
+| A tip spot is where the pick-up ends (the driver's `tz`) | Venus ends a pick-up at `Cntr.1.base` + the `.ctr`'s `MaxDepth` and begins it at base + `Depth` (probed in simulation, FIRMWARE_EQUIVALENCE §2.7) | spot z = base + `MaxDepth` (base + tip length − fitting depth where the `.ctr` has none); export writes `MaxDepth` = spot − base |
+| A well's `material_z_thickness` is material under the cavity floor | The `.ctr`'s `BaseMM`: Venus's floor is base + `BaseMM` (FIRMWARE_EQUIVALENCE §2.4) | `material_z_thickness` = `BaseMM`, both ways |
 | Factories set `model` to their base factory (`hamilton_96_tiprack_standard` for every Hamilton tip rack, `hamilton_tip_carrier_L5` for every 5-position tip carrier) | The model doesn't identify the labware | Stock lookup compares a fresh instance of each candidate factory: positions, size and tip |
 | `TIP_CAR_480BC_A00` and `TIP_CAR_480_A00` are identical in PLR (no barcode window) | Export can't tell which was meant | The first stock match is used (`TIP_CAR_480.tml`) |
 | `create_ordered_items_2d` with a circular cross-section requires equal x/y | Some Venus wells are rectangular | Rectangle cross-section when x ≠ y |
@@ -346,7 +347,7 @@ This is a round trip of meaning, not bytes. A Venus definition that goes through
 - **Tips:**
   - `MlStarTipRack` is set only when pylabrobot's creator for that Hamilton tip type makes a tip of the same length; wide and ultrawide variants get none.
   - `PlrTipFilter`, `PlrTipFittingDepth` and `PlrTipMaxVolume` properties carry what Venus's tip codes don't; the generator reads them back.
-  - Tip container base = spot z − rack sinking depth − (tip length − fitting depth): *unverified* in Venus.
+  - Tip container base = spot z − rack sinking depth − (tip length − fitting depth), with `MaxDepth` = tip length − fitting depth, so Venus's pick-up ends at the spot (verified rule; the export's own files not yet run in Venus). `Depth` stays the tip length, so Venus begins the pick-up a fitting depth over the spot where PLR uses the collar height.
 - **Lids:** `RackBaseToCoverBase` = plate height − `nesting_z_height`. `CoverThickness` is unknown in PLR and written as 1 mm.
 - **Carriers:**
   - sites are numbered from the back;
@@ -384,8 +385,8 @@ Every number a conversion changes, and every interpretation it makes, is recorde
 
 | Kind | Meaning | Example |
 |---|---|---|
-| `convention` | The same thing measured from different reference points. Exact; reversed on the way back. | Tip racks: `ZTrans` = PLR z + 6 mm sinking depth; tip spot = Venus base + (tip length − fitting depth) |
-| `stock_disagrees` | A stock Hamilton file describes the same labware with different numbers | `HTF_L.rck`: tip bottom 2.1 mm above PLR's |
+| `convention` | The same thing measured from different reference points. Exact; reversed on the way back. | Tip racks: `ZTrans` = PLR z + 6 mm sinking depth; tip spot = Venus base + `MaxDepth` |
+| `stock_disagrees` | A stock Hamilton file describes the same labware with different numbers | `HTF_L.rck`: hole 6.8 mm against PLR's 7.2 (the 2.1 mm tip bottom difference was our old tip rule, gone with `MaxDepth`) |
 | `approximation` | A number Venus can't hold exactly, with its bound | Lid `CoverThickness` unknown in PLR |
 | `interpretation` | A choice where the source is ambiguous | Rotated labware placed unrotated; a tip type guessed from a file name |
 | `missing` | Information not available | A definition file not found: a plain box at the stored position |
