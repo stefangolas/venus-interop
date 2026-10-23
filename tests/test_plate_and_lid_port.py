@@ -40,6 +40,12 @@ BARE = ("Move_Growth_Plate", "Growth_Plate_waste")
 LIDS = ("Growth_Plate_lid", "Lid_parking_Growth_Plate")
 
 
+
+def core_force(grip: dict) -> int:
+  """The Venus grip force (0-9) a port meant: PLR is given it in firmware steps (yw = force x 5)."""
+  from venus_interop.plr import steps
+  return grip["grip_strength"] // steps.GRIP_FORCE_STEP
+
 def _calls():
   """(function, its arguments as Python values, z_shift or None); the eject flag alternates."""
   from venus_interop.plr.libraries import plate_and_lid as pl
@@ -119,7 +125,7 @@ class _Gripper:
   async def to_placeholder(self, thing, placeholder, front_channel, eject, grip, release):
     self.moves.append(dict(
       thing=thing, to=placeholder, height=grip["pickup_distance_from_top"],
-      width=grip["resource_size_y"], force=grip["grip_strength"], front=front_channel + 1,
+      width=grip["resource_size_y"], force=core_force(grip), front=front_channel + 1,
       z_speed=grip["z_speed"], press=release["press_on_distance"],
       x_acceleration=release["x_acceleration_level"], tap=release["offset"].z, eject=int(eject)))
 

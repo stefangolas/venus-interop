@@ -47,8 +47,19 @@ def install(v: VenusDeck, slide_waste: Optional[str] = None,
     v.replace(slide_waste, lambda: Trash(v.deck.get_component_name("trash_core96"),
                                          size_x=122.4, size_y=82.6, size_z=box.get_size_z()))
   if grip_tools is not None:
-    v.replace(grip_tools,
-              lambda: hamilton_core_gripper_1000ul_5ml_on_waste(name=v.deck.get_component_name("core_grippers")))
+    # Venus takes the tools as it takes tips: from the rack's base + the .ctr's Depth down to its
+    # MaxDepth (Marionette: 235.0 / 225.0); PLR's from its tools' top down 10 mm. Its tools stand
+    # where Venus's top is, so both heights come out as Venus's.
+    placed = v.layout.by_id()[grip_tools]
+    rack = v.store.rack(placed.file)
+    ctr = v.store.ref(rack, "Cntr.1.file") if rack is not None else None
+    venus_top = (v.deck.get_resource(grip_tools).get_absolute_location().z + rack.num("Cntr.1.base") + ctr.num("Depth")
+                 if ctr is not None else None)
+    holder = v.replace(grip_tools,
+                       lambda: hamilton_core_gripper_1000ul_5ml_on_waste(name=v.deck.get_component_name("core_grippers")))
+    if venus_top is not None:
+      top = max(t.get_location_wrt(v.deck, z="t").z for t in holder.children)
+      holder.location = holder.location + Coordinate(0, 0, round(venus_top - top, 4))
 
 
 def give_room(wells: Sequence[Resource], volume: float) -> None:

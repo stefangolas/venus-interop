@@ -160,3 +160,31 @@ def test_venus_following_is_volume_over_area():
   wells = [trough.get_item(i) for i in range(4)]
   assert steps.venus_following(wells, [456.8] * 4, step, None, None)["surface_following_distances"] == [0.2] * 4
   assert steps.venus_following(wells, [456.8] * 4, steps.Pipetting(0, fluid_height=1.0), None, None) == {}
+
+
+def test_venus_grip_as_venus_sends_it():
+  # probes/grip_force.hsl: yo = opening, yg = width, yv = speed, yw = force x 5 (0-9 -> 0-45)
+  from venus_interop.plr import steps
+  assert steps.venus_grip(80, 88, 5, 277) == dict(resource_size_y=80, y_clearance=4.0, squeeze_mm=0.0,
+                                                   grip_strength=25, grip_speed_y=277)
+  assert steps.venus_grip(82.5, 91, 9)["grip_strength"] == 45
+  assert steps.venus_release(80, 88) == dict(y_clearance=4.0)
+
+
+def test_venus_lid_heights():
+  # Marionette's lid grips: a ZTransValue 0 lid stands RackBaseToCoverBase above its plate's bottom
+  # (Media_source: 123.9 + 37.3); a lid park with ZTransValue 0 stores its cover's underside
+  # (127.9 - (9.15 - 2.5) = 121.25)
+  from venus_interop.files.definitions import DefinitionStore, Lid
+  from venus_interop.files.layout import Placement
+  from venus_interop.plr import plr_import
+  lid_def = Lid("lid.lid", "COVER", {"Dim.Dx": "127", "Dim.Dy": "86", "Dim.Dz": "9.15", "RackBaseToCoverBase": "37.3",
+                                     "CoverThickness": "2.5"})
+  on_plate = Placement({"Id": "l", "File": "LID.lid", "ZTrans": "167.85", "ZTransValue": "0"})
+  assert plr_import.venus_lid_z(on_plate, lid_def, 123.9) == 161.2
+  assert plr_import.venus_lid_z(Placement({**on_plate.fields, "ZTransValue": "2"}), lid_def, 123.9) == 167.85
+  store = DefinitionStore()
+  store.add("LID.lid", lid_def)
+  park = Placement({"Id": "park", "File": "LID.lid", "ZTrans": "127.9", "ZTransValue": "0", "TForm.3.X": "0",
+                    "TForm.3.Y": "0"})
+  assert plr_import.venus_corner(park, store)[2] == 121.25

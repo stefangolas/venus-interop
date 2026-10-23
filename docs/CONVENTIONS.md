@@ -84,7 +84,7 @@ Venus deck coordinates are PLR deck coordinates, with the same origin, axes and 
 | Rack Z | site Z (= carrier ZTrans + Site.Z) when ZTransValue is 0 or 1 | 3417 + 30 hand-set |
 | Stacks | each rack sits at the lower rack's Z + the **lower** rack's `StackHt` | 111/112 steps. Racks at the *same* Z on one site are alternatives, not a stack. |
 | Lid XY | lid corner = plate corner + ((plate.Dx − lid.Dx)/2, (plate.Dy − lid.Dy)/2): centred | 350/382 |
-| Lid Z | **no rule in the data**: keep the stored value. For decks built in PLR, use lid base = plate base + `RackBaseToCoverBase` (*unverified*) | None of four candidate formulas fits any of the 383 lids with definitions. Identical plate-and-lid pairs on Z-from-site placements sit at different offsets (Agilent reservoir + the same lid: +43.05, +40.25, +39.95), so these values were set by hand. On rack-based nests (`ZTransValue = 1`) the plate sits 1.3 mm lower but its lid doesn't move. |
+| Lid Z | **Measured in Venus (FIRMWARE_EQUIVALENCE §2.12):** with `ZTransValue` 0, a plate's lid stands `RackBaseToCoverBase` above the plate's bottom, whatever its stored Z; a lid placed as labware stores its cover's underside (`Dim.Dz` − `CoverThickness` above its bottom). `ZTransValue` 1 and 2: the stored value (unmeasured for 2) | Three lids and three parks in Marionette, exact |
 | Site order | Venus site 1 is at the back. PLR carriers count sites from the front (`PLT_CAR_L5AC_A00`: index 0 at y = 8.5). The converter orders PLR sites front to back; each holder is named `<carrier>_site_<Venus site id>`. | MULTIFLEX_ASSEMBLY.md, KAPA notes, PLR |
 | Rotation | turned about position 1 (`TForm.3`) by `TForm.1/2`; PLR `Rotation(z = −Angle)`. Measured in Venus (FIRMWARE_EQUIVALENCE §2.4) | 11 racks in the sweep, exact |
 | Venus `.x` frames | Y up | `plr/xfile.py` swaps to Z up and reverses the winding |
@@ -468,7 +468,6 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 
 | Question | How to settle it |
 |---|---|
-| Lid Z rule | Test `RackBaseToCoverBase` and the 4 mm offset on the 436 corpus lids |
 | 384-tip racks, piercing and slim tips | PLR has no equivalent; generated |
 | Column reservoirs (Agilent 12/6/4/2) | Venus doesn't mark shared liquid; group positions by container width |
 | Authored model registration | Compare with Venus's 3D view, or with `3D*Offset` |
@@ -485,7 +484,6 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 | Step-return recovery codes: `StepReturn::GetRecoveryButton` values 4 and 9, which easyPick II's `UpdatePickingState` counts as picked | Trigger errors with known recoveries in the simulator and read the step return |
 | PTL enum values: `ErrorHandling` (5 in the corpus), `drivingMode` (1 = aspirate driven, 2 = dispense driven per `HSLPTLLib.hsl`), `DispenseMode`, `AspirateMode` | The smart step dialog against the generated `SetPipettingState` lines |
 | How Venus's element counter applies a tip counter to a sequence (`ReadElementCounterIntoSequence`). What it stores is known from `Config\HxElementCounter_template.mdb`: ElementCounters (ID, Name, InstrumentClass, LabwareType, Modified, SimulationModified; 28 stock counters, one per tip type), Positions and SimulationPositions (ElementCounterID, PositionID, Status), Status 0 empty / 1 occupied (`HSLTipCountingLib` `HxECPositionStatus`). Open: whether PositionID is the sequence index or the rack position, and whether reading sets the current position to the first occupied one or removes the empty ones; `tip_count` takes the first, the same while tips are taken in order | Read a counter database after a partial run, and read it into a sequence in the simulator |
-| How Venus's CO-RE grip force (0-9 in step records) and grip speed (e.g. 277.8, no unit stated) relate to PLR's `grip_strength` (0-99) and `grip_speed_y` (mm/s); ports pass the force through unchanged and leave the speed at PLR's default | Read the firmware command a ZSwapGetPlate step sends in Venus's trace (C0ZP grip strength and speed fields) for known settings |
 | Whether a sequence copy (`a = b`, `CopySequence`) carries its position properties (`methods.sequences` copies them; the HSL reference doesn't say) | A two-line test method in the simulator: set a property, copy, read it on the copy |
 | The CO-RE 96 Head Tip Eject step's `UsePickUpPosition` values: 2 is read as "default waste" from the order the dialog help lists Off / pick-up position / default waste | Set each option in the step dialog and read the saved `.stp` |
 | The Venus Y and Z of the culture-processing `Move96HeadAndArm` firmware moves (`H0YA ya07500`, `H0ZA za68500`): 117.19 mm and 342.5 mm with PLR's head drive resolutions; 68500 is the top of the head's Z window either way | Run the move and read the head's position back |

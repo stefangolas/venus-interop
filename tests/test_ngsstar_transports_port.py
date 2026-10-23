@@ -40,6 +40,12 @@ CALLS = [
 ]
 
 
+
+def core_force(grip: dict) -> int:
+  """The Venus grip force (0-9) a port meant: PLR is given it in firmware steps (yw = force x 5)."""
+  from venus_interop.plr import steps
+  return grip["grip_strength"] // steps.GRIP_FORCE_STEP
+
 @pytest.fixture(scope="module")
 def avenio():
   return NGS / "assets" / "NGSStar" / "Roche" / "Avenio CGP"
@@ -109,7 +115,7 @@ class _Gripper:
     o, d = grip["offset"], release["offset"]
     self.moves.append(dict(
       thing=thing, to=placeholder, height=grip["pickup_distance_from_top"], width=grip["resource_size_y"],
-      opening=round(grip["resource_size_y"] + 2 * grip["y_clearance"], 4), force=grip["grip_strength"],
+      opening=round(grip["resource_size_y"] + 2 * grip["y_clearance"], 4), force=core_force(grip),
       z_speed=grip["z_speed"], front=front_channel + 1, eject=int(eject), press=release["press_on_distance"],
       x_acceleration=release["x_acceleration_level"], place_z_speed=release["z_speed"],
       pick_shift=(o.x, o.y, o.z), drop_shift=(d.x, d.y, d.z)))
@@ -194,7 +200,7 @@ class _IswapGripper:
                            release=None, front_channel=None, eject=None):
     if iswap is None:  # the CO-RE gripper
       self.log.append(dict(thing=thing, to=placeholder, core=True, height=grip["pickup_distance_from_top"],
-                           width=grip["resource_size_y"], force=grip["grip_strength"], end=int(eject)))
+                           width=grip["resource_size_y"], force=core_force(grip), end=int(eject)))
       return
     move = dict(thing=thing, to=placeholder, height=grip["pickup_distance_from_top"], width=grip["width"],
                 opening=round(grip["width"] + grip["open_margin"], 4), force=grip["grip_strength"],

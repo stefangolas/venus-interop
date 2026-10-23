@@ -235,11 +235,31 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
 
 
+# A Venus grip force (0-9) as the firmware's grip strength (yw, 0-99): five steps each, as Venus sends
+# it (probes/grip_force.hsl, 2026-10-22: forces 0..9 sent as 0, 5, ... 45)
+GRIP_FORCE_STEP = 5
+
+
+def venus_grip(width: float, opening: float, force: int, speed: Optional[float] = None) -> dict[str, Any]:
+  """PLR's pick_up_resource arguments for a Venus grip, as Venus sends it (the same probe): the jaws
+  open to `opening` and close to `width` (yo, yg; PLR squeezes 1.5 mm past it by default), the grip
+  force in firmware steps (yw), and the grip speed in mm/s as given (yv; PLR's default 5.0 when None)."""
+  out: dict[str, Any] = dict(resource_size_y=width, y_clearance=round((opening - width) / 2, 4), squeeze_mm=0.0,
+                             grip_strength=int(force) * GRIP_FORCE_STEP)
+  if speed is not None:
+    out["grip_speed_y"] = speed
+  return out
+
+
+def venus_release(width: float, opening: float) -> dict[str, Any]:
+  """PLR's drop_resource arguments for a Venus place: the jaws open back to the grip's opening (yo)."""
+  return dict(y_clearance=round((opening - width) / 2, 4))
+
+
 @dataclasses.dataclass(frozen=True)
 class CoreGrip:
   """A Venus CO-RE gripper get (ZSwapGetPlate) and place (ZSwapPlacePlate): what decides the PLR
-  call. Grip force and grip speed are kept for the comparison only: PLR's grip strength runs 0-99
-  where Venus's grip force runs 0-9, and Venus's grip speed has no stated unit (CONVENTIONS §11)."""
+  call (`venus_grip`, `core_grip_arguments`)."""
   height: float  # GripperAccessHeight: mm below the top
   width: float  # grip width, mm across the jaws
   opening: float  # grip opening before access, mm
@@ -249,6 +269,7 @@ class CoreGrip:
   x_acceleration: int = 1
   place_z_speed: float = 75.0  # mm/s, placing
   check: int = 0  # plate check on place: no PLR counterpart
+  speed: Optional[float] = None  # grip speed, mm/s (Venus's yv); PLR's default when the record names none
 
 
 def core_grip_arguments(grip: CoreGrip, pick_offset=None, drop_offset=None) -> tuple[dict, dict]:
@@ -258,11 +279,11 @@ def core_grip_arguments(grip: CoreGrip, pick_offset=None, drop_offset=None) -> t
 
   for observe in OBSERVERS:
     observe("CoreGrip", None, grip)
-  pick = dict(pickup_distance_from_top=grip.height, resource_size_y=grip.width,
-              y_clearance=round((grip.opening - grip.width) / 2, 4), grip_strength=grip.force,
-              z_speed=grip.z_speed, offset=pick_offset or Coordinate(0, 0, 0))
+  pick = dict(pickup_distance_from_top=grip.height, z_speed=grip.z_speed, offset=pick_offset or Coordinate(0, 0, 0),
+              **venus_grip(grip.width, grip.opening, grip.force, grip.speed))
   drop = dict(offset=drop_offset or Coordinate(0, 0, 0), press_on_distance=grip.press,
-              x_acceleration_level=grip.x_acceleration, z_speed=grip.place_z_speed)
+              x_acceleration_level=grip.x_acceleration, z_speed=grip.place_z_speed,
+              **venus_release(grip.width, grip.opening))
   return pick, drop
 
 

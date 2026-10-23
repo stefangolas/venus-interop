@@ -350,13 +350,37 @@ how to align the two for a test.
   ejects now match Venus field for field.
 
 ### 2.12 CO-RE gripper
-- **Fields:**
-  - the channels used `pa/pb`. Venus uses 7 and 8; NIST's library moves the front channel. PLR's
-    indices are 0-based in its API, so check the off-by-one;
-  - grip widths `yo/yg`: from the labware;
-  - grip speed `yv`, grip strength `yw`;
-  - heights `zj`, traverse `th/te`;
-  - the gripper tool's position on the waste.
+Measured in Venus (probe `probes/grip_force.hsl`, STAR_OEM toolkit, forces 0-9 and two settings;
+and Marionette's 7 moves), 2026-10-22:
+- **What a step's settings become:**
+  - `yw` = the grip force × 5 (0-9 sent as 0, 5, ... 45): `steps.GRIP_FORCE_STEP`. The ports had
+    passed the force as it is, a fifth of Venus's strength;
+  - `yo` = the grip opening, `yg` = the grip width, as given: PLR squeezes 1.5 mm past the width
+    and opens 1.5 mm each side by default (`squeeze_mm`, `y_clearance`);
+  - `yv` = the grip speed in mm/s, as given (277 in NIST's library; PLR's default is 5.0);
+  - the place (`C0ZR`) reopens to the grip opening.
+  `steps.venus_grip` / `venus_release` give PLR these; the CO-RE ports use them.
+- **Lids** (Marionette, every lid grip and place within 0.1 mm):
+  - on a plate, with `ZTransValue` 0: the lid's bottom is the plate's bottom + the `.lid`'s
+    `RackBaseToCoverBase`, whatever its stored `ZTrans` (`plr_import.venus_lid_z`; three lids). PLR
+    had the stored `ZTrans`, 6.65 mm high. The importer sets the lid's PLR nesting to match, and a lid
+    going back onto its plate is dropped onto the plate at that height (`venus_deck.Gripper`);
+  - a lid placed as labware (a lid park) with `ZTransValue` 0 stores the cover's underside: its
+    bottom is `Dim.Dz` − `CoverThickness` lower (9.15 − 2.5 = 6.65; two parks). `ZTransValue` 1 is
+    its bottom (one park);
+  - drops into a site go at the placeholder's own height, not the site's.
+- **Tools:** taken as tips are: from the rack's base + the `.ctr`'s `Depth` (`tp`, 235.0) to its
+  `MaxDepth` (`tz`, 225.0); returned 20 mm lower (215.0 / 205.0). PLR's tools are seated where
+  Venus's top is (`examples/nist_deck.install`).
+- **Front channel:** NIST's PlateAndLid draws it from the clock's seconds (`GetNewFrontChannel`), so
+  `pa/pb` differ run to run: expected. PLR's tool return (`C0ZS`) sends no `pa/pb`.
+- **Heights to 0.1 mm:** Venus cuts gripper heights (196.35 → 196.3) where PLR rounds: 0.05 mm at
+  most, left as it is.
+- **Open:**
+  - the place end height `te`: with `TransportMode` 2 (a plate with its lid), `zj` + 35 − the grip
+    height on all 7 of Marionette's places; with mode 0 (the probe) the traverse height;
+  - a plate-with-lid grip (`MoveGrowthPlateWithLid`) 0.6 mm higher in Venus than the plate's top −
+    the grip height: one move.
 
 ### 2.13 Initialization and queries
 - **Venus at start:**
@@ -440,6 +464,7 @@ for field.
 | `po`, `zo` | 5.0, 0.5: the step record's `-534183622`, `-534183700` | 10.0, 0.0 | `Pipetting.pull_out/touch_off`, sent under the profile; the keys named in `stp_pars` (one value each measured) |
 | `ms` with no mix | the class's mix flow (500) | 100.0 / 1.0 | a zero-cycle `Mix` at the class's rate, under the profile |
 | `fp`, `mh` | the class's corrected volume (or the mix volume) over the container's area, to 0.1 mm; a connected cavity (`ConnectedCtr = 1`) takes all its channels' volumes over all its positions' area (Media_source: 4 × 456.8 / (96 × 88.36) = 0.2) | 0.1 (PLR's following), 0 | `steps.venus_following` under the profile; the importer records each container's area (`EqnOfVol` h·K) and `ConnectedCtr`. 126 of 128 |
+| `C0Z*` `yo yg yv yw`, lid `zj`, tools `tp/tz` | the step's opening, width, speed; force × 5; lids at plate bottom + `RackBaseToCoverBase`; tools from the rack's `Depth` / `MaxDepth` | opening/width ±1.5, speed 5.0, the force as is; lids at the stored Z (+6.65), lids on plates and parks 6.6-38.9 mm off; tools 4.5 mm high | §2.12: `steps.venus_grip`, `plr_import.venus_lid_z`, `venus_deck.Gripper`, `nist_deck.install`; probe `grip_force.hsl` |
 | `dm` | 3 (blow-out at the surface: Venus's "Empty") | 4 (PLR's `empty`, the tip emptied where it stands) | **port bug**: `blow_out` for the class's "Empty" |
 | `av/dv`, one tie | 11.25 → 11.3 | 11.2 (`round`, half to even) | the fork rounds a half up |
 
@@ -452,9 +477,9 @@ for field.
 | `il`, `in` | sent, 0 | not sent | Expected: the firmware's default |
 | `tt`, `td` | slot 05, `td1` | slot 01, `td0` | Expected: the same tip; both out of rack (§2.7) |
 | `C0TT` | 53 | 2 | Expected (§2.7) |
-| `C0Z*` widths, speed, force, `zj` | `yo` 88.0, `yg` 80.0, `yv` 277.0, `yw` 25, `zj` 187.3 | 83.0, 77.0, 5.0, 5, 186.7 | Gripper (§2.12). `yv` is likely `ZSwapGrippYSpeed` (277.8) in the `.cfg` |
-| `C0ZR` `te` | 150.4 to 220.3, one per place | 275.0 | Open: per placed plate |
-| `C0ZS/ZT` `tp/tz`, `pa/pb` | 215.0 / 205.0, channels 7/8 | 219.5 / 209.5, 6/7 (none on `ZS`) | Gripper tools: 4.5 mm, and the channel numbering |
+| `C0ZR` `te` | `zj` + 35 − grip height (mode 2) | 275.0 | Open (§2.12): depends on the transport mode |
+| `C0ZP/ZR` `zj` | 0.6 mm above PLR on one plate-with-lid move; 0.1 below on three (Venus cuts) | | §2.12: the 0.6 open, the 0.1 left |
+| `C0ZT/ZS` `pa/pb` | 7/8 this run | 6/7; none on `ZS` | Expected: the front channel drawn from the clock (§2.12) |
 | `C0ZA` | 1 | 5 | The 96-head and arm move: to compare |
 | 96-head | `C0EI/EM/EV` | `H0` module commands | Command family: check the move targets |
 

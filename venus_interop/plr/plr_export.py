@@ -13,7 +13,7 @@ from pylabrobot.resources import Deck, Resource
 from venus_interop.files import hxcfg
 from venus_interop.files.definitions import DefinitionStore
 from venus_interop.files.layout import Layer, Layout, Placement, Sequence, fmt
-from venus_interop.plr.plr_import import VENUS, venus_corner
+from venus_interop.plr.plr_import import VENUS, venus_corner, venus_lid_z
 
 TOL = 2e-4  # pylabrobot rounds coordinates to 4 decimals; Venus stores float32 noise
 
@@ -79,9 +79,11 @@ def plr_to_lay(deck: Deck, store: DefinitionStore, allow_unmapped: bool = False)
       p.lid = Placement(dict(lid_r.metadata[VENUS]["fields"]))
       loc = lid_r.get_absolute_location()
       lx, ly, _ = p.lid.tform
-      if abs(lx - loc.x) > TOL or abs(ly - loc.y) > TOL or abs(p.lid.z - loc.z) > TOL:
+      # where Venus would put it from what the fields say (venus_lid_z); its ZTrans moves by the difference
+      expected = venus_lid_z(p.lid, store.lid(p.lid.file), r.get_absolute_location().z)
+      if abs(lx - loc.x) > TOL or abs(ly - loc.y) > TOL or abs(expected - loc.z) > TOL:
         p.lid.set_tform(loc.x, loc.y)
-        p.lid.z = loc.z
+        p.lid.z = p.lid.z + (loc.z - expected)
     labware.append(p)
 
   sequences = [Sequence(s["name"], [tuple(i) for i in s["items"]], s["read_only"], s["extra"])

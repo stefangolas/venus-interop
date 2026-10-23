@@ -99,6 +99,15 @@ def rotation_z(p: Placement) -> float:
   return round(math.degrees(math.atan2(s, c)), 6) % 360
 
 
+def venus_lid_z(lid: Placement, lid_def, plate_bottom: float) -> float:
+  """Where Venus puts a plate's lid (its bottom, deck Z). With ZTransValue 0 it ignores the stored
+  ZTrans: the lid stands RackBaseToCoverBase above the plate's bottom (Marionette's lid grips, three
+  lids, exact; docs/FIRMWARE_EQUIVALENCE.md section 2.12). Otherwise, unmeasured, the stored ZTrans."""
+  if lid.fields.get("ZTransValue") == "0" and lid_def is not None and "RackBaseToCoverBase" in lid_def.fields:
+    return round(plate_bottom + lid_def.rack_base_to_cover_base, 4)
+  return lid.z
+
+
 def venus_corner(p: Placement, store: DefinitionStore) -> tuple[float, float, float]:
   """The placement's origin in deck coordinates, as Venus places it: the front-left-bottom corner,
   or for rotated labware the point that corner turns to. Venus turns a rack about its position 1
@@ -109,6 +118,13 @@ def venus_corner(p: Placement, store: DefinitionStore) -> tuple[float, float, fl
     dx, dy = rules.a1_offset(rack)
     c, s = turn(p)
     x, y = x - (c * dx - s * dy), y - (s * dx + c * dy)
+  elif p.kind == "lid" and p.z_mode == 0:
+    # a lid placed as labware (a lid park): with ZTransValue 0 the stored Z is the cover's underside,
+    # its CoverThickness below the top, so the lid's bottom is its height less that thickness lower
+    # (Marionette's lid parks: 6.65 mm, 9.15 - 2.5, two parks exact; ZTransValue 1 is the bottom)
+    lid = store.lid(p.file)
+    if lid is not None and "CoverThickness" in lid.fields:
+      return x, y, round(p.z - (lid.dim[2] - lid.num("CoverThickness")), 4)
   return x, y, p.z - z_above_bottom(p.z_mode, rack, store)
 
 
@@ -419,15 +435,19 @@ def lay_to_plr(layout: Layout, store: DefinitionStore, name: str = "deck") -> Ha
     if p.lid is not None:
       lid_def = store.lid(p.lid.file)
       sx, sy, sz = lid_def.dim if lid_def is not None else (0.0, 0.0, 0.0)
-      lid = Lid(p.lid.id, sx, sy, sz, nesting_z_height=0, metadata={VENUS: {"fields": dict(p.lid.fields)}})
+      o = r.get_absolute_location()
+      lid_z = venus_lid_z(p.lid, lid_def, o.z)
+      above = lid_z - o.z
+      # PLR seats a lid nesting_z_height into its plate: so a lid put back lands where Venus has it
+      nesting = round(r.get_size_z() - above, 4)
+      lid = Lid(p.lid.id, sx, sy, sz, nesting_z_height=max(nesting, 0.0), metadata={VENUS: {"fields": dict(p.lid.fields)}})
       lx, ly, _ = p.lid.tform  # a lid's TForm.3 is its corner
       lid.metadata[VENUS]["lid_of"] = p.id
-      o = r.get_absolute_location()
       # in the plate's own frame: a rotated plate turns its lid with it, the stored corner stays put
       # (where Venus puts a rotated plate's lid is unmeasured)
       c, s = turn(p)
       ddx, ddy = lx - o.x, ly - o.y
-      loc = Coordinate(round(c * ddx + s * ddy, 4), round(-s * ddx + c * ddy, 4), p.lid.z - o.z)
+      loc = Coordinate(round(c * ddx + s * ddy, 4), round(-s * ddx + c * ddy, 4), round(above, 4))
       try:
         r.assign_child_resource(lid, location=loc)
       except (ValueError, TypeError):

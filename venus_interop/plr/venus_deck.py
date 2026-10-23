@@ -19,7 +19,7 @@ from venus_interop.methods.deck_state import absent_at_start
 from venus_interop.plr import plr_import
 from venus_interop.rules import placement
 
-from pylabrobot.resources import Coordinate, Resource, ResourceHolder
+from pylabrobot.resources import Coordinate, Lid, Plate, Resource, ResourceHolder
 
 
 def corpus_index(corpus: pathlib.Path) -> Dict[str, pathlib.Path]:
@@ -204,10 +204,18 @@ class Gripper:
     after this one (a library's eject_gripper 0).
     """
     where = self.v.spots[placeholder]
+    lid_of = None  # a plate's lid place: the lid goes onto the plate, seated as Venus has it
     if self.v.deck.has_resource(placeholder):  # a stand-in still there, not the thing itself
       stand_in = self.v.deck.get_resource(placeholder)
+      lid_of = stand_in.metadata.get(plr_import.VENUS, {}).get("lid_of")
       if stand_in is not thing:
         stand_in.parent.unassign_child_resource(stand_in)
+    if lid_of is None:  # the stand-in gone: which plate the layout gives this lid place
+      lid_of = next((p.id for p in self.v.layout.labware if p.lid is not None and p.lid.id == placeholder), None)
+    if into is None and lid_of is not None and isinstance(thing, Lid):
+      plate = self.v.resource(lid_of)
+      if isinstance(plate, Plate) and plate.lid is None:
+        into = plate
     self.say(f"{thing.name} -> {placeholder}" + (" (iSWAP)" if iswap is not None else ""))
     g = self.star.core_grippers
     if iswap is None:
@@ -216,7 +224,20 @@ class Gripper:
       await g.pick_up_resource(thing, **(grip or {}))
 
       async def drop(to):
-        await g.drop_resource(to, **(release or {}))
+        kw = dict(release or {})
+        if isinstance(to, (ResourceHolder, Plate)):
+          # into a site or onto a plate (a lid), at the placeholder's own height as Venus places it:
+          # a lid park stands its cover's height below the site's (plr_import.venus_corner), a lid
+          # RackBaseToCoverBase above its plate's bottom (plr_import.venus_lid_z)
+          dz = round(where.z - to.get_location_wrt(self.v.deck, "c", "c", "b").z, 4)
+          if abs(dz) > 1e-6:
+            kw["offset"] = kw.get("offset", Coordinate(0, 0, 0)) + Coordinate(0, 0, dz)
+        await g.drop_resource(to, **kw)
+        if isinstance(to, (ResourceHolder, Plate)) and thing.parent is to:
+          # the model where it went down: the drop's offset moves the arm, not the tree
+          now = thing.get_location_wrt(self.v.deck, "c", "c", "b").z
+          if abs(now - where.z) > 1e-6:
+            thing.location = thing.location + Coordinate(0, 0, round(where.z - now, 4))
     else:
       await self._iswap_step(iswap, lambda e: iswap.plan_pick_up(thing, direction=direction, elbow=e, **(grip or {})),
                              elbows)

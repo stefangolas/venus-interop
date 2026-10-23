@@ -22,6 +22,7 @@ from typing import Optional
 
 from pylabrobot.resources import Coordinate
 
+from venus_interop.plr import steps
 from venus_interop.plr.venus_deck import Gripper, VenusDeck
 
 LIBRARY = "PLATEANDLIDMOVEMENT"  # the Venus namespace ported
@@ -37,6 +38,8 @@ class Grip:
   press: float = 0.0  # plate press on put, mm
   x_acceleration: int = 1
   z_speed: float = 75.0  # mm/s
+  opening: float = 88.0  # mm: grip_opening in every move of the library
+  speed: float = 277.0  # mm/s: grip_speed in every move of the library
 
 
 _LID = Grip(4, 84.5, 5, press=0.5, x_acceleration=2)
@@ -93,10 +96,11 @@ class PlateAndLidMovement:
     destination = self._labware(move_to_seq)  # a placeholder: where it goes
     await self.g.to_placeholder(
       plate, destination, front_channel=self._front(new_front_gripper), eject=int(eject_gripper) == 1,
-      grip=dict(pickup_distance_from_top=grip.height, resource_size_y=grip.width,
-                grip_strength=grip.force, z_speed=grip.z_speed),
+      grip=dict(pickup_distance_from_top=grip.height, z_speed=grip.z_speed,
+                **steps.venus_grip(grip.width, grip.opening, grip.force, grip.speed)),
       release=dict(offset=Coordinate(0, 0, grip.tap), press_on_distance=grip.press,
-                   x_acceleration_level=grip.x_acceleration, z_speed=grip.z_speed))
+                   x_acceleration_level=grip.x_acceleration, z_speed=grip.z_speed,
+                   **steps.venus_release(grip.width, grip.opening)))
     return plate
 
   async def MoveLid(self, lid_from_seq, lid_to_seq, gripper_sequence=None, new_front_gripper=0,

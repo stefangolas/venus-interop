@@ -1,0 +1,31 @@
+// The CO-RE gripper's fields as Venus sends them (STAR_OEM toolkit on pyhamilton's STAR_OEM_Test.lay):
+// a plate gripped and put back with each grip force 0-9 (width 80, opening 88, speed 277, as NIST's
+// PlateAndLid library), then once with another width, opening and speed. Stage with stage_probe.py,
+// then run_probe.py. Results in docs/FIRMWARE_EQUIVALENCE.md section 2.12.
+namespace _Method { #include "HSLSeqLib.hsl" }
+namespace _Method { #include "HSLTrcLib.hsl" }
+namespace _Method { #include "STAR_OEM_toolkit.hs_" }
+global device ML_STAR ("STAR_OEM_Test.lay", "ML_STAR", hslTrue);
+namespace _Method {
+function grip(sequence & plate, sequence & lid, sequence & tools, variable force, variable width, variable before,
+              variable speed, variable eject) void
+{
+   variable ret;
+   Trace("PROBE grip force ", force, " width ", width, " opening ", before, " speed ", speed);
+   plate.SetCurrentPosition(1); tools.SetCurrentPosition(1);
+   STAR_OEM_TOOLKIT::Channels_1mL_COREGrippers_Get(ML_STAR, plate, lid, tools, 0, 0, force, 8, width, 5, before, speed,
+                                                   75, 0, ret);
+   plate.SetCurrentPosition(1); tools.SetCurrentPosition(1);
+   STAR_OEM_TOOLKIT::Channels_1mL_COREGrippers_Place(ML_STAR, plate, lid, tools, 0, 0, eject, 75, 0, 1, 0, ret);
+}
+method main() void
+{
+   variable ret; variable f; sequence plate; sequence lid; sequence tools;
+   SeqAdd(plate, "phage_start_plate", "A1");
+   SeqAdd(tools, "COREGripTool", "1");
+   SeqAdd(tools, "COREGripTool", "2");
+   STAR_OEM_TOOLKIT::Initialize(ML_STAR, 0, ret);
+   for (f = 0; f <= 9; f++) grip(plate, lid, tools, f, 80, 88, 277, 0);
+   grip(plate, lid, tools, 5, 82.5, 91, 150, 1);
+}
+}
