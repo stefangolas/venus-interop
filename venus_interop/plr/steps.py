@@ -27,6 +27,8 @@ import dataclasses
 import math
 from typing import Any, Optional, Union
 
+from venus_interop.plr import faithful
+
 MIX_FLOW = 250.0  # uL/s
 
 # Called with ("Aspirate" | "Dispense", channels, Pipetting), or ("CoreGrip", None, CoreGrip), for
@@ -148,14 +150,12 @@ def venus_heights(pipettes, wells, step: Pipetting, extra: dict) -> dict[str, An
 
 
 def _venus_extras(pipettes, n: int, step: Pipetting, aspirate: bool, liquid_class, extra: dict) -> dict:
-  """What Venus sends beside the heights, under a Venus profile: the step's touch-off position
-  (zo), and with no mix the class's mix flow rate (Venus's ms 500.0 where PLR sends 100.0 / 1.0)."""
+  """What Venus sends beside the heights, under a Venus profile: with no mix the class's mix flow
+  rate (Venus's ms 500.0 where PLR sends 100.0 / 1.0). The step's touch-off position goes through
+  `faithful.touch_off`: PLR's aspirate and dispense take none."""
   if getattr(pipettes, "venus_profile", None) is None:
     return {}
   out: dict[str, Any] = {}
-  if step.touch_off is not None:
-    out["aspirate_positions_above_z_touch_off" if aspirate else "dispense_positions_above_z_touch_off"] = \
-      [step.touch_off] * n
   mixes = "pre_mixes" if aspirate else "post_mixes"
   flow = getattr(liquid_class, "aspiration_mix_flow_rate" if aspirate else "dispense_mix_flow_rate", None)
   if not step.effective().mix_cycles and flow is not None:
@@ -218,7 +218,8 @@ async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   kw.update(venus_heights(pipettes, wells, step, extra))
   kw.update(_venus_extras(pipettes, len(channels), step, True, liquid_class, extra))
   _apply_following(pipettes, kw, wells, volumes, step, liquid_class, True, extra)
-  await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
+  with faithful.touch_off(pipettes, step.touch_off if getattr(pipettes, "venus_profile", None) else None):
+    await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
 
 
 async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_class: Optional[Any] = None,
@@ -232,7 +233,8 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   kw.update(venus_heights(pipettes, wells, step, extra))
   kw.update(_venus_extras(pipettes, len(channels), step, False, liquid_class, extra))
   _apply_following(pipettes, kw, wells, volumes, step, liquid_class, False, extra)
-  await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
+  with faithful.touch_off(pipettes, step.touch_off if getattr(pipettes, "venus_profile", None) else None):
+    await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
 
 
 # A Venus grip force (0-9) as the firmware's grip strength (yw, 0-99): five steps each, as Venus sends

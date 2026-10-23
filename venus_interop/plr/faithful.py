@@ -11,6 +11,7 @@ One switch, the environment variable PLR_VENUS_FAITHFUL_CFG:
 always kept; only what it leaves as None is filled. Covered so far:
   - traverse heights: channels, tip pick-up and eject, the CO-RE gripper, the 96-head;
   - one C0TP per tip pick-up call, as a Venus step sends it (`_one_command`);
+  - aspirate and dispense volumes rounded half up, and the step's touch-off position (`_venus_one_move`);
   - pipetting heights (`steps.venus_heights`): the minimum height, the liquid height and the LLD
     search start, from the containers' MaxDepth and LSHt; no second section in a one-segment
     container;
@@ -21,8 +22,10 @@ always kept; only what it leaves as None is filled. Covered so far:
 """
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import functools
+import math
 import os
 import pathlib
 from typing import Optional
@@ -124,6 +127,37 @@ def _at_height(owner, method, height: float):
   return wrapper
 
 
+def _venus_one_move(pip, method, touch_off_name: str):
+  """The driver's one-command aspirate or dispense as Venus sends it, without changing the driver:
+  - a volume's half rounds up (`round` takes 11.25 uL to 11.2, Venus sends 11.3);
+  - the step's touch-off position (zo, `touch_off`) where the call gives none."""
+  @functools.wraps(method)
+  async def wrapper(*args, **kwargs):
+    args = list(args)
+    if len(args) >= 5:
+      args[4] = [math.floor(v * 10 + 0.5 + 1e-6) / 10 for v in args[4]]
+    elif "piston_volumes" in kwargs:
+      kwargs["piston_volumes"] = [math.floor(v * 10 + 0.5 + 1e-6) / 10 for v in kwargs["piston_volumes"]]
+    zo = getattr(pip, "_venus_touch_off", None)
+    if zo is not None and kwargs.get(touch_off_name) is None:
+      channels = args[0] if args else kwargs["use_channels"]
+      kwargs[touch_off_name] = [zo] * len(channels)
+    return await method(*args, **kwargs)
+  wrapper.venus_faithful = True
+  return wrapper
+
+
+@contextlib.contextmanager
+def touch_off(pipettes, value: Optional[float]):
+  """The step's touch-off position for the commands sent while it lasts (`_venus_one_move`)."""
+  before = getattr(pipettes, "_venus_touch_off", None)
+  pipettes._venus_touch_off = value
+  try:
+    yield
+  finally:
+    pipettes._venus_touch_off = before
+
+
 def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
   """Put a profile (the given one, else the environment's) on a set-up STARDevice. Returns what
   was applied, None for nothing."""
@@ -139,6 +173,9 @@ def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
     if hasattr(pip, "default_firmware_lld"):
       pip.default_firmware_lld = True
     # tip commands travel as high as the tips allow when given no height; Venus travels at its own
+    if hasattr(pip, "_aspirate_in_one_move") and not getattr(pip._aspirate_in_one_move, "venus_faithful", False):
+      pip._aspirate_in_one_move = _venus_one_move(pip, pip._aspirate_in_one_move, "aspirate_positions_above_z_touch_off")
+      pip._dispense_in_one_move = _venus_one_move(pip, pip._dispense_in_one_move, "dispense_positions_above_z_touch_off")
     if not getattr(pip.pick_up_tips, "venus_faithful", False):
       pip.pick_up_tips = _fill(_one_command(pip.pick_up_tips), minimum_traverse_height_start=p.traverse_height)
       pip.drop_tips = _fill(pip.drop_tips, minimum_traverse_height_start=p.traverse_height,

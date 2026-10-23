@@ -188,3 +188,22 @@ def test_venus_lid_heights():
   park = Placement({"Id": "park", "File": "LID.lid", "ZTrans": "127.9", "ZTransValue": "0", "TForm.3.X": "0",
                     "TForm.3.Y": "0"})
   assert plr_import.venus_corner(park, store)[2] == 121.25
+
+
+def test_one_move_rounds_halves_up_and_takes_the_touch_off():
+  # Venus sends 11.25 uL as 11.3 (round() gives 11.2) and the step record's touch-off position
+  # (0.5 mm in Marionette); the driver is left as PLR has it
+  sent = []
+
+  class OneMove:
+    async def _aspirate_in_one_move(self, use_channels, locations, searches, floors, piston_volumes,
+                                    aspirate_positions_above_z_touch_off=None):
+      sent.append((piston_volumes, aspirate_positions_above_z_touch_off))
+
+  pip = OneMove()
+  wrapped = faithful._venus_one_move(pip, pip._aspirate_in_one_move, "aspirate_positions_above_z_touch_off")
+  asyncio.run(wrapped([0, 1], [None] * 2, [0] * 2, [0] * 2, [11.25, 456.84]))
+  with faithful.touch_off(pip, 0.5):
+    asyncio.run(wrapped([0, 1], [None] * 2, [0] * 2, [0] * 2, [11.25, 456.84]))
+  assert sent == [([11.3, 456.8], None), ([11.3, 456.8], [0.5, 0.5])]
+  assert getattr(pip, "_venus_touch_off", None) is None  # the context is over
