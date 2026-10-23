@@ -16,7 +16,8 @@ always kept; only what it leaves as None is filled. Covered so far:
     container;
   - firmware LLD (`lm1`, the venus-plr driver's `default_firmware_lld`);
   - the step record's pull-out distance and touch-off position, and with no mix the class's mix
-    flow rate (`steps._venus_extras`).
+    flow rate (`steps._venus_extras`);
+  - liquid and mix following as Venus computes them, volume over area (`steps.venus_following`).
 """
 from __future__ import annotations
 

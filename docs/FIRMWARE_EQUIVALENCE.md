@@ -439,6 +439,7 @@ for field.
 | `as` in 25 of 64, `av/dv` in 22 of 37 | the 300 µL class (100 µL/s) | the 1000 µL class: a 300 µL filter tip's 360 µL rounded to 400 | **port bug**, `gsf_ims._class`: the nearest tip size, from the rack's type even when the spot is empty |
 | `po`, `zo` | 5.0, 0.5: the step record's `-534183622`, `-534183700` | 10.0, 0.0 | `Pipetting.pull_out/touch_off`, sent under the profile; the keys named in `stp_pars` (one value each measured) |
 | `ms` with no mix | the class's mix flow (500) | 100.0 / 1.0 | a zero-cycle `Mix` at the class's rate, under the profile |
+| `fp`, `mh` | the class's corrected volume (or the mix volume) over the container's area, to 0.1 mm; a connected cavity (`ConnectedCtr = 1`) takes all its channels' volumes over all its positions' area (Media_source: 4 × 456.8 / (96 × 88.36) = 0.2) | 0.1 (PLR's following), 0 | `steps.venus_following` under the profile; the importer records each container's area (`EqnOfVol` h·K) and `ConnectedCtr`. 126 of 128 |
 | `dm` | 3 (blow-out at the surface: Venus's "Empty") | 4 (PLR's `empty`, the tip emptied where it stands) | **port bug**: `blow_out` for the class's "Empty" |
 | `av/dv`, one tie | 11.25 → 11.3 | 11.2 (`round`, half to even) | the fork rounds a half up |
 
@@ -447,8 +448,7 @@ for field.
 | Fields | Venus | PLR | What is known |
 |---|---|---|---|
 | `av/dv` ±0.1, 15 of 64 | 456.8 or 456.9 for one nominal 440 µL, the same class | 456.8 | **Partly explained (probe `volume_probe.hsl`, 2026-10-22):** Venus carries the rounding remainder from one aspirate to the next at 0.1 µL (error diffusion); a dispense sends what its aspirate did. 12 × 440 µL then 8 × 431 µL, constant inputs: .8 .9 .8 .9 .8 .8 .9 .8 .9 .8 .8 .9, then .6 .6 .7 .6 .6 .6 .7 .6. A carry reset at the volume change gets 18 of 20 with PLR's corrected values; all 20 need Venus's 431 µL value at 447.6215–447.6249 against linear 447.621 (440 µL: 456.8389–456.8409, PLR 456.84), so Venus's curve departs from linear by about 0.002 µL there (a smoothed interpolation, the user's reading). Not a drive-increment carry (0.046876 µL). Open: the curve, and when the remainder resets (on Marionette the carry rules score below plain rounding, 98 vs 113 of 128) |
-| `fp`, 39 + 42 of 64 | round(volume / container area, 0.1) where the area is the well's (`Growth_Plate`: all) | 0.1 (PLR's following) | Rule holds on `Growth_Plate`. `Media_source` and the liquid waste read a larger area (about 2,300 mm²): the reservoir's connected cavity, to check in its `.rck` |
-| `mh`, 12 of 64 | the mix volume / the area (7.6 = 450 / 59.29) | 0 | The same rule, for the mix's following |
+| `fp`, 4 of 64 dispenses | volume / area, to 0.1 mm | the same | **Fixed but 4** (`steps.venus_following`). Two are the 8-channel dispenses into the empty liquid waste (Venus 0.1, the rule 0.4): open, perhaps a limit in an empty container. Two follow the `av/dv` carry (Venus divides the 447.7 it sent, PLR 447.6) |
 | `il`, `in` | sent, 0 | not sent | Expected: the firmware's default |
 | `tt`, `td` | slot 05, `td1` | slot 01, `td0` | Expected: the same tip; both out of rack (§2.7) |
 | `C0TT` | 53 | 2 | Expected (§2.7) |

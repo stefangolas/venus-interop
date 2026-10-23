@@ -164,6 +164,48 @@ def _venus_extras(pipettes, n: int, step: Pipetting, aspirate: bool, liquid_clas
   return {k: v for k, v in out.items() if extra.get(k) is None}
 
 
+def _cut(x: float) -> float:
+  return math.floor(x * 10 + 0.5 + 1e-9) / 10
+
+
+def venus_following(wells, volumes, step: Pipetting, liquid_class, mixes) -> dict[str, Any]:
+  """Venus's liquid following (fp) and mix following (mh), as its firmware for Marionette shows
+  (docs/FIRMWARE_EQUIVALENCE.md section 4, 126 of 128 commands): how far the surface moves, the
+  volume over the container's cross-section, to 0.1 mm. A volume is the class's corrected one (av,
+  dv); a cavity whose positions are connected (ConnectedCtr) takes all its channels' volumes over
+  all its positions' area. None where a container's area is not known."""
+  meta = [w.metadata.get("venus", {}) for w in wells]
+  if not step.effective().liquid_following or any(m.get("area") is None for m in meta):
+    return {}
+  def spread(amounts):
+    totals: dict[int, float] = {}
+    for w, a, m in zip(wells, amounts, meta):
+      if m.get("connected"):
+        totals[id(w.parent)] = totals.get(id(w.parent), 0.0) + a
+    return [_cut(totals[id(w.parent)] / (m["area"] * w.parent.num_items)) if m.get("connected") else _cut(a / m["area"])
+            for w, a, m in zip(wells, amounts, meta)]
+  correct = getattr(liquid_class, "compute_corrected_volume", None)
+  drawn = [correct(v) if correct is not None and v else v for v in volumes]
+  out: dict[str, Any] = {"auto_surface_following": False, "surface_following_distances": spread(drawn)}
+  if mixes and any(m is not None and m.repetitions for m in mixes):
+    mh = spread([m.volume if m is not None else 0.0 for m in mixes])
+    out["mixes"] = [dataclasses.replace(m, surface_following_distance=d, auto_surface_following=False)
+                    if m is not None else None for m, d in zip(mixes, mh)]
+  return out
+
+
+def _apply_following(pipettes, kw: dict, wells, volumes, step: Pipetting, liquid_class, aspirate: bool,
+                     extra: dict) -> None:
+  """Venus's following into the call's arguments, under a Venus profile, unless the caller gave its own."""
+  if getattr(pipettes, "venus_profile", None) is None or "surface_following_distances" in extra:
+    return
+  name = "pre_mixes" if aspirate else "post_mixes"
+  f = venus_following(wells, volumes, step, liquid_class, kw.get(name))
+  if "mixes" in f:
+    kw[name] = f.pop("mixes")
+  kw.update(f)
+
+
 async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_class: Optional[Any] = None,
                    **extra):
   """A Venus Aspirate step on PLR: the wells per channel, the step's settings, the class if known."""
@@ -175,6 +217,7 @@ async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   kw.update(venus_heights(pipettes, wells, step, extra))
   kw.update(_venus_extras(pipettes, len(channels), step, True, liquid_class, extra))
+  _apply_following(pipettes, kw, wells, volumes, step, liquid_class, True, extra)
   await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
 
 
@@ -188,6 +231,7 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   kw.update(venus_heights(pipettes, wells, step, extra))
   kw.update(_venus_extras(pipettes, len(channels), step, False, liquid_class, extra))
+  _apply_following(pipettes, kw, wells, volumes, step, liquid_class, False, extra)
   await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
 
 

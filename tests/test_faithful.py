@@ -132,3 +132,31 @@ def test_one_pick_up_command_per_call():
   asyncio.run(s.pipettes.pick_up_tips([]))
   assert planned[0] is not original  # one batch per call while it runs
   assert module.plan_batches is original  # and the driver's planner back after
+
+
+def test_venus_following_is_volume_over_area():
+  # Marionette's firmware: fp = the volume over the container's area, to 0.1 mm (Growth_Plate: 467.1 uL
+  # over 59.29 mm2 is 7.9, a 450 uL mix's mh 7.6); a connected cavity takes all its channels' volume
+  # over all its positions (Media_source: 4 x 456.8 uL over 96 x 88.36 mm2 is 0.2)
+  from pylabrobot.lib.liquid_handling.mix import Mix
+  from pylabrobot.resources import Coordinate, Plate, Well
+  from venus_interop.plr import steps
+
+  def plate(n, area, connected):
+    wells = {}
+    for i in range(n):
+      w = Well(f"w{i}", 9, 9, 10)
+      w.location = Coordinate(i * 9, 0, 0)
+      w.metadata["venus"] = {"area": area, "connected": connected}
+      wells[f"A{i + 1}"] = w
+    return Plate("p", 9 * n, 9, 12, ordered_items=wells)
+
+  step = steps.Pipetting(5, 2.0, liquid_following=True)
+  growth = plate(2, 59.29, False)
+  out = steps.venus_following([growth.get_item(0)], [467.1], step, None, [Mix(450.0, 2, 250.0)])
+  assert out["surface_following_distances"] == [7.9] and out["auto_surface_following"] is False
+  assert out["mixes"][0].surface_following_distance == 7.6
+  trough = plate(96, 88.36, True)
+  wells = [trough.get_item(i) for i in range(4)]
+  assert steps.venus_following(wells, [456.8] * 4, step, None, None)["surface_following_distances"] == [0.2] * 4
+  assert steps.venus_following(wells, [456.8] * 4, steps.Pipetting(0, fluid_height=1.0), None, None) == {}

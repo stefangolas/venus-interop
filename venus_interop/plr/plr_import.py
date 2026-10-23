@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import re
 import warnings
 from typing import Optional
 
@@ -244,7 +245,7 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
       key = f"{chr(ord('A') + ys.index(y))}{xs.index(x) + 1}"
       items[key] = Well(f"{name}_well_{key}", size_x=wx, size_y=wy, **well)
       items[key].location = Coordinate(round(bx + x - wx / 2, 4), round(by + y - wy / 2, 4), dz)
-    return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr)
+    return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr, rack)
   if rack.fields.get("IX.Start", "0") == "1":
     # position 1 at the front-left and rows counting back (rules.placement.a1_offset): the wells
     # take Venus's names, in Venus's order (a portrait plate named as the landscape plate it is
@@ -254,19 +255,26 @@ def build_rack(name: str, rack: Rack, store: DefinitionStore) -> Resource:
       items[key] = Well(f"{name}_well_{key}", size_x=wx, size_y=wy, **well)
       items[key].location = Coordinate(round(bx + (c - 1) * rack.dx - wx / 2, 4),
                                        round(by + (r - 1) * rack.dy - wy / 2, 4), dz)
-    return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr)
+    return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr, rack)
   items = create_ordered_items_2d(Well, **well, **_grid(name, rack, wx, wy, dz))
-  return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr)
+  return _with_heights(Plate(name, sx, sy, sz, ordered_items=items), ctr, rack)
 
 
-def _with_heights(plate: Plate, ctr) -> Plate:
+_AREA = re.compile(r"^\s*h\s*\*\s*([0-9.]+)\s*$")
+
+
+def _with_heights(plate: Plate, ctr, rack: Optional[Rack] = None) -> Plate:
   """The container's MaxDepth and LSHt on each well (metadata["venus"]): the heights Venus measures
   its minimum height and LLD search start from, over the floor (docs/FIRMWARE_EQUIVALENCE.md
-  section 2.4). PLR has no field for them; `steps` uses them when PLR_VENUS_FAITHFUL_CFG is set."""
+  section 2.4). PLR has no field for them; `steps` uses them when PLR_VENUS_FAITHFUL_CFG is set.
+  Also what Venus's liquid following divides by: the cross-section of a one-segment container
+  (its EqnOfVol, h * area), and whether the rack's positions share one cavity (ConnectedCtr)."""
   if ctr is not None:
+    m = _AREA.match(ctr.fields.get("1.EqnOfVol", "")) if ctr.int("Segments") == 1 else None
     for w in plate.get_all_items():
       w.metadata[VENUS] = {"max_depth": ctr.num("MaxDepth"), "lld_search_height": ctr.num("LSHt"),
-                       "segments": ctr.int("Segments")}
+                           "segments": ctr.int("Segments"), "area": float(m.group(1)) if m else None,
+                           "connected": rack is not None and rack.fields.get("ConnectedCtr") == "1"}
   return plate
 
 
