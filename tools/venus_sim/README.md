@@ -48,6 +48,9 @@ Run the PLR-side scripts with the repo's Python, and `run_probe.py` with `paths.
 Probes in `probes/` (our own; `sign.py` adds the footer when staged):
 - `marionette_reload_tips.hsl`: the operator's tip reload before each Marionette run;
 - `eject_patterns.hsl`: tip eject per channel pattern;
+- `marionette_volume_repeat.hsl`: one 440 µL then 431 µL aspirate/dispense repeated, on Marionette's
+  staged method folder (copy it there, `sign.py` it, run `reload_tips.hsl` first): what Venus sends
+  as `av/dv` from constant inputs (FIRMWARE_EQUIVALENCE §4);
 - `empty.hsl`: an empty method;
 - `pyhamilton_smoke.py`: pyhamilton's STAR_OEM path, end to end.
 

@@ -255,7 +255,8 @@ class RecordingChannels:
     return [self.measured] * len(containers)
 
   def _pipette(self, command, wells, vols, use_channels, kw):
-    settings = {k: v for k, v in kw.items() if k not in ("hamilton_liquid_classes", "empty")}
+    # the dispense mode (empty, blow_out) comes from the liquid class, which the records name
+    settings = {k: v for k, v in kw.items() if k not in ("hamilton_liquid_classes", "empty", "blow_out")}
     settings["venus"] = self.meant.pop(0)
     settings["volumes"] = [float(v) for v in vols]
     self._log(command, wells, use_channels, self.label(command, kw), settings)

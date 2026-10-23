@@ -67,9 +67,10 @@ KEY_NAMES = {
   "-534183920": "channel constant 920",  # always 0
   "-534183925": "channel constant 925",  # always 0
   "-534183629": "channel constant 629",  # always 0
-  "-534183700": "channel constant 700",  # always 0.5
-  # open (CONVENTIONS §11): value varies 0/5/7/10/18 in the corpus
-  "-534183622": "detect mode (open)",
+  # Venus's firmware for Marionette's steps (docs/FIRMWARE_EQUIVALENCE.md section 4): zo and po, both
+  # 5 / 0.5 there; one value each measured, 0/7/10/18 for the pull-out elsewhere in the corpus
+  "-534183700": "touch-off position",  # zo, the aspirate/dispense position above a Z touch; 0.5
+  "-534183622": "pull-out distance",  # po, the rise before the transport air
 }
 
 _PREFIX = re.compile(r"^(\d+)(-|[A-Za-z_])(.*)$")

@@ -106,7 +106,10 @@ def test_venus_heights_from_max_depth():
   out = steps.venus_heights(pip, [well], step, {})
   assert out["minimum_allowed_z_positions_during"] == [181.04]  # 170 + 1.3 + 1.0 + 8.74
   assert 172.3 + out["liquid_heights"][0] == pytest.approx(181.3)  # from 181.0 as sent, not 181.34
-  assert "liquid_heights" not in steps.venus_heights(pip, [well], steps.Pipetting(5, submerge=2.0), {})
+  assert out["lld_search_heights"] == [221.0]  # floor + LSHt, lp
+  # under cLLD as well: zl = zx + the step's height (Marionette's aspirates: zx + 5.0)
+  lld = steps.venus_heights(pip, [well], steps.Pipetting(5, submerge=2.0, fluid_height=5.0), {})
+  assert 172.3 + lld["liquid_heights"][0] == pytest.approx(186.0)
   given = steps.venus_heights(pip, [well], step, {"minimum_allowed_z_positions_during": [150.0]})
   assert "minimum_allowed_z_positions_during" not in given  # the port's own value is kept
 

@@ -11,9 +11,12 @@ One switch, the environment variable PLR_VENUS_FAITHFUL_CFG:
 always kept; only what it leaves as None is filled. Covered so far:
   - traverse heights: channels, tip pick-up and eject, the CO-RE gripper, the 96-head;
   - one C0TP per tip pick-up call, as a Venus step sends it (`_one_command`);
-  - pipetting heights (`steps.venus_heights`): the minimum height and, with cLLD off, the liquid
-    height, from the containers' MaxDepth.
-Venus-faithful LLD is to join this profile, under the same variable.
+  - pipetting heights (`steps.venus_heights`): the minimum height, the liquid height and the LLD
+    search start, from the containers' MaxDepth and LSHt; no second section in a one-segment
+    container;
+  - firmware LLD (`lm1`, the venus-plr driver's `default_firmware_lld`);
+  - the step record's pull-out distance and touch-off position, and with no mix the class's mix
+    flow rate (`steps._venus_extras`).
 """
 from __future__ import annotations
 
@@ -128,8 +131,12 @@ def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
     return None
   pip = star.pipettes
   if pip is not None:
-    pip.venus_profile = p  # steps.venus_heights: Venus's minimum and liquid heights
+    pip.venus_profile = p  # steps.venus_heights: Venus's minimum, liquid and search heights
     pip.default_minimum_traverse_height = p.traverse_height
+    # cLLD in one C0AS/C0DS with lm1, the firmware searching, as Venus sends it (the driver's own
+    # search otherwise: a P?ZL descent, then the command with LLD off from the surface found)
+    if hasattr(pip, "default_firmware_lld"):
+      pip.default_firmware_lld = True
     # tip commands travel as high as the tips allow when given no height; Venus travels at its own
     if not getattr(pip.pick_up_tips, "venus_faithful", False):
       pip.pick_up_tips = _fill(_one_command(pip.pick_up_tips), minimum_traverse_height_start=p.traverse_height)

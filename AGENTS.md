@@ -16,9 +16,14 @@ none gets a flag of its own.
 
 - **Where it acts:** `faithful.apply(star)`, called after `star.setup()` (every demo does). A value a
   port passes explicitly always wins.
-- **What it covers so far:** traverse heights (`TraverseHeight` for the channels and tip pick-up and
-  eject, `ZSwapTraverseHeight` for the CO-RE gripper, `Head96TraverseHeight`). Venus-faithful LLD
-  will join it.
+- **What it covers so far:**
+  - traverse heights (`TraverseHeight` for the channels, tip pick-up and eject and the gripper's
+    tools, `ZSwapTraverseHeight` for the gripper holding a plate, `Head96TraverseHeight`);
+  - one `C0TP` per tip pick-up call;
+  - pipetting heights from the containers (`MaxDepth`, `LSHt`, one-segment containers without a
+    cone) and firmware LLD (`lm1`, the `venus-plr` driver's `firmware_lld`);
+  - the step record's pull-out distance and touch-off position, and the class's mix flow rate
+    with no mix.
 - **When to set it:** for any 1:1 comparison with Venus (`tools/venus_sim/README.md`, "Running the
   1:1 tests"); `marionette_plr_firmware.py` sets it itself. To keep it on for a machine:
   `setx PLR_VENUS_FAITHFUL_CFG "C:\Program Files (x86)\HAMILTON\Config\ML_Starlet.cfg"` (new shells

@@ -46,24 +46,37 @@ from venus_interop.plr import steps
 from venus_interop.plr.libraries.ngsstar_report import (CORE_OK, ISWAP_OK, PIPETTING_OK, RunReport, number_text,
                                                         trimmed_volume)
 from venus_interop.plr.libraries.star_tip_tools import StarTipTools
-from venus_interop.plr.steps import CoreGrip, IswapGrip, Pipetting
+from venus_interop.plr.steps import CoreGrip, IswapGrip
+from venus_interop.plr.steps import Pipetting as _Pipetting
 
 from pylabrobot.hamilton.star.liquid_classes import mapping as star_classes
 
 LIBRARY = "NGSSTARPROCESSES"  # the Venus namespace ported
+
+
+def Pipetting(*args, **kwargs) -> _Pipetting:
+  """A step of the library's, with its record's pull-out distance and touch-off position: 5.0 and
+  0.5 in 89 of NGSStarProcesses.stp's 126 aspirate and dispense records, unless given."""
+  kwargs.setdefault("pull_out", 5.0)
+  kwargs.setdefault("touch_off", 0.5)
+  return _Pipetting(*args, **kwargs)
+
+
+FIXED_HEIGHT_PULL_OUT = 0.0  # the records of the multi-dispense and drain dispenses (36 of 126)
 
 SVFT, HVFT, LVFT = 1, 5, 23  # Venus tip types: 300 uL, 1000 uL, 50 uL filter tips
 
 
 @dataclasses.dataclass(frozen=True)
 class TipSettings:
-  """What the library's cLLD step records set differently per tip type."""
+  """What the library's step records set differently per tip type."""
   aspirate_submerge: float  # mm below the surface found
   dispense_clld: int  # cLLD sensitivity
   dispense_submerge: float
+  dispense_pull_out: float = 5.0  # the fixed-height dispense record's pull-out distance
 
 
-TIP_SETTINGS = {SVFT: TipSettings(0.5, 2, 0.5), HVFT: TipSettings(2.0, 1, 0.6), LVFT: TipSettings(0.5, 1, 0.5)}
+TIP_SETTINGS = {SVFT: TipSettings(0.5, 2, 0.5), HVFT: TipSettings(2.0, 1, 0.6, 0.0), LVFT: TipSettings(0.5, 1, 0.5)}
 LIQUID_FOLLOWING_ABOVE = 1.8  # mm: a fixed-height aspirate follows the liquid above this
 MIX_POSITION = 1.0  # mm above the surface: the aspirate records' and the cLLD dispense records'
 # PIP_MixOnly, per tip type: the most a channel mixes, and what a negative mix volume becomes, in uL
@@ -290,7 +303,7 @@ class NGSStarProcesses:
     dispense_step = (Pipetting(cfg.dispense_clld, cfg.dispense_submerge, liquid_following=True,
                                mix_cycles=mix_d, mix_volume=mix_volume_dispense, mix_position=MIX_POSITION)
                      if dispense_height == 0 else
-                     Pipetting(0, fluid_height=dispense_height,
+                     Pipetting(0, fluid_height=dispense_height, pull_out=cfg.dispense_pull_out,
                                liquid_following=bool(liquid_following_at_fixed_dispense),
                                mix_cycles=mix_d, mix_volume=mix_volume_dispense))
     held = []
@@ -328,8 +341,8 @@ class NGSStarProcesses:
     # HSLML_STAR::AspirationMonitoring_1000ulChannel_Off / _On (no PLR counterpart)
     first, second = (250.0, 50.0) if 300 - volume < 20 else (volume - 50.0, 50.0)
     draw_all = Pipetting(1, 0.5, liquid_following=True, aspirate_mode=2)
-    off_bottom = Pipetting(0, fluid_height=0.7, aspirate_mode=1)
-    drain = Pipetting(0, fluid_height=15.0)
+    off_bottom = Pipetting(0, fluid_height=0.7, aspirate_mode=1, pull_out=3.0, touch_off=0.2)  # its record's
+    drain = Pipetting(0, fluid_height=15.0, pull_out=FIXED_HEIGHT_PULL_OUT)
     tips, lc = self.tips[SVFT], self._lc(liquid_class)
     for wells, waste in sq.batches(self.channels, self.v.seq(aspiration), self.v.seq(dispense)):
       held = await self._pick_up(ML_STAR, tips, aspiration, len(wells))
@@ -488,18 +501,19 @@ class NGSStarProcesses:
                        mix_volume=_one_or_each([a.mix[c] for c in ch]), mix_position=2.0)
       await steps.aspirate(self.p, trough, [a.aspirate[c] for c in ch], ch, draw, lc)
       if not tubes:
-        await steps.dispense(self.p, trough, [pre] * len(ch), ch, Pipetting(0, fluid_height=50.0), lc)
+        await steps.dispense(self.p, trough, [pre] * len(ch), ch, Pipetting(0, fluid_height=50.0, pull_out=FIXED_HEIGHT_PULL_OUT), lc)
       for pattern in a.dispense_patterns:
         wells = self._take(dispense, pattern, sq.AUTOMATIC, sq.CHANNEL_PATTERN)
         dch = sorted(wells)
         await steps.dispense(self.p, self._wells(wells[c] for c in dch), [volume] * len(dch), dch,
-                             Pipetting(0, fluid_height=height), lc)
+                             Pipetting(0, fluid_height=height, pull_out=FIXED_HEIGHT_PULL_OUT), lc)
         # the rows read the main aspirate (the trough) and this round's dispense
         self._report_pipetting(taken, wells, {c: volume for c in dch})
       # the drain ("drain tip in jet mode"): what the tips still hold, the reserve
       left = [a.aspirate[c] - pre - volume * sum(p[c] == "1" for p in a.dispense_patterns) for c in ch]
       if not tubes:
-        await steps.dispense(self.p, trough, left, ch, Pipetting(0, fluid_height=50.0), lc, empty=[True] * len(ch))
+        await steps.dispense(self.p, trough, left, ch, Pipetting(0, fluid_height=50.0, pull_out=FIXED_HEIGHT_PULL_OUT), lc,
+                             empty=[True] * len(ch))
       if tip_type != HVFT:  # the 1000 uL copy writes the counters once, after the loop
         self.DATA_TipCounterWrite(ML_STAR)
       if dst.cur > 0 and dst.max == 0:  # MECC::EndlessSequenceLoopWarning

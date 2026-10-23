@@ -304,9 +304,15 @@ how to align the two for a test.
     - Venus sends one `C0AS` with `lm1` and lets the firmware search.
     - The firmware streams can't match until the driver can leave LLD to the firmware. That would
       be a driver option; this driver has none (any `CAPACITIVE` mode is searched in software).
-    - **Decided (user, 2026-10-22):** ship a wrapper or utility that makes Venus-faithful LLD moves:
-      one `C0AS/C0DS` with `lm1` and Venus's `lp` (floor + `LSHt`), `zx` (floor + `MaxDepth`), `ip`
-      and `fp`, the firmware doing the search. Not built yet.
+    - **Built (2026-10-22), as a driver option** (the user's choice over a wrapper on private
+      APIs): `firmware_lld` on `aspirate`/`dispense` in the `venus-plr` fork
+      (`default_firmware_lld` on the pipettes). It skips the driver's search, sends the LLD mode
+      in the command, draws the blow-out air in it, takes `lld_search_heights` (`lp`) and a
+      liquid height beside an LLD mode (`zl`). The tracker books the volumes as given.
+      `PLR_VENUS_FAITHFUL_CFG` turns it on (`faithful.apply`), and `steps.venus_heights` passes
+      `lp` = floor + `LSHt` and `zl` = `zx` as sent + the step's height, with LLD or without.
+    - **Result on Marionette:** `lm`, `lp`, `th`, `zl` match on all 64 aspirates and 64
+      dispenses; PLR sends 4,424 commands, down from 6,352 (no search traffic).
   - **Tip pick-up and eject.** The driver travels as high as the mounted tips allow
     (`_tip_traverse_height` with no height given: Z range top − tip overhang = 247.6 for 1000 µL
     tips), never below 245.0. Venus uses 245.0.
@@ -408,41 +414,49 @@ Check each of these when a method first uses it:
 
 ## 4. Marionette (NIST, plate 3): first full comparison, 2026-10-22
 
-Venus completed the run in simulation: 181 device steps, 379 commands sent. PLR sent 6,363
-commands, most of them position queries.
+Venus completed the run in simulation: 181 device steps, 379 commands sent. PLR sent 6,363 at
+first, most of them position queries and its own liquid searches; 4,424 now, with
+`PLR_VENUS_FAITHFUL_CFG` set (`marionette_plr_firmware.py` sets it).
 
-**Match exactly:**
-- the counts of aspirate `C0AS` (64), dispense `C0DS` (64), tip eject `C0TR` (18) and CO-RE gripper
-  commands `C0ZP/ZR` (7) and `C0ZS/ZT` (3); tip pick-up `C0TP` 18 (was 18 vs 19, fixed below);
-- in every paired command, every X/Y position and channel pattern;
-- the volumes, except the rounding noted below.
+**State (end of 2026-10-22):** every count, position, height, channel pattern and tip command
+matches, and every pipetting field except those in the second table. Tip eject `C0TR` matches field
+for field.
 
-**Differences**, all present in every paired command unless counted:
+**Fixed, with what fixed it:**
 
-| Fields | Venus | PLR | Class |
+| Fields | Venus | PLR was | Fix |
 |---|---|---|---|
-| `av/dv` in 37 of 64 | 456.9 | 456.8 | Liquid class (§2.5): correction-curve rounding |
-| `as` in 25 of 64; `ms`, `po`, `zo`, `mh` | from the `.mdb` | PLR's values | Liquid class not applied, or a different class chosen (§2.5) |
-| `dm` | 3 | 4 | Liquid class or step dispense mode (§2.5, §2.6) |
-| `lm` (AS 64/64, DS 40/64), `th`, `zl`, extra `P?Z*` traffic | firmware cLLD (`lm1`) | driver searches itself, then `lm0` from the found surface | **Structural** (§2.10): the PLR driver has no firmware-LLD option |
-| `fp` | 0.2 mm | 0.1 mm | Step settings or liquid class: open |
-| `zx` | floor + `MaxDepth` (132.9, 138.2, 181.0) | was the cavity bottom | **Fixed** (§2.4): 128 of 128 |
-| `lp` | floor + `LSHt` (172.9, 178.2, 199.5) | PLR's container top | **Explained** (§2.4); `LSHt` is on the wells, sent by the faithful LLD (§2.10) |
-| `zl` | `zx` as sent + the step's height, LLD or not | was from the cavity bottom | **Fixed** without LLD (24 of 24 dispenses); with LLD it's the structural row above |
-| `zu zr` | no second section | cone 3.2 mm | Labware geometry: open |
-| `th/te` on tip commands | 245.0 | was 247.6 | **Fixed** (§2.10): `PLR_VENUS_FAITHFUL_CFG` fills `TraverseHeight` |
-| `th/te` on the CO-RE gripper | grip/place 275.0 (`ZSwapTraverseHeight`); tools `C0ZT/ZS` 245.0 (`TraverseHeight`) | was 280.0 for all | **Fixed** (§2.10), all 20 commands |
-| `C0ZR` `te` | 150.4 to 220.3, one per place | 275.0 | Open: depends on the placed plate, not a traverse setting |
-| `tp/tz` (+2.1 mm on 1000 µL) | rack + `MaxDepth` / `Depth` | was rack + tip length − 8, + 10 | **Fixed** (§2.7). Pick-up `tp/tz/th` now match |
-| `tt`, `td` | slot 05, td1 | slot 01, td0 | **Expected** (§2.7): the same tip (`tf1 tl0871 tv10650 tg3 tu0` both); `td1` (out of rack) and `td0` (the tip type's `tu0`, out of rack) pick up alike |
-| `C0TP` count 18 vs 19 | one command, channels 1-4 at X 770.5 (rows E-H), 5-8 at X 779.5 (rows A-D) | two: PLR's planner splits channels that cross in Y | **Fixed** (§2.7): under `PLR_VENUS_FAITHFUL_CFG`, one `C0TP` per call and tip model. 18 of 18, every position |
-| `C0TR` | spread over the waste, `tz` 187.0 | was tight at the centre, `tz` 235.9 | **Fixed** (§2.11): all fields match |
-| `C0Z*` `pa/pb yo yg yv yw zj` | channels 7/8 | channels 6/7 | Gripper (§2.12) |
-| 96-head | `C0EI/EM/EV` | `H0` module commands | Command family: check the move targets |
-| `C0TT` | 53 | 2 | Tip types (§2.7): expected |
+| `C0TP` count 18 vs 19 | one command, channels 1-4 at X 770.5 (rows E-H), 5-8 at X 779.5 (rows A-D) | two: the planner splits channels that cross in Y | one `C0TP` per call and tip model (§2.7) |
+| `tp/tz` on pick-up (+2.1 mm, 1000 µL) | rack + `MaxDepth` / `Depth` | rack + tip length − 8, + 10 | the spot at base + `MaxDepth` (§2.7) |
+| `th/te`, tips and tools | 245.0 (`TraverseHeight`) | 247.6 / 280.0 | the profile (§2.10) |
+| `th/te`, gripping | 275.0 (`ZSwapTraverseHeight`) | 280.0 | the profile (§2.10) |
+| `C0TR` | spread over the waste, `tz` 187.0, `yp` cut to 0.1 mm | tight at the centre, `tz` 235.9; then `yp` rounded | `steps.eject_to_waste` (§2.11) |
+| `lm`, `th`, `zl`, `P?Z*` traffic | firmware cLLD (`lm1`) | the driver's own search, then `lm0` | `firmware_lld` (§2.10) |
+| `zx` | floor + `MaxDepth` | the cavity bottom | `steps.venus_heights` (§2.4) |
+| `lp` | floor + `LSHt`, LLD or not | the container top | the same |
+| `zl` | `zx` as sent + the step's height | from the cavity bottom | the same |
+| `zu zr` | 0 / 0 (one-segment containers) | a 3.2 mm cone, PLR's default | the same; several segments unmeasured |
+| `as` in 25 of 64, `av/dv` in 22 of 37 | the 300 µL class (100 µL/s) | the 1000 µL class: a 300 µL filter tip's 360 µL rounded to 400 | **port bug**, `gsf_ims._class`: the nearest tip size, from the rack's type even when the spot is empty |
+| `po`, `zo` | 5.0, 0.5: the step record's `-534183622`, `-534183700` | 10.0, 0.0 | `Pipetting.pull_out/touch_off`, sent under the profile; the keys named in `stp_pars` (one value each measured) |
+| `ms` with no mix | the class's mix flow (500) | 100.0 / 1.0 | a zero-cycle `Mix` at the class's rate, under the profile |
+| `dm` | 3 (blow-out at the surface: Venus's "Empty") | 4 (PLR's `empty`, the tip emptied where it stands) | **port bug**: `blow_out` for the class's "Empty" |
+| `av/dv`, one tie | 11.25 → 11.3 | 11.2 (`round`, half to even) | the fork rounds a half up |
 
-Next: work through the table row by row, starting with LLD and the liquid class, then labware
-geometry, until only expected rows remain.
+**Left:**
+
+| Fields | Venus | PLR | What is known |
+|---|---|---|---|
+| `av/dv` ±0.1, 15 of 64 | 456.8 or 456.9 for one nominal 440 µL, the same class | 456.8 | **Partly explained (probe `volume_probe.hsl`, 2026-10-22):** Venus carries the rounding remainder from one aspirate to the next at 0.1 µL (error diffusion); a dispense sends what its aspirate did. 12 × 440 µL then 8 × 431 µL, constant inputs: .8 .9 .8 .9 .8 .8 .9 .8 .9 .8 .8 .9, then .6 .6 .7 .6 .6 .6 .7 .6. A carry reset at the volume change gets 18 of 20 with PLR's corrected values; all 20 need Venus's 431 µL value at 447.6215–447.6249 against linear 447.621 (440 µL: 456.8389–456.8409, PLR 456.84), so Venus's curve departs from linear by about 0.002 µL there (a smoothed interpolation, the user's reading). Not a drive-increment carry (0.046876 µL). Open: the curve, and when the remainder resets (on Marionette the carry rules score below plain rounding, 98 vs 113 of 128) |
+| `fp`, 39 + 42 of 64 | round(volume / container area, 0.1) where the area is the well's (`Growth_Plate`: all) | 0.1 (PLR's following) | Rule holds on `Growth_Plate`. `Media_source` and the liquid waste read a larger area (about 2,300 mm²): the reservoir's connected cavity, to check in its `.rck` |
+| `mh`, 12 of 64 | the mix volume / the area (7.6 = 450 / 59.29) | 0 | The same rule, for the mix's following |
+| `il`, `in` | sent, 0 | not sent | Expected: the firmware's default |
+| `tt`, `td` | slot 05, `td1` | slot 01, `td0` | Expected: the same tip; both out of rack (§2.7) |
+| `C0TT` | 53 | 2 | Expected (§2.7) |
+| `C0Z*` widths, speed, force, `zj` | `yo` 88.0, `yg` 80.0, `yv` 277.0, `yw` 25, `zj` 187.3 | 83.0, 77.0, 5.0, 5, 186.7 | Gripper (§2.12). `yv` is likely `ZSwapGrippYSpeed` (277.8) in the `.cfg` |
+| `C0ZR` `te` | 150.4 to 220.3, one per place | 275.0 | Open: per placed plate |
+| `C0ZS/ZT` `tp/tz`, `pa/pb` | 215.0 / 205.0, channels 7/8 | 219.5 / 209.5, 6/7 (none on `ZS`) | Gripper tools: 4.5 mm, and the channel numbering |
+| `C0ZA` | 1 | 5 | The 96-head and arm move: to compare |
+| 96-head | `C0EI/EM/EV` | `H0` module commands | Command family: check the move targets |
 
 ## 5. The position sweep: checking the spatial layer against Venus
 
@@ -540,13 +554,13 @@ wrong about what Venus does.
 ## 7. Decisions and open work
 
 - **Decided (user, 2026-10-22):**
-  - a Venus-faithful LLD wrapper (§2.10);
+  - a Venus-faithful LLD (§2.10): built as a driver option, `firmware_lld` (user, 2026-10-22);
   - headless and headful configurations for operator dialogs (§2.9);
   - the harness lives in this repository (`tools/venus_sim`);
   - labware may be added to the Venus install as tests need it (with the manifest).
 - **Next, spatial:**
   1. ~~apply the `ZTransValue` floor rule in `venus_corner` and the export~~ (done, 2026-10-22);
-  2. ~~carry `MaxDepth` and `LSHt` and use them for `zx` and `zl`~~ (done 2026-10-22); `lp` with the faithful LLD;
+  2. ~~carry `MaxDepth` and `LSHt` and use them for `zx`, `lp` and `zl`~~ (done 2026-10-22, with the faithful LLD);
   3. ~~derive and implement rotation~~ (done 2026-10-22: 1,836 of 1,836 exact);
   4. ~~explain the slide-waste and filter-plate exceptions~~ (a negative base, done 2026-10-22);
   5. ~~run the full corpus sweep~~ (done 2026-10-22, a covering set: 73 layouts, **2,065 of 2,065

@@ -53,6 +53,7 @@ class SubmethodError(ValueError):
 SUBMERGE = 2.0
 CLLD = 5  # the records' cLLD sensitivity ("from labware")
 DISPENSE_HEIGHT = 0.3  # fb45c82b, the dispense not to liquid
+RECORD = dict(pull_out=5.0, touch_off=0.5)  # every step record's pull-out distance and touch-off position
 
 Volumes = Union[float, Sequence[float]]
 
@@ -79,9 +80,13 @@ class GsfIms:
     return lc
 
   def _class(self, tips: str):
+    # the rack's tip type, as STAR_TIP_TOOLS::GetTipType reads the labware, whether the spot still
+    # holds a tip or not (Marionette's 300 uL aspirates got the 1000 uL class from a used spot)
     spot = self.v.resolve(self.v.seq(tips).items[0])
-    volume = round(spot.tip_for_pickup().maximal_volume, -2) if spot.has_tip() else 1000
-    name = CLASS_BY_TIP.get(int(volume), CLASS_BY_TIP[1000])
+    tip = spot.tip_for_pickup() if spot.has_tip() else spot.make_tip()
+    # the nearest tip size: a 300 uL filter tip holds 360 uL, which rounded to 400 and fell back to
+    # the 1000 uL class (Marionette: 25 aspirates at 250 uL/s where Venus drew at 100)
+    name = CLASS_BY_TIP[min(CLASS_BY_TIP, key=lambda size: abs(size - tip.maximal_volume))]
     return name, self._lc(name)
 
   def _wells(self, items):
@@ -105,17 +110,20 @@ class GsfIms:
     ch = list(range(len(wells)))
     name, lc = (class_name, self._lc(class_name)) if class_name else self._class(tips)
     step = Pipetting(CLLD, SUBMERGE, fluid_height=5.0, liquid_following=True, mix_position=mix_position,
-                     **_mix_fields(mix))
+                     **_mix_fields(mix), **RECORD)
     await steps.aspirate(self.p, wells, _per_channel(volumes, ch), ch, step, lc)
     self._last_class = lc
 
   async def dispense_wells(self, wells, volumes: Volumes, to_liquid: bool, mix: Optional[Mix] = None):
     ch = list(range(len(wells)))
-    step = (Pipetting(CLLD, SUBMERGE, liquid_following=True, mix_position=2.0, **_mix_fields(mix)) if to_liquid
-            else Pipetting(0, SUBMERGE, fluid_height=DISPENSE_HEIGHT, liquid_following=True, mix_position=2.0,
-                           **_mix_fields(mix)))
+    step = (Pipetting(CLLD, SUBMERGE, liquid_following=True, mix_position=2.0, **_mix_fields(mix), **RECORD)
+            if to_liquid else
+            Pipetting(0, SUBMERGE, fluid_height=DISPENSE_HEIGHT, liquid_following=True, mix_position=2.0,
+                      **_mix_fields(mix), **RECORD))
+    # the class's "Empty" (..._DispenseSurface_Empty) is a blow-out at the surface, firmware mode 3
+    # as Venus sends it; PLR's `empty` is mode 4, emptying the tip where it stands
     await steps.dispense(self.p, wells, _per_channel(volumes, ch), ch, step, self._last_class,
-                         empty=[True] * len(ch))
+                         blow_out=[True] * len(ch))
 
   # -- tips ------------------------------------------------------------------------------------
 

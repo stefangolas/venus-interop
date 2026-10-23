@@ -24,6 +24,7 @@ class (its aspirate or dispense mix flow rate); MIX_FLOW where no class is known
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import Any, Optional, Union
 
 MIX_FLOW = 250.0  # uL/s
@@ -56,16 +57,23 @@ class Pipetting:
   mix_volume: Union[float, tuple[float, ...]] = 0.0  # one per channel (in channel order) where they differ
   mix_position: float = 0.0  # mm above the surface (aspirate)
   aspirate_mode: int = 0  # 0 aspiration, 1 consecutive aspiration, 2 aspirate all
+  # what the record says, sent only under PLR_VENUS_FAITHFUL_CFG (venus_heights); None: not in it
+  pull_out: Optional[float] = None  # mm risen before the transport air (po)
+  touch_off: Optional[float] = None  # mm above a Z touch (zo)
 
   @classmethod
   def from_record(cls, s: dict[str, Any]) -> "Pipetting":
     """From a step's settings as the HSL interpreter records them (names as stp_pars gives them)."""
+    def optional(name):
+      v = s.get(name)
+      return None if v in (None, "") else float(v)
     return cls(clld=int(s.get("cLLD sensitivity", 0) or 0), submerge=float(s.get("submerge depth", 0) or 0),
                fluid_height=float(s.get("fluid height", 0) or 0),
                liquid_following=bool(int(s.get("LiquidFollowing", 0) or 0)),
                mix_cycles=int(s.get("mix cycles", 0) or 0), mix_volume=_per_channel(s.get("mix volume", 0)),
                mix_position=float(s.get("mix position", 0) or 0),
-               aspirate_mode=int(s.get("aspirate mode", 0) or 0))
+               aspirate_mode=int(s.get("aspirate mode", 0) or 0),
+               pull_out=optional("pull-out distance"), touch_off=optional("touch-off position"))
 
   def effective(self) -> "Pipetting":
     """Only what takes effect: the submerge depth with cLLD on, the fluid height with it off, the
@@ -108,9 +116,9 @@ def venus_heights(pipettes, wells, step: Pipetting, extra: dict) -> dict[str, An
   """Venus's heights for the wells, as the step's PLR arguments, when the pipettes carry a Venus
   profile (`faithful.apply`, PLR_VENUS_FAITHFUL_CFG); none otherwise. As Venus's firmware shows
   (docs/FIRMWARE_EQUIVALENCE.md section 2.4): the minimum height `zx` is the floor + the
-  container's MaxDepth, and with cLLD off the liquid height `zl` is the step's fluid height above
-  `zx`. A well without the imported MaxDepth keeps PLR's (the floor). The LLD search start (floor +
-  LSHt) waits for the faithful LLD."""
+  container's MaxDepth, the liquid height `zl` the step's fluid height above `zx`, and under cLLD
+  the firmware's search starts at the floor + the container's LSHt (`lp`). A well without the
+  imported MaxDepth keeps PLR's (the floor)."""
   if getattr(pipettes, "venus_profile", None) is None:
     return {}
   offsets = extra.get("resource_offsets") or [None] * len(wells)
@@ -119,11 +127,40 @@ def venus_heights(pipettes, wells, step: Pipetting, extra: dict) -> dict[str, An
             for w, o in zip(wells, offsets)]
   minimum = [round(f + d, 2) for f, d in zip(floors, depths)]
   out: dict[str, Any] = {"minimum_allowed_z_positions_during": minimum}
-  if not step.effective().clld:
-    # from zx as sent (the driver's 0.1 mm, round(z * 10)): Venus measures zl from it (Marionette's
-    # dispenses at 0.3 mm: zx 181.0, zl 181.3, where from the unrounded zx it would be 181.4)
-    sent = [round(m * 10) / 10 for m in minimum]
-    out["liquid_heights"] = [round(s + step.fluid_height - f, 4) for s, f in zip(sent, floors)]
+  # zl from zx as sent (the driver's 0.1 mm, round(z * 10)), with LLD or without: Marionette's
+  # dispenses at 0.3 mm read zx 181.0, zl 181.3 (from the unrounded zx it would be 181.4), its
+  # aspirates under cLLD zl = zx + 5.0, the step's fluid height
+  sent = [round(m * 10) / 10 for m in minimum]
+  out["liquid_heights"] = [round(s + step.fluid_height - f, 4) for s, f in zip(sent, floors)]
+  # lp = floor + LSHt, sent with LLD off too (Marionette's dispenses at 0.3 mm: 199.5); under cLLD
+  # the firmware searches from it (faithful.apply turns firmware LLD on)
+  searches = [w.metadata.get("venus", {}).get("lld_search_height") for w in wells]
+  if all(s is not None for s in searches):
+    out["lld_search_heights"] = [round(f + s, 2) for f, s in zip(floors, searches)]
+  # no second section (zu, zr 0) in a one-segment container, as Venus sends it (Marionette's three
+  # plates); PLR's default is a 3.2 mm cone. A container of several segments keeps PLR's: unmeasured
+  if all(w.metadata.get("venus", {}).get("segments") == 1 for w in wells):
+    out["second_section_heights"] = [0.0] * len(wells)
+    out["second_section_ratios"] = [0.0] * len(wells)
+  if step.pull_out is not None:
+    out["pull_out_distances_transport_air"] = [step.pull_out] * len(wells)
+  return {k: v for k, v in out.items() if extra.get(k) is None}
+
+
+def _venus_extras(pipettes, n: int, step: Pipetting, aspirate: bool, liquid_class, extra: dict) -> dict:
+  """What Venus sends beside the heights, under a Venus profile: the step's touch-off position
+  (zo), and with no mix the class's mix flow rate (Venus's ms 500.0 where PLR sends 100.0 / 1.0)."""
+  if getattr(pipettes, "venus_profile", None) is None:
+    return {}
+  out: dict[str, Any] = {}
+  if step.touch_off is not None:
+    out["aspirate_positions_above_z_touch_off" if aspirate else "dispense_positions_above_z_touch_off"] = \
+      [step.touch_off] * n
+  mixes = "pre_mixes" if aspirate else "post_mixes"
+  flow = getattr(liquid_class, "aspiration_mix_flow_rate" if aspirate else "dispense_mix_flow_rate", None)
+  if not step.effective().mix_cycles and flow is not None:
+    from pylabrobot.lib.liquid_handling.mix import Mix
+    out[mixes] = [Mix(volume=0.0, repetitions=0, flow_rate=flow)] * n
   return {k: v for k, v in out.items() if extra.get(k) is None}
 
 
@@ -137,6 +174,7 @@ async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   kw.update(venus_heights(pipettes, wells, step, extra))
+  kw.update(_venus_extras(pipettes, len(channels), step, True, liquid_class, extra))
   await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
 
 
@@ -149,6 +187,7 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   if liquid_class is not None:
     kw["hamilton_liquid_classes"] = [liquid_class] * len(channels)
   kw.update(venus_heights(pipettes, wells, step, extra))
+  kw.update(_venus_extras(pipettes, len(channels), step, False, liquid_class, extra))
   await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
 
 
@@ -237,7 +276,10 @@ async def eject_to_waste(pipettes, use_channels: list[int]) -> None:
     return
   n = pipettes.num_channels
   step = (g["last_y"] - g["first_y"]) / (n - 1)
-  await pipettes.drop_tips([Coordinate(g["x"], g["first_y"] + ch * step, g["bottom"]) for ch in use_channels],
+  # each point cut to 0.1 mm, not rounded, as Venus sends them (Marionette: 297.857 -> 297.8, 271.07
+  # -> 271.0, 244.29 -> 244.2, 217.5 kept)
+  ys = [math.floor((g["first_y"] + ch * step) * 10 + 1e-6) / 10 for ch in use_channels]
+  await pipettes.drop_tips([Coordinate(g["x"], y, g["bottom"]) for y in ys],
                            use_channels=use_channels, drop_method=TipDropMethod.PLACE_SHIFT,
                            begin_tip_deposit_process=g["bottom"] + 10.0, end_tip_deposit_process=g["bottom"],
                            minimum_traverse_height_start=245.0, minimum_traverse_height_end=245.0)

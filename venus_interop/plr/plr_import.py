@@ -265,7 +265,8 @@ def _with_heights(plate: Plate, ctr) -> Plate:
   section 2.4). PLR has no field for them; `steps` uses them when PLR_VENUS_FAITHFUL_CFG is set."""
   if ctr is not None:
     for w in plate.get_all_items():
-      w.metadata[VENUS] = {"max_depth": ctr.num("MaxDepth"), "lld_search_height": ctr.num("LSHt")}
+      w.metadata[VENUS] = {"max_depth": ctr.num("MaxDepth"), "lld_search_height": ctr.num("LSHt"),
+                       "segments": ctr.int("Segments")}
   return plate
 
 

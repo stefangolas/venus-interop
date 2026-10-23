@@ -1,0 +1,46 @@
+ namespace _Method { #include "Common\\Common96HeadSubMethods.hs_" } 
+ namespace _Method { #include "HSLTipCountingLib.hsl" } 
+ namespace _Method { #include "HSLSeqLib.hsl" } 
+ namespace _Method { #include "HSLStrLib.hsl" } 
+ namespace _Method { #include "Common\\LMSF_Utilities.hs_" } 
+ namespace _Method { #include "HSLExtensions\\Dictionary.hsl" } 
+ namespace _Method { #include "HSLExtensions\\String.hsl" } 
+ namespace _Method { #include "HSLExtensions\\File.hsl" } 
+ namespace _Method { #include "Common\\Tip Handling\\With 96-Head\\Tip Handling with 96-Head.hs_" } 
+ namespace _Method { #include "HSLTrcLib.hsl" } 
+ namespace _Method { #include "Common\\PlateAndLidMovement.hs_" } 
+ namespace _Method { #include "GSF-IMS Project\\GSF-IMS.shared_submethods.hs_" } 
+ namespace _Method { #include "HSLExtensions\\Sequence.hsl" } 
+#include "Fitness Selection.Marionette protease.v5.res"
+global device ML_STAR ("Fitness Selection.Marionette protease.v5.lay", "ML_STAR", hslTrue);
+// {{ 2 "TemplateIncludeBlock" ""
+ namespace _Method { #include "HSLMETEDLib.hs_" } 
+ namespace _Method { #include "HSLMECCLib.hs_" } 
+ namespace _Method { #include "HSLPTLLib.hsl" } 
+// }} ""
+// Volume probe (venus-interop, 2026-10-22): one 440 uL aspirate and dispense repeated, then 431 uL,
+// the volumes Marionette's media step draws; what Venus sends as av/dv each time
+namespace _Method { method main(  ) void {
+variable i;
+COMMON96HEADSUBMETHODS::_InitLibrary();
+LMSF_UTILITIES::_InitLibrary();
+TIP_HANDLING_WITH_96_HEAD::_InitLibrary();
+PLATEANDLIDMOVEMENT::_InitLibrary();
+GSF_IMS_SHARED_SUBMETHODS::_InitLibrary();
+LMSF_UTILITIES::InitSTARWithErrorEmail(ML_STAR, 1, 0);
+GSF_IMS_SHARED_SUBMETHODS::tip_pickup(ML_STAR.Tips_1000_Channels, 4, ML_STAR);
+i = 0;
+while (i < 12) {
+GSF_IMS_SHARED_SUBMETHODS::simple_aspirate(ML_STAR.Media_pipette_from_4, 0, 440, ML_STAR.Tips_1000_Channels, 4, ML_STAR);
+GSF_IMS_SHARED_SUBMETHODS::simple_dispense(ML_STAR.Media_pipette_from_4, 0, 1, 440, 0, 0, 4, ML_STAR);
+i = i + 1;
+}
+i = 0;
+while (i < 8) {
+GSF_IMS_SHARED_SUBMETHODS::simple_aspirate(ML_STAR.Media_pipette_from_4, 0, 431, ML_STAR.Tips_1000_Channels, 4, ML_STAR);
+GSF_IMS_SHARED_SUBMETHODS::simple_dispense(ML_STAR.Media_pipette_from_4, 0, 1, 431, 0, 0, 4, ML_STAR);
+i = i + 1;
+}
+GSF_IMS_SHARED_SUBMETHODS::tip_eject(4, ML_STAR);
+} }
+// $$author=venus-sim$$valid=0$$time=2026-10-22 22:05$$checksum=898208e9$$length=086$$
