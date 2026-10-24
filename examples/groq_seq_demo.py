@@ -38,8 +38,9 @@ Found in the methods' own code, and what the demo does about it:
     channels. The demo's default is the clonal test (the tube racks, 4 positions); `--library` the other.
   - Plates 2-5's gradient start takes the inducer's volume out of the media, not the TMP's (the
     Marionette method takes both): column 12 holds the TMP volume more than the other wells.
-These are the methods as committed (2025-11-23); whether Venus throws where its reference says it
-does is open (CONVENTIONS §11).
+These are the methods as committed (2025-11-23). Venus's simulation aborts both where the demo does
+(docs/FIRMWARE_EQUIVALENCE.md §4b): plate 1 at position 9's "property not found", plates 2-5 at
+`ElementAt(inducer_number - 1)`, "array reference out of bound".
 
 Deviations from the methods (beyond `marionette_demo.py`'s, which apply here too):
   - TipCount::Edit2, the operator's dialog to edit each tip counter before it is read, is skipped.
@@ -359,7 +360,9 @@ def report(v: VenusDeck, method: GroqSeq) -> None:
 
 
 async def main(corpus: pathlib.Path, which: str, view: bool, p: Parameters, trace: Optional[pathlib.Path],
-               repair: bool, tip_counters: Optional[pathlib.Path], liquid_classes: Optional[pathlib.Path]) -> None:
+               repair: bool, tip_counters: Optional[pathlib.Path], liquid_classes: Optional[pathlib.Path],
+               viewer_debug: bool = False, record_only: bool = False,
+               replay_dir: Optional[pathlib.Path] = None) -> None:
   logging.disable(logging.WARNING)
   warnings.simplefilter("ignore")
   set_volume_tracking(True)
@@ -374,22 +377,55 @@ async def main(corpus: pathlib.Path, which: str, view: bool, p: Parameters, trac
   faithful.apply(star)  # Venus's defaults when PLR_VENUS_FAITHFUL_CFG is set
   fill(v)
 
-  if view:
+  viewer = None
+  if view or record_only:
     from pylabrobot.hamilton.star.motion import attach_viewer_motion
-    from pylabrobot.visualizer3D.server import Viewer3D
+    from venus_interop.plr.replay import ReplayViewer
+    from datetime import datetime
+    from uuid import uuid4
 
-    viewer = Viewer3D(star, name="groq_seq_demo.py", open_browser=False)
+    from venus_interop.plr import viewer_models
+    from mpe2_model import attach_visual
+
+    models_root = viewer_models.attach(v.deck)
+    viewer_models.attach_star_base(star)
+    print(f"viewer models: {attach_visual(v, pathlib.Path(models_root) / 'hamilton_mpe2_animated.glb')} MPE2 units drawn")
+    replay_dir = replay_dir or pathlib.Path('.local/replays') / (
+      datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:8])
+    viewer = ReplayViewer(star, bundle=replay_dir,
+                      metadata=dict(method=which, grad_plate=p.grad_plate_num,
+                                    culture_volume=p.culture_volume, repair=repair),
+                      name="groq_seq_demo.py", open_browser=False, models_root=models_root,
+                      overlays=viewer_debug, hover=viewer_debug, ui=True,
+                      look="technical" if viewer_debug else "real", light=1.0 if viewer_debug else 0.8)
     await viewer.start()
     attach_viewer_motion(star.driver, viewer)
-    print("viewer:", getattr(viewer, "url", ""), flush=True)
-    await viewer.wait_for_browser()
-    await asyncio.sleep(1.0)
+    viewer_url = viewer.url
+    if not viewer_debug:
+      separator = "&" if "?" in viewer_url else "?"
+      viewer_url = viewer_url.replace("#", f"{separator}pauses=0.5#", 1)
+    print("viewer:", viewer_url, flush=True)
+    if not record_only:
+      await viewer.wait_for_browser()
+      await asyncio.sleep(1.0)
 
   method = cls(star, v, p, repair=repair, counters=TipCounters(tip_counters),
                liquid_classes=VenusLiquidClasses.from_json(liquid_classes) if liquid_classes else None)
-  await method.run()
-  report(v, method)
-  if view:
+  failure = None
+  try:
+    await method.run()
+    report(v, method)
+  except BaseException as error:
+    failure = str(error) or type(error).__name__
+    raise
+  finally:
+    if viewer is not None:
+      error = failure or (str(method.aborted) if method.aborted else None)
+      await viewer.finish_recording('aborted' if error else 'complete', error)
+      print('replay bundle:', replay_dir.resolve(), flush=True)
+      if record_only or failure:
+        await viewer.stop()
+  if view and not record_only:
     print("done", flush=True)
     await asyncio.Event().wait()
 
@@ -401,6 +437,12 @@ if __name__ == "__main__":
   ap.add_argument("--trace", type=pathlib.Path,
                   help="the method's trace; the corpus's sibling analysis/traces/<method>.condensed.md when not given")
   ap.add_argument("--view", action="store_true")
+  ap.add_argument("--viewer-debug", action="store_true",
+                  help="show viewer overlays and hover readouts with technical lighting")
+  ap.add_argument("--record-only", action="store_true",
+                  help="generate a static interactive replay without waiting for a browser")
+  ap.add_argument("--replay-dir", type=pathlib.Path,
+                  help="new replay bundle directory; --view automatically records into .local/replays")
   ap.add_argument("--repair", action="store_true",
                   help="fix the plate-map code's defects (see the module docstring); not the method as written")
   ap.add_argument("--grad-plate", type=int, default=3, help="plates 2-5: gradient plate number (TMP from 2 on)")
@@ -415,4 +457,5 @@ if __name__ == "__main__":
   a = ap.parse_args()
   par = Parameters(culture_volume=a.culture_volume, grad_plate_num=a.grad_plate, is_clonal_test=not a.library,
                    worklist_file=a.plate_map)
-  asyncio.run(main(a.corpus, a.method, a.view, par, a.trace, a.repair, a.tip_counters, a.liquid_classes))
+  asyncio.run(main(a.corpus, a.method, a.view, par, a.trace, a.repair, a.tip_counters, a.liquid_classes,
+                   a.viewer_debug, a.record_only, a.replay_dir))

@@ -1,0 +1,63 @@
+{
+  "source": "MFX_CAR_5TipBC.x",
+  "source_sha256": "8bdb882c731237e109157a0877b7faa295bff4837d8aeab190f2b887ec52dae4",
+  "definition": "MFX_CAR_5TipBC.tml",
+  "definition_sha256": "5fa9b8dfe10e4600b5cae035c74c81000f9869b8b89abe268311d71c70c337d0",
+  "source_bounds_mm": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      134.2,
+      500.299988,
+      114.699997
+    ]
+  ],
+  "translation_mm": [
+    0.5,
+    0.0,
+    0.0
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      0.0005,
+      0.0,
+      0.0
+    ],
+    [
+      0.1347,
+      0.500299988,
+      0.114699997
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "MFX_CAR_5TipBC",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        0.5,
+        0.0,
+        0.0
+      ],
+      "venus": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "MFX_CAR_5TipBC",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

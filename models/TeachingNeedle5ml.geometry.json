@@ -1,0 +1,63 @@
+{
+  "source": "TeachingNeedle5ml.hxx",
+  "source_sha256": "d8f477b9002af9054761a63766554ae5344d4d7de836b77f4b6b6d61e5d59ce0",
+  "definition": "TeachingNeedle5ml.rck",
+  "definition_sha256": "ea3a7327af973dd18fa7ca89f1c59b87ee5b214c6cb3c034ba35e3bcc279a2ab",
+  "source_bounds_mm": [
+    [
+      -8.45,
+      -8.45,
+      -59.0
+    ],
+    [
+      8.45,
+      8.45,
+      59.0
+    ]
+  ],
+  "translation_mm": [
+    9.95,
+    8.95,
+    -35.900000000000006
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      0.0014999999999999996,
+      0.0005000000000000004,
+      -0.09490000000000001
+    ],
+    [
+      0.0184,
+      0.0174,
+      0.023099999999999996
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "TeachingNeedle5ml",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        1.5,
+        0.5,
+        -94.9
+      ],
+      "venus": [
+        -8.45,
+        -8.45,
+        -59.0
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "TeachingNeedle5ml",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

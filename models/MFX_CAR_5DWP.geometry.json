@@ -1,0 +1,63 @@
+{
+  "source": "MFX_CAR_5DWP.x",
+  "source_sha256": "b0d28a73c204372e7dd512f6727a3350b8c17458d94c1686038cb8294fd5e1f2",
+  "definition": "MFX_CAR_5DWP.tml",
+  "definition_sha256": "0e52aa45fb72d7b10c15e544142498b2bdba24ba9d84769404457e1d997bff88",
+  "source_bounds_mm": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      134.0,
+      500.299988,
+      93.849998
+    ]
+  ],
+  "translation_mm": [
+    0.5,
+    0.0,
+    0.0
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      0.0005,
+      0.0,
+      0.0
+    ],
+    [
+      0.1345,
+      0.500299988,
+      0.093849998
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "MFX_CAR_5DWP",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        0.5,
+        0.0,
+        0.0
+      ],
+      "venus": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "MFX_CAR_5DWP",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

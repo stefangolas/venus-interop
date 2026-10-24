@@ -1,0 +1,63 @@
+{
+  "source": "MFX_CAR_HHC_Empty_2Base HPTab.x",
+  "source_sha256": "9a48248e33bda4298081662a0ef83a1ce4b69fd192d881830b558a0a28fdf541",
+  "definition": "MFX_CAR_HHC_Empty_2Base HPTab.tml",
+  "definition_sha256": "e836a8356e4afbdc729520b9c40828c3b513a8f5b0aed7961dc8553b2c64b12e",
+  "source_bounds_mm": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      154.5,
+      526.5,
+      90.28297134939999
+    ]
+  ],
+  "translation_mm": [
+    1.5,
+    0.0,
+    0.0
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      0.0015,
+      0.0,
+      0.0
+    ],
+    [
+      0.156,
+      0.5265,
+      0.09028297134939998
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "MFX_CAR_HHC_Empty_2Base HPTab",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        1.5,
+        0.0,
+        0.0
+      ],
+      "venus": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "MFX_CAR_HHC_Empty_2Base HPTab",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

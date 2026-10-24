@@ -1,0 +1,64 @@
+{
+  "source": "pylabrobot/hamilton/star/resource_model/star_base.glb",
+  "source_sha256": "139c6e16d95de1d2988cbd3d324b791871c41ff0868aada7fb0f3e11e64b5df8",
+  "translation_m": [
+    -0.116215,
+    -0.0978,
+    -0.0805
+  ],
+  "retained_primitives": [
+    3,
+    4,
+    5,
+    7,
+    11
+  ],
+  "deltas": [
+    {
+      "resource": "STAR chassis",
+      "kind": "convention",
+      "quantity": "visual origin in metres",
+      "plr": [
+        -0.116215,
+        -0.0978,
+        -0.0805
+      ],
+      "venus": [
+        0,
+        0,
+        0
+      ],
+      "decision": "Translate the mesh by minus that origin; retain every imported resource coordinate.",
+      "detail": "PLR STAR factory places its deck at STAR_DECK_LOCATION in the chassis frame."
+    },
+    {
+      "resource": "STAR chassis",
+      "kind": "interpretation",
+      "quantity": "visible source components",
+      "plr": [
+        3,
+        4,
+        5,
+        7,
+        11
+      ],
+      "venus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "decision": "Show lower platform and chassis only; retain imported waste hardware and an unobstructed deck view.",
+      "detail": "The source combines lower chassis, waste hardware, door and upper enclosure."
+    }
+  ]
+}

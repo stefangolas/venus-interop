@@ -1,0 +1,66 @@
+{
+  "model": "fourtitude_growth_lid",
+  "kind": "lid",
+  "definition": "Culture Processing/Fourtitude Growth Plate with Lid.lid",
+  "definition_sha256": "c88816da51770898150a896d9b24fce54c2b2fe2c6bafe8b4b7c088874401e33",
+  "size_mm": [
+    127.0,
+    86.0,
+    9.15
+  ],
+  "positions_mm": [],
+  "choices": {
+    "side_wall_mm": 1.0,
+    "roof_thickness_mm": 1.0,
+    "underside": "open universal lid; no unverified condensation rings",
+    "appearance": {
+      "rgba": [
+        225,
+        235,
+        240,
+        110
+      ],
+      "roughness": 0.3,
+      "metallic": 0,
+      "alpha_mode": "BLEND"
+    }
+  },
+  "deltas": [
+    {
+      "resource": "fourtitude_growth_lid",
+      "kind": "interpretation",
+      "quantity": "visual reconstruction",
+      "plr": {
+        "side_wall_mm": 1.0,
+        "roof_thickness_mm": 1.0,
+        "underside": "open universal lid; no unverified condensation rings",
+        "appearance": {
+          "rgba": [
+            225,
+            235,
+            240,
+            110
+          ],
+          "roughness": 0.3,
+          "metallic": 0,
+          "alpha_mode": "BLEND"
+        }
+      },
+      "venus": "Universal lids used on growth plates",
+      "decision": "Approximate exterior and cavity details; no protocol geometry changes",
+      "detail": "Square tapered growth wells from NIST photo; reservoir cavity topology from Agilent; support shape from Hamilton image. Sharp corners and material appearance are approximations."
+    },
+    {
+      "resource": "fourtitude_growth_lid",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply coordinates by 0.001"
+    }
+  ],
+  "triangles": 28,
+  "watertight": true,
+  "references": "models/GROQ_SEQ_REFERENCES.md",
+  "fidelity": "approximate visualization, not mechanical CAD"
+}

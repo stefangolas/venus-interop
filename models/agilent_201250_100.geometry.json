@@ -1,0 +1,488 @@
+{
+  "model": "agilent_201250_100",
+  "kind": "single",
+  "definition": "Agilent/Agilent single cavity 12 col pyr bottom 290 mL reservoir with lid.rck",
+  "definition_sha256": "8b0dbae0e41b46a09a1d225d69b65044b841e4418d7fd69118c6ca7c6b6b4b9b",
+  "size_mm": [
+    127.0,
+    86.0,
+    44.04
+  ],
+  "positions_mm": [
+    [
+      13.5,
+      74.5
+    ],
+    [
+      13.5,
+      65.5
+    ],
+    [
+      13.5,
+      56.5
+    ],
+    [
+      13.5,
+      47.5
+    ],
+    [
+      13.5,
+      38.5
+    ],
+    [
+      13.5,
+      29.5
+    ],
+    [
+      13.5,
+      20.5
+    ],
+    [
+      13.5,
+      11.5
+    ],
+    [
+      22.5,
+      74.5
+    ],
+    [
+      22.5,
+      65.5
+    ],
+    [
+      22.5,
+      56.5
+    ],
+    [
+      22.5,
+      47.5
+    ],
+    [
+      22.5,
+      38.5
+    ],
+    [
+      22.5,
+      29.5
+    ],
+    [
+      22.5,
+      20.5
+    ],
+    [
+      22.5,
+      11.5
+    ],
+    [
+      31.5,
+      74.5
+    ],
+    [
+      31.5,
+      65.5
+    ],
+    [
+      31.5,
+      56.5
+    ],
+    [
+      31.5,
+      47.5
+    ],
+    [
+      31.5,
+      38.5
+    ],
+    [
+      31.5,
+      29.5
+    ],
+    [
+      31.5,
+      20.5
+    ],
+    [
+      31.5,
+      11.5
+    ],
+    [
+      40.5,
+      74.5
+    ],
+    [
+      40.5,
+      65.5
+    ],
+    [
+      40.5,
+      56.5
+    ],
+    [
+      40.5,
+      47.5
+    ],
+    [
+      40.5,
+      38.5
+    ],
+    [
+      40.5,
+      29.5
+    ],
+    [
+      40.5,
+      20.5
+    ],
+    [
+      40.5,
+      11.5
+    ],
+    [
+      49.5,
+      74.5
+    ],
+    [
+      49.5,
+      65.5
+    ],
+    [
+      49.5,
+      56.5
+    ],
+    [
+      49.5,
+      47.5
+    ],
+    [
+      49.5,
+      38.5
+    ],
+    [
+      49.5,
+      29.5
+    ],
+    [
+      49.5,
+      20.5
+    ],
+    [
+      49.5,
+      11.5
+    ],
+    [
+      58.5,
+      74.5
+    ],
+    [
+      58.5,
+      65.5
+    ],
+    [
+      58.5,
+      56.5
+    ],
+    [
+      58.5,
+      47.5
+    ],
+    [
+      58.5,
+      38.5
+    ],
+    [
+      58.5,
+      29.5
+    ],
+    [
+      58.5,
+      20.5
+    ],
+    [
+      58.5,
+      11.5
+    ],
+    [
+      67.5,
+      74.5
+    ],
+    [
+      67.5,
+      65.5
+    ],
+    [
+      67.5,
+      56.5
+    ],
+    [
+      67.5,
+      47.5
+    ],
+    [
+      67.5,
+      38.5
+    ],
+    [
+      67.5,
+      29.5
+    ],
+    [
+      67.5,
+      20.5
+    ],
+    [
+      67.5,
+      11.5
+    ],
+    [
+      76.5,
+      74.5
+    ],
+    [
+      76.5,
+      65.5
+    ],
+    [
+      76.5,
+      56.5
+    ],
+    [
+      76.5,
+      47.5
+    ],
+    [
+      76.5,
+      38.5
+    ],
+    [
+      76.5,
+      29.5
+    ],
+    [
+      76.5,
+      20.5
+    ],
+    [
+      76.5,
+      11.5
+    ],
+    [
+      85.5,
+      74.5
+    ],
+    [
+      85.5,
+      65.5
+    ],
+    [
+      85.5,
+      56.5
+    ],
+    [
+      85.5,
+      47.5
+    ],
+    [
+      85.5,
+      38.5
+    ],
+    [
+      85.5,
+      29.5
+    ],
+    [
+      85.5,
+      20.5
+    ],
+    [
+      85.5,
+      11.5
+    ],
+    [
+      94.5,
+      74.5
+    ],
+    [
+      94.5,
+      65.5
+    ],
+    [
+      94.5,
+      56.5
+    ],
+    [
+      94.5,
+      47.5
+    ],
+    [
+      94.5,
+      38.5
+    ],
+    [
+      94.5,
+      29.5
+    ],
+    [
+      94.5,
+      20.5
+    ],
+    [
+      94.5,
+      11.5
+    ],
+    [
+      103.5,
+      74.5
+    ],
+    [
+      103.5,
+      65.5
+    ],
+    [
+      103.5,
+      56.5
+    ],
+    [
+      103.5,
+      47.5
+    ],
+    [
+      103.5,
+      38.5
+    ],
+    [
+      103.5,
+      29.5
+    ],
+    [
+      103.5,
+      20.5
+    ],
+    [
+      103.5,
+      11.5
+    ],
+    [
+      112.5,
+      74.5
+    ],
+    [
+      112.5,
+      65.5
+    ],
+    [
+      112.5,
+      56.5
+    ],
+    [
+      112.5,
+      47.5
+    ],
+    [
+      112.5,
+      38.5
+    ],
+    [
+      112.5,
+      29.5
+    ],
+    [
+      112.5,
+      20.5
+    ],
+    [
+      112.5,
+      11.5
+    ]
+  ],
+  "choices": {
+    "cavities": 1,
+    "floor_features": 12,
+    "floor_z_mm": 5.0,
+    "ridge_height_mm": 3.0,
+    "wall_mm": 1.0,
+    "floor_flat_width_mm": 2.0,
+    "floor_end_inset_mm": 2.0,
+    "skirt_wall_mm": 1.2,
+    "underside_recess_mm": 1.0,
+    "cavity_length_mm": 72.0,
+    "outside_recess_z_mm": [
+      3.0,
+      42.04
+    ],
+    "appearance": {
+      "rgba": [
+        218,
+        229,
+        235,
+        235
+      ],
+      "roughness": 0.3,
+      "metallic": 0,
+      "alpha_mode": "OPAQUE"
+    }
+  },
+  "deltas": [
+    {
+      "resource": "agilent_201250_100",
+      "kind": "interpretation",
+      "quantity": "visual reconstruction",
+      "plr": {
+        "cavities": 1,
+        "floor_features": 12,
+        "floor_z_mm": 5.0,
+        "ridge_height_mm": 3.0,
+        "wall_mm": 1.0,
+        "floor_flat_width_mm": 2.0,
+        "floor_end_inset_mm": 2.0,
+        "skirt_wall_mm": 1.2,
+        "underside_recess_mm": 1.0,
+        "cavity_length_mm": 72.0,
+        "outside_recess_z_mm": [
+          3.0,
+          42.04
+        ],
+        "appearance": {
+          "rgba": [
+            218,
+            229,
+            235,
+            235
+          ],
+          "roughness": 0.3,
+          "metallic": 0,
+          "alpha_mode": "OPAQUE"
+        }
+      },
+      "venus": "Agilent single cavity PP 12 col pyr 290 mL reservoir (201250-100) with lid (202497-100)",
+      "decision": "Approximate exterior and cavity details; no protocol geometry changes",
+      "detail": "Square tapered growth wells from NIST photo; reservoir cavity topology from Agilent; support shape from Hamilton image. Sharp corners and material appearance are approximations."
+    },
+    {
+      "resource": "agilent_201250_100",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply coordinates by 0.001"
+    },
+    {
+      "resource": "agilent_201250_100",
+      "kind": "stock_disagrees",
+      "quantity": "footprint",
+      "plr": [
+        127.76,
+        85.47
+      ],
+      "venus": [
+        127.0,
+        86.0
+      ],
+      "decision": "Keep Venus footprint for visual registration; do not resize resources",
+      "detail": "Manufacturer physical footprint differs from the Venus definition"
+    }
+  ],
+  "triangles": 230,
+  "watertight": true,
+  "references": "models/GROQ_SEQ_REFERENCES.md",
+  "fidelity": "approximate visualization, not mechanical CAD"
+}

@@ -46,7 +46,7 @@ POSE = {
 }
 
 
-def derived_glb(source: pathlib.Path, out_dir: pathlib.Path) -> pathlib.Path:
+def derived_glb(source: pathlib.Path, out_dir: pathlib.Path, origin=MIN_CORNER) -> pathlib.Path:
   """The source GLB with each carrier nested under an X node, and the model moved to its corner."""
   data = source.read_bytes()
   json_len = struct.unpack_from("<I", data, 12)[0]
@@ -59,13 +59,44 @@ def derived_glb(source: pathlib.Path, out_dir: pathlib.Path) -> pathlib.Path:
     nodes.append({"name": f"{name}_x", "children": [index[name]]})
     world["children"] = [len(nodes) - 1 if c == index[name] else c for c in world["children"]]
   t = world.get("translation", [0.0, 0.0, 0.0])
-  world["translation"] = [t[0] - MIN_CORNER[0] / 1000, t[1] - MIN_CORNER[1] / 1000, t[2] - MIN_CORNER[2] / 1000]
+  world["translation"] = [t[i] - origin[i] / 1000 for i in range(3)]
   text = json.dumps(gltf, separators=(",", ":")).encode()
   text += b" " * (-len(text) % 4)
   body = struct.pack("<II", len(text), 0x4E4F534A) + text + rest
   out = out_dir / "hamilton_mpe2_nested.glb"
   out.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
   return out
+
+
+def attach_visual(v, glb: pathlib.Path) -> int:
+  """Draw the existing MPE2 at rest on an imported deck, without changing its resource tree.
+
+  GROQ-seq doesn't operate MPE2. Its unit is only a 45 mm placeholder; register the visual by
+  the base's Filter_1 site instead of squeezing the whole device into that box. Active MPE2
+  methods should keep using MPE2Model and its state observer (as the DNA extraction demo does).
+  """
+  from venus_interop.plr.viewer_models import venus_file
+  from venus_interop.rules.deltas import Delta
+
+  units = [r for r in v.deck.get_all_resources() if venus_file(r).endswith('/mpe2/[mpe]2.rck')]
+  if not units:
+    return 0
+  if not glb.is_file():
+    raise FileNotFoundError(f'MPE2 viewer asset missing: {glb}; run tools/build_groq_viewer_models.py')
+  for box in units:
+    base = box.parent.parent
+    site = next(s for s in base.children if s.name.endswith('_site_Filter_1'))
+    seat = site.get_location_wrt(v.deck, 'c', 'c', 'b') - box.get_location_wrt(v.deck)
+    origin = (SEAT.x - seat.x, SEAT.y - seat.y, SEAT.z - seat.z)
+    path = derived_glb(glb, pathlib.Path(tempfile.mkdtemp(prefix='mpe2_groq_')), origin=origin)
+    box.mesh = {'path': str(path), 'units': 'm', 'up': 'Z'}
+    box.metadata['viewer_model_deltas'] = [Delta(
+      box.name, 'interpretation', 'MPE2 visual filter seat',
+      venus=[seat.x, seat.y, seat.z], plr=[SEAT.x, SEAT.y, SEAT.z],
+      decision='Translate existing model so its rest filter seat matches the imported Filter_1 centre',
+      detail='Visual only; resource dimensions, locations, wells and collection site are unchanged. '
+             'Physical installed revision and collection seat alignment remain unverified.').as_dict()]
+  return len(units)
 
 
 class MPE2Model(Resource):

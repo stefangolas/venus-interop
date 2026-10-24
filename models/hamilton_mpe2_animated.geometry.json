@@ -1,0 +1,5 @@
+{
+  "source": "plr-models/models/hamilton_mpe2_animated.glb",
+  "sha256": "f19a67a57e4be118744ab8a3a7861c1490db389372733586cccf9262a7440b94",
+  "registration": "Unmodified original; examples/mpe2_model.py registers the filter seat at runtime"
+}

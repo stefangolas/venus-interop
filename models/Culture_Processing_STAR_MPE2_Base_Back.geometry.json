@@ -1,0 +1,63 @@
+{
+  "source": "[MPE]2 Base.x",
+  "source_sha256": "5d118d98f2aaa3de4d1fd3228df75a3ca4dd659b5a28824ebd159497428d646a",
+  "definition": "Culture_Processing_STAR_MPE2_Base_Back.tml",
+  "definition_sha256": "f13eeb6d13eb591948f93342575cdebfe5e3a3313a821a1d7af3b94b4e4a8de3",
+  "source_bounds_mm": [
+    [
+      -203.331162,
+      -248.5,
+      0.028786999999999452
+    ],
+    [
+      240.617828,
+      248.576897,
+      8.328787
+    ]
+  ],
+  "translation_mm": [
+    -219.168838,
+    248.5,
+    -0.028786999999999452
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      -0.4225,
+      0.0,
+      0.0
+    ],
+    [
+      0.02144899,
+      0.497076897,
+      0.008300000000000002
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "[MPE]2 Base",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        -422.5,
+        0.0,
+        0.0
+      ],
+      "venus": [
+        -203.331162,
+        -248.5,
+        0.028786999999999452
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "[MPE]2 Base",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

@@ -1,0 +1,296 @@
+{
+  "model": "agilent_204284_100",
+  "kind": "six",
+  "definition": "Agilent/Agilent 6 well reservoir.rck",
+  "definition_sha256": "7b3e63e4cfe33d6eb3b9e4599905ea6a5c474fee2b428db15073e9845f69eefe",
+  "size_mm": [
+    127.0,
+    86.0,
+    44.0
+  ],
+  "positions_mm": [
+    [
+      19.0,
+      74.5
+    ],
+    [
+      19.0,
+      65.5
+    ],
+    [
+      19.0,
+      56.5
+    ],
+    [
+      19.0,
+      47.5
+    ],
+    [
+      19.0,
+      38.5
+    ],
+    [
+      19.0,
+      29.5
+    ],
+    [
+      19.0,
+      20.5
+    ],
+    [
+      19.0,
+      11.5
+    ],
+    [
+      37.0,
+      74.5
+    ],
+    [
+      37.0,
+      65.5
+    ],
+    [
+      37.0,
+      56.5
+    ],
+    [
+      37.0,
+      47.5
+    ],
+    [
+      37.0,
+      38.5
+    ],
+    [
+      37.0,
+      29.5
+    ],
+    [
+      37.0,
+      20.5
+    ],
+    [
+      37.0,
+      11.5
+    ],
+    [
+      55.0,
+      74.5
+    ],
+    [
+      55.0,
+      65.5
+    ],
+    [
+      55.0,
+      56.5
+    ],
+    [
+      55.0,
+      47.5
+    ],
+    [
+      55.0,
+      38.5
+    ],
+    [
+      55.0,
+      29.5
+    ],
+    [
+      55.0,
+      20.5
+    ],
+    [
+      55.0,
+      11.5
+    ],
+    [
+      73.0,
+      74.5
+    ],
+    [
+      73.0,
+      65.5
+    ],
+    [
+      73.0,
+      56.5
+    ],
+    [
+      73.0,
+      47.5
+    ],
+    [
+      73.0,
+      38.5
+    ],
+    [
+      73.0,
+      29.5
+    ],
+    [
+      73.0,
+      20.5
+    ],
+    [
+      73.0,
+      11.5
+    ],
+    [
+      91.0,
+      74.5
+    ],
+    [
+      91.0,
+      65.5
+    ],
+    [
+      91.0,
+      56.5
+    ],
+    [
+      91.0,
+      47.5
+    ],
+    [
+      91.0,
+      38.5
+    ],
+    [
+      91.0,
+      29.5
+    ],
+    [
+      91.0,
+      20.5
+    ],
+    [
+      91.0,
+      11.5
+    ],
+    [
+      109.0,
+      74.5
+    ],
+    [
+      109.0,
+      65.5
+    ],
+    [
+      109.0,
+      56.5
+    ],
+    [
+      109.0,
+      47.5
+    ],
+    [
+      109.0,
+      38.5
+    ],
+    [
+      109.0,
+      29.5
+    ],
+    [
+      109.0,
+      20.5
+    ],
+    [
+      109.0,
+      11.5
+    ]
+  ],
+  "choices": {
+    "cavities": 6,
+    "floor_features": 24,
+    "floor_z_mm": 2.0,
+    "ridge_height_mm": 3.0,
+    "wall_mm": 1.0,
+    "floor_flat_width_mm": 2.0,
+    "floor_end_inset_mm": 2.0,
+    "skirt_wall_mm": 1.2,
+    "underside_recess_mm": 1.0,
+    "cavity_length_mm": 72.0,
+    "outside_recess_z_mm": [
+      3.0,
+      42.0
+    ],
+    "appearance": {
+      "rgba": [
+        218,
+        229,
+        235,
+        235
+      ],
+      "roughness": 0.3,
+      "metallic": 0,
+      "alpha_mode": "OPAQUE"
+    }
+  },
+  "deltas": [
+    {
+      "resource": "agilent_204284_100",
+      "kind": "interpretation",
+      "quantity": "visual reconstruction",
+      "plr": {
+        "cavities": 6,
+        "floor_features": 24,
+        "floor_z_mm": 2.0,
+        "ridge_height_mm": 3.0,
+        "wall_mm": 1.0,
+        "floor_flat_width_mm": 2.0,
+        "floor_end_inset_mm": 2.0,
+        "skirt_wall_mm": 1.2,
+        "underside_recess_mm": 1.0,
+        "cavity_length_mm": 72.0,
+        "outside_recess_z_mm": [
+          3.0,
+          42.0
+        ],
+        "appearance": {
+          "rgba": [
+            218,
+            229,
+            235,
+            235
+          ],
+          "roughness": 0.3,
+          "metallic": 0,
+          "alpha_mode": "OPAQUE"
+        }
+      },
+      "venus": "Agilent 6 column reagent plate, 204284-100",
+      "decision": "Approximate exterior and cavity details; no protocol geometry changes",
+      "detail": "Square tapered growth wells from NIST photo; reservoir cavity topology from Agilent; support shape from Hamilton image. Sharp corners and material appearance are approximations."
+    },
+    {
+      "resource": "agilent_204284_100",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply coordinates by 0.001"
+    },
+    {
+      "resource": "agilent_204284_100",
+      "kind": "stock_disagrees",
+      "quantity": "footprint",
+      "plr": [
+        127.76,
+        85.47
+      ],
+      "venus": [
+        127.0,
+        86.0
+      ],
+      "decision": "Keep Venus footprint for visual registration; do not resize resources",
+      "detail": "Manufacturer physical footprint differs from the Venus definition"
+    }
+  ],
+  "triangles": 434,
+  "watertight": true,
+  "references": "models/GROQ_SEQ_REFERENCES.md",
+  "fidelity": "approximate visualization, not mechanical CAD"
+}

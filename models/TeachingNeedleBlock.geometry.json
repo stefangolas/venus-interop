@@ -1,0 +1,63 @@
+{
+  "source": "TeachingNeedleBlock.hxx",
+  "source_sha256": "44d73c74c39e18de9b8a5a97108b501a515a87ed386989ece06b8e386ea56305",
+  "definition": "TeachingNeedleBlock.rck",
+  "definition_sha256": "89a3870c40c8c7a284353391c0f740c0ce87b299e8a4b2f5fd06aa281bf5a386",
+  "source_bounds_mm": [
+    [
+      -4.0,
+      -35.5,
+      -29.900003999999996
+    ],
+    [
+      4.0,
+      35.5,
+      29.899996
+    ]
+  ],
+  "translation_mm": [
+    6.5,
+    35.5,
+    -22.099996000000004
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      0.0025000000000000005,
+      0.0,
+      -0.052000000000000005
+    ],
+    [
+      0.0105,
+      0.07100000000000001,
+      0.007799999999999998
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "TeachingNeedleBlock",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        2.5,
+        0.0,
+        -52.0
+      ],
+      "venus": [
+        -4.0,
+        -35.5,
+        -29.900003999999996
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "TeachingNeedleBlock",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

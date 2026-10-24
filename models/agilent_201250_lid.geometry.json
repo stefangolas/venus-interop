@@ -1,0 +1,66 @@
+{
+  "model": "agilent_201250_lid",
+  "kind": "lid",
+  "definition": "Agilent/Agilent single cavity 12 col pyr bottom 290 mL reservoir with lid.lid",
+  "definition_sha256": "9d3303c762f1c4d28b4270267e3878c3207b1bfde8b056a1b3d2e7f20ef2db81",
+  "size_mm": [
+    127.0,
+    86.0,
+    9.15
+  ],
+  "positions_mm": [],
+  "choices": {
+    "side_wall_mm": 1.0,
+    "roof_thickness_mm": 1.0,
+    "underside": "open universal lid; no unverified condensation rings",
+    "appearance": {
+      "rgba": [
+        225,
+        235,
+        240,
+        110
+      ],
+      "roughness": 0.3,
+      "metallic": 0,
+      "alpha_mode": "BLEND"
+    }
+  },
+  "deltas": [
+    {
+      "resource": "agilent_201250_lid",
+      "kind": "interpretation",
+      "quantity": "visual reconstruction",
+      "plr": {
+        "side_wall_mm": 1.0,
+        "roof_thickness_mm": 1.0,
+        "underside": "open universal lid; no unverified condensation rings",
+        "appearance": {
+          "rgba": [
+            225,
+            235,
+            240,
+            110
+          ],
+          "roughness": 0.3,
+          "metallic": 0,
+          "alpha_mode": "BLEND"
+        }
+      },
+      "venus": "Agilent univeral lid (202497-100)",
+      "decision": "Approximate exterior and cavity details; no protocol geometry changes",
+      "detail": "Square tapered growth wells from NIST photo; reservoir cavity topology from Agilent; support shape from Hamilton image. Sharp corners and material appearance are approximations."
+    },
+    {
+      "resource": "agilent_201250_lid",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply coordinates by 0.001"
+    }
+  ],
+  "triangles": 28,
+  "watertight": true,
+  "references": "models/GROQ_SEQ_REFERENCES.md",
+  "fidelity": "approximate visualization, not mechanical CAD"
+}

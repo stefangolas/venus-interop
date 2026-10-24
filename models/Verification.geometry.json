@@ -1,0 +1,63 @@
+{
+  "source": "Verification.hxx",
+  "source_sha256": "9487c83895e41d781d28640b94a6b961c9f3694dec648ed17a35040d39f20ec1",
+  "definition": "Verification.rck",
+  "definition_sha256": "9959dc52ab8502e1b76ee7f74f8058a02a49b5ed17b4d03432e18da4110657c4",
+  "source_bounds_mm": [
+    [
+      -4.8999999999999995,
+      -4.8999999999999995,
+      -4.7
+    ],
+    [
+      4.8999999999999995,
+      4.8999999999999995,
+      4.7
+    ]
+  ],
+  "translation_mm": [
+    12.899999999999999,
+    14.899999999999999,
+    14.7
+  ],
+  "scale": 0.001,
+  "output_bounds_m": [
+    [
+      0.007999999999999998,
+      0.009999999999999998,
+      0.009999999999999998
+    ],
+    [
+      0.017799999999999996,
+      0.019799999999999998,
+      0.0194
+    ]
+  ],
+  "deltas": [
+    {
+      "resource": "Verification",
+      "kind": "interpretation",
+      "quantity": "mesh origin",
+      "plr": [
+        8.0,
+        10.0,
+        10.0
+      ],
+      "venus": [
+        -4.8999999999999995,
+        -4.8999999999999995,
+        -4.7
+      ],
+      "decision": "Place mesh minimum at definition 3D offsets; preserve overhangs and dimensions",
+      "detail": "Cosmetic registration; not verified against Venus rendering"
+    },
+    {
+      "resource": "Verification",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply all coordinates by 0.001"
+    }
+  ]
+}

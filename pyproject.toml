@@ -19,7 +19,7 @@ build-backend = "setuptools.build_meta"
 include = ["venus_interop*"]
 
 [tool.setuptools.package-data]
-"venus_interop.plr" = ["templates/*.lay", "data/*.json"]
+"venus_interop.plr" = ["templates/*.lay", "data/*.json", "replay_static/*.js", "replay_static/*.css"]
 "venus_interop.multiflex" = ["data/*.json"]
 "venus_interop.methods" = ["plld/*.hsl"]
 

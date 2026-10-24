@@ -1,0 +1,66 @@
+{
+  "model": "agilent_6_column_lid",
+  "kind": "lid",
+  "definition": "Agilent/Agilent 6 well reservoir.lid",
+  "definition_sha256": "9de171129c5e25cf96acdaedcad4e0fe5459e570d4620dcbfbad013296ab9282",
+  "size_mm": [
+    127.0,
+    86.0,
+    9.15
+  ],
+  "positions_mm": [],
+  "choices": {
+    "side_wall_mm": 1.0,
+    "roof_thickness_mm": 1.0,
+    "underside": "open universal lid; no unverified condensation rings",
+    "appearance": {
+      "rgba": [
+        225,
+        235,
+        240,
+        110
+      ],
+      "roughness": 0.3,
+      "metallic": 0,
+      "alpha_mode": "BLEND"
+    }
+  },
+  "deltas": [
+    {
+      "resource": "agilent_6_column_lid",
+      "kind": "interpretation",
+      "quantity": "visual reconstruction",
+      "plr": {
+        "side_wall_mm": 1.0,
+        "roof_thickness_mm": 1.0,
+        "underside": "open universal lid; no unverified condensation rings",
+        "appearance": {
+          "rgba": [
+            225,
+            235,
+            240,
+            110
+          ],
+          "roughness": 0.3,
+          "metallic": 0,
+          "alpha_mode": "BLEND"
+        }
+      },
+      "venus": "Universal lid for Agilent 6 column plate",
+      "decision": "Approximate exterior and cavity details; no protocol geometry changes",
+      "detail": "Square tapered growth wells from NIST photo; reservoir cavity topology from Agilent; support shape from Hamilton image. Sharp corners and material appearance are approximations."
+    },
+    {
+      "resource": "agilent_6_column_lid",
+      "kind": "convention",
+      "quantity": "mesh units",
+      "plr": "m",
+      "venus": "mm",
+      "decision": "Multiply coordinates by 0.001"
+    }
+  ],
+  "triangles": 28,
+  "watertight": true,
+  "references": "models/GROQ_SEQ_REFERENCES.md",
+  "fidelity": "approximate visualization, not mechanical CAD"
+}
