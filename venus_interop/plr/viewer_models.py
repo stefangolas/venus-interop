@@ -139,6 +139,35 @@ def attach_star_base(star) -> None:
   if not source.is_file():
     raise FileNotFoundError('Build the chassis visual with tools/build_groq_star_base.py')
   star.reference_glb = source.name
+  _place_extension_housing(star)
+
+
+def _place_extension_housing(star) -> None:
+  """Hang the left extension housing where PLR's `STAR()` has it, against the chassis.
+
+  `STARDevice` hangs it flush with the device's own top and back at x = -its width. PLR's `STAR()`
+  makes the device the chassis (deck at `STAR_DECK_LOCATION` in it); an imported deck's device is
+  the deck itself, so the housing came out against the deck's corner instead: 110 mm into the
+  chassis in X and off in Y and Z. Placed in the chassis frame and shifted as the chassis visual is.
+  """
+  from pylabrobot.hamilton.star import device
+  from pylabrobot.resources import Coordinate
+  from venus_interop.rules.deltas import Delta
+
+  housing = star.left_extension_housing
+  if housing is None:
+    return
+  origin = device.STAR_DECK_LOCATION
+  width, depth, height = device.EXTENSION_HOUSING_SIZE
+  housing.location = Coordinate(-width - origin.x, device.MANUAL_SIZE_Y - depth - origin.y,
+                                device.SIZE_Z - height - origin.z)
+  chassis = [-width, device.MANUAL_SIZE_Y - depth, device.SIZE_Z - height]
+  housing.metadata['viewer_frame_delta'] = Delta(
+    resource=housing.name, kind='convention', quantity='extension housing frame (mm)',
+    venus=chassis, plr=[housing.location.x, housing.location.y, housing.location.z],
+    decision='Translate chassis coordinates by -STAR_DECK_LOCATION into the deck frame.',
+    detail='Visual registration against PLR STAR(); not a Venus cabinet measurement.',
+  ).as_dict()
 
 
 def missing(deck) -> dict:

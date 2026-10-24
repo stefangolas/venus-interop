@@ -2,6 +2,9 @@
 
 ## Implemented
 
+For setup from a fresh method checkout, including the corpus and trace needed below, see
+[From a method checkout to a replay](METHOD_WORKFLOW.md).
+
 GROQ `--view` now automatically records into a new `.local/replays/<timestamp>-<id>/`
 folder. `ReplayViewer` captures once on the server, even with multiple browsers, and bundles
 the viewer version, content-addressed GLBs, initial/final snapshots and ordered events.

@@ -1,7 +1,8 @@
 """Where test layouts and labware definitions come from, and how to turn them into a corpus folder.
 
 A corpus folder (VENUS_INTEROP_CORPUS) holds:
-  raw/<name>.lay        layouts, as found
+  raw/<sha1[:12]>.lay   layouts, named by content, copied byte for byte
+  index.tsv            <hash> TAB <source> TAB <original path> TAB <size in bytes>
   defs_raw/<name>       definition files (.rck .tml .lid .ctr), named by a hash of their source path
   defs_index.tsv        <file in defs_raw> TAB <path relative to a Labware folder> TAB <source>
 
@@ -45,15 +46,22 @@ class Source:
     return out
 
 
+def _env_path(name: str) -> Optional[pathlib.Path]:
+  value = os.environ.get(name)
+  return pathlib.Path(value) if value else None
+
+
 SOURCES = [
-  Source("venus", "The local Venus install: its layouts, Labware folder and NGS STAR kits", VENUS),
+  Source("venus", "The local Venus install: its layouts, Labware folder and NGS STAR kits",
+         _env_path("HAMILTON_DIR") or VENUS),
   Source("ngs_protocols", "NGS STAR protocols (KAPA, 10x, PacBio, QIAseq, ONT, Avenio) and their kit labware",
-         pathlib.Path(r"C:\Users\stefa\NGS-Protocols")),
+         _env_path("VENUS_INTEROP_NGS")),
   Source("lmsf_hamilton", "djross22/lmsf_hamilton, branch S-Cell_STAR-2: 141 layouts and the lab's labware",
-         None, "https://github.com/djross22/lmsf_hamilton/tree/S-Cell_STAR-2"),
+         _env_path("VENUS_INTEROP_NIST"), "https://github.com/djross22/lmsf_hamilton/tree/S-Cell_STAR-2",
+         labware_roots=("LabWare",)),
   Source("pyhamilton", "PyHamilton's sample layouts", None, "https://github.com/dgretton/pyhamilton"),
-  Source("hamilton_library", "Hamilton's shared library (labautomation.io), downloaded by plr-viz3d-scratch",
-         pathlib.Path(r"C:\Users\stefa\plr-viz3d-scratch\hamilton_library\labware"),
+  Source("hamilton_library", "Hamilton's shared library (labautomation.io), downloaded and unpacked",
+         _env_path("VENUS_INTEROP_HAMILTON_LIBRARY"),
          "https://download.hamiltonsupport.com/wl/?id=VQY0XAzTfcT7KY29A1YJtZVFwZ7GMOO2"),
 ]
 
@@ -62,16 +70,36 @@ def _key(path: pathlib.Path) -> str:
   return hashlib.sha1(str(path).lower().encode()).hexdigest()[:12] + path.suffix.lower()
 
 
+def layout_key(path: pathlib.Path) -> str:
+  """A layout's name in a corpus: its content's sha1, so the same file has the same name on every
+  machine (the demos and tests name layouts this way, e.g. GROQ-Seq.2_TFs.lay is 5ae1a84b57e5.lay)."""
+  return hashlib.sha1(pathlib.Path(path).read_bytes()).hexdigest()[:12] + ".lay"
+
+
 def build(out: pathlib.Path, layouts: Iterable[pathlib.Path], labware_dirs: Iterable[pathlib.Path],
-          source: str = "local") -> dict[str, int]:
-  """Copy layouts and every definition under the Labware folders into a corpus folder."""
+          source: str = "local", root: Optional[pathlib.Path] = None) -> dict[str, int]:
+  """Copy layouts and every definition under the Labware folders into a corpus folder.
+
+  Layouts go to `raw/<content hash>.lay`, listed in `index.tsv` (hash, source, path under `root`,
+  size); definitions to `defs_raw/`, listed in `defs_index.tsv`."""
   out = pathlib.Path(out)
   (out / "raw").mkdir(parents=True, exist_ok=True)
   (out / "defs_raw").mkdir(parents=True, exist_ok=True)
   n_lay = n_def = 0
+  listed_path = out / "index.tsv"
+  listed = {}
+  if listed_path.exists():
+    with open(listed_path, encoding="utf-8") as f:
+      listed = {row[0]: row for row in csv.reader(f, delimiter="\t")}
   for lay in layouts:
-    shutil.copyfile(lay, out / "raw" / _key(lay))
+    lay = pathlib.Path(lay)
+    key = layout_key(lay)
+    shutil.copyfile(lay, out / "raw" / key)
+    where = lay.relative_to(root).as_posix() if root is not None and lay.is_relative_to(root) else lay.name
+    listed[key[:-4]] = [key[:-4], source, where, str(lay.stat().st_size)]
     n_lay += 1
+  with open(listed_path, "w", encoding="utf-8", newline="") as f:
+    csv.writer(f, delimiter="\t").writerows(listed.values())
   index_path = out / "defs_index.tsv"
   index = {}
   if index_path.exists():

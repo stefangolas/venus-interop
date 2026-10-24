@@ -14,6 +14,26 @@ sys.path.insert(0, str(ROOT / 'examples'))
 from mpe2_model import attach_visual, SEAT  # noqa: E402
 
 
+def test_extension_housing_matches_stock_star_in_deck_frame():
+  from pylabrobot.hamilton.star.device import STAR, STARDevice, RECORDING_STAR
+  from pylabrobot.resources.hamilton import STARDeck
+
+  reference = STAR(simulation=True)
+  star = STARDevice(deck=STARDeck(name="imported"), simulation=True,
+                    declared_configuration_json=RECORDING_STAR)
+  before = star.deck.location.copy()
+  viewer_models.attach_star_base(star)
+  expected = reference.left_extension_housing.location - reference.deck.location
+  assert star.left_extension_housing.location == expected
+  assert star.deck.location == before
+  delta = star.left_extension_housing.metadata['viewer_frame_delta']
+  origin = reference.deck.location
+  assert [p + offset for p, offset in zip(delta['plr'], (origin.x, origin.y, origin.z))] == pytest.approx(
+    delta['venus'])
+  viewer_models.attach_star_base(star)
+  assert star.left_extension_housing.location == expected
+
+
 def test_star_base_translation_preserves_compressed_geometry():
   from pylabrobot.hamilton.star import device
   source = (pathlib.Path(device.__file__).parent / 'resource_model/star_base.glb').read_bytes()

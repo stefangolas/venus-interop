@@ -50,6 +50,16 @@ The core (`files`, `rules`, `multiflex` without `.plr`, `methods`) needs only th
 
 ## Command-line tools
 
+For the end-to-end path from a method checkout to a corpus, readable traces and a GROQ replay,
+see [Getting started with methods](docs/METHOD_WORKFLOW.md). For comparisons against Venus itself,
+start with the [simulation harness and 1:1 testing procedure](tools/venus_sim/README.md#running-the-11-tests-venus--plr).
+
+The method tools read `.med` records and generated HSL; `methods.hsl_eval` interprets the supported
+HSL subset for port tests. See [porting libraries](docs/PORTING.md) for its scope and limitations.
+Firmware capture is `tools/venus_sim/plr_firmware.py`, compared by `compare_firmware.py`.
+The PLR fork's `pylabrobot/hamilton/star/motion.py` decodes firmware into 3D motion;
+[interactive replays](docs/GROQ_REPLAYS.md) bundle that motion for browser playback.
+
 All tools are in `tools/` and print usage with `-h`.
 
 | Tool | Does |

@@ -1,5 +1,9 @@
 # Examples: hand-built PLR decks for Venus layouts
 
+For a fresh GROQ setup, follow [the method workflow](../docs/METHOD_WORKFLOW.md): build a corpus,
+generate a trace, then record or view the demo. The [Venus simulation harness](../tools/venus_sim/README.md)
+documents the separate 1:1 position and firmware comparisons.
+
 | File | Deck | Notes |
 |---|---|---|
 | `kapa_deck.py`, `kapa_compare_to_lay.py` | NGS STAR KAPA HyperPlus (`NGS-Protocols/protocols/KAPA_HyperPrep/KAPA_HyperPlus_Deck.lay`) | [docs/notes/VENUS_TO_PLR_kapa.md](../docs/notes/VENUS_TO_PLR_kapa.md) |

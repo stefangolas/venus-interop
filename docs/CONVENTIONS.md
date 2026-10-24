@@ -93,6 +93,15 @@ The old rule `Dim.Dy − BndryY` for the A1 offset is wrong in general; it only 
 
 ## 3b. Placement conventions: what the systematic offsets are
 
+**Viewer extension cabinet (PLR frame registration).** For the 54-track imported-deck viewer,
+`viewer_models.attach_star_base` places the cabinet in the chassis frame and subtracts
+`STAR_DECK_LOCATION`, the same translation as the chassis mesh. Against the integrated
+`venus-plr` checkout, its deck-relative corner is (-381.215, -91.0, -32.5) mm, matching
+stock `STAR()` in `test_extension_housing_matches_stock_star_in_deck_frame`. This check covers
+one 54-track configuration, not the layout corpus or STARlet; no exceptions have been measured.
+The cosmetic resource records a `Delta` in `metadata['viewer_frame_delta']`; protocol labware
+does not move. This checks PLR's frames only; physical cabinet alignment remains unverified.
+
 Measured on 4,467 racks on carrier sites in the corpus and the NGS layouts, with copies of a layout counted once (`tools/redundancy.py`, `rules/capture.py`). Each rule below explains a class of offsets that §3's site rule alone does not.
 
 **Height, by `ZTransValue`:**
@@ -471,6 +480,7 @@ The difference is pylabrobot's own `collar_height` minus the flat `fitting_depth
 | 384-tip racks, piercing and slim tips | PLR has no equivalent; generated |
 | Column reservoirs (Agilent 12/6/4/2) | Venus doesn't mark shared liquid; group positions by container width |
 | Authored model registration | Compare with Venus's 3D view, or with `3D*Offset` |
+| STAR extension cabinet physical alignment | Viewer registration matches stock PLR `STAR()` in deck coordinates; confirm the installed cabinet geometry on the instrument. |
 | GROQ-seq viewer assemblies: placing each mesh minimum at its definition's `3D*Offset` (six MultiFlex sources and the MPE² base); MPE² unit registered by its filter seat | Cosmetic interpretation recorded in each asset's Delta ledger, not a new placement rule. Compare with Venus's 3D view; confirm installed MPE² revision and collection-seat alignment. Imported protocol coordinates are unchanged. |
 | GROQ-seq consumable reconstruction: detailed walls, tapers, lid roofs, and CO-RE II support heights | The nine generated visual meshes retain definition boxes and grids, with approximations in their Delta ledgers. All three support descriptions name 6608647-01 despite differing definition heights; measure the body/seat relationship before claiming mechanical fidelity. Single-cavity lid Description identifies 202497-100; the other lid SKUs remain unverified. Cosmetic cavities do not replace the container volume rules. |
 | GROQ-seq waste and teaching visual registration | The five authored accessory meshes use the same mesh-minimum-at-`3D*Offset` interpretation and Delta ledger. TeachingNeedle5ml and TeachingNeedleBlock retain Z minima -94.9 and -52 mm; WasteBlock retains a 186 mm mesh width despite its 30 mm logical box. The slide rack uses `core96SlideWasteRack.hxx` as named in its definition. Compare registration with Venus before treating these cosmetic transforms as a placement rule; protocol coordinates remain unchanged. |
