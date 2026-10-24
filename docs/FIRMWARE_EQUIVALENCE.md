@@ -19,16 +19,16 @@ people's methods, traces, backups of Venus files.
 
 | Step | Automated by | Manual part |
 |---|---|---|
-| Stage | `stage_marionette.py` (per method; copy it for a new one) | find the method's hard-coded paths and input files (§2.9) |
+| Stage | `stage_method.py NAME` (the methods in `methods.py`; add an entry for a new one) | find the method's hard-coded paths and input files (§2.9) |
 | Labware | `labware_closure.py --copy`, `labware_siblings.py` | files in neither the corpus nor the install: find them or skip the layout |
-| Stored state | `probes/marionette_reload_tips.hsl` (staged and signed by `stage_marionette.py`) | which counters the method reads (grep `TipCount::Read2`, `GetTipCounters`) |
-| Venus run | `run_probe.py` under `paths.PYTHON32` | note the ComTrace line count first (`<work>/marionette_comtrace_start.txt`) |
-| PLR run | `marionette_plr_firmware.py` | the same parameters, counters and liquid classes as the Venus run |
-| Compare | `compare_firmware.py --extract` | classify every difference (§3.2) |
+| Stored state | `probes/reload_tips.hsl` (staged on the method's layout and signed by `stage_method.py`) | which counters the method reads (grep `TipCount::Read2`, `GetTipCounters`) |
+| Venus run | `run_method.py NAME` under `paths.PYTHON32` (tip reload, ComTrace start line, method) | |
+| PLR run | `plr_firmware.py NAME` | the same parameters, counters and liquid classes as the Venus run |
+| Compare | `compare_firmware.py NAME --extract` | classify every difference (§3.2) |
 | Spatial check | `sweep.py`, `compare_sweep.py` (§5) | read the groups; turn each into a rule |
 | Probes | `stage_probe.py`, `probes/*.hsl` | write a probe for each new Venus behaviour |
 
-1. **Stage the method** in a folder of its own (`stage_<method>.py`):
+1. **Stage the method** in a folder of its own (`stage_method.py`):
    - copy the `.hsl/.sub/.stp/.res` and the layout, under the file name the method declares
      (`global device ML_STAR ("<name>.lay", ...)`);
    - follow the `#include` closure from the method's folder, then the Venus `Library`, then the
@@ -36,6 +36,8 @@ people's methods, traces, backups of Venus files.
    - convert text files back to CRLF where that makes the checksum footer verify (a git checkout
      has LF line endings; Venus's checksums are over CRLF);
    - repoint hard-coded input paths and re-sign the file (`venus_interop.files.footer.rewrite`);
+   - an include relative to the method's folder in the source tree (`..\..\X.hs_`, GROQ-Seq
+     plate 1) leaves the staging folder: name it from its `Methods`/`Library` root and re-sign;
    - write the method's input files (§2.9).
 2. **Set the stored state** (§2.8). For tip counters, run a reload method through Hamilton's API.
 3. **Run Venus headless.** Use 32-bit Python, `RunHSLExecutor.dll` through pythonnet, then
@@ -440,7 +442,7 @@ Check each of these when a method first uses it:
 
 Venus completed the run in simulation: 181 device steps, 379 commands sent. PLR sent 6,363 at
 first, most of them position queries and its own liquid searches; 4,424 now, with
-`PLR_VENUS_FAITHFUL_CFG` set (`marionette_plr_firmware.py` sets it).
+`PLR_VENUS_FAITHFUL_CFG` set (`plr_firmware.py` sets it).
 
 **State (end of 2026-10-22):** every count, position, height, channel pattern and tip command
 matches, and every pipetting field except those in the second table. Tip eject `C0TR` matches field
@@ -482,6 +484,41 @@ for field.
 | `C0ZT/ZS` `pa/pb` | 7/8 this run | 6/7; none on `ZS` | Expected: the front channel drawn from the clock (§2.12) |
 | `C0ZA` | 1 | 5 | The 96-head and arm move: to compare |
 | 96-head | `C0EI/EM/EV` | `H0` module commands | Command family: check the move targets |
+
+## 4b. GROQ-Seq.2_TFs plate 1 and plates 2-5 (NIST): 2026-10-23
+
+Both methods on their layout (`5ae1a84b57e5.lay`), the demo's parameters (culture 300 µL, clonal
+test, gradient plate 3), `PLR_VENUS_FAITHFUL_CFG` = `ML_Starlet.cfg`; `methods.py` names
+`groq_plate_1`, `groq_plates_2-5`.
+
+**Both abort where the demo says they do**, after every move (CONVENTIONS §11's open points, now
+Venus's answers): plate 1 in `CalculateOutputs`, "the sequence property 'plasmid' was not found"
+(position 9 of a 12-well sequence set on 1-8); plates 2-5 at `tmp_conc_arr.ElementAt(inducer_number
+- 1)`, "array reference out of bound". Headless, the run stops at the error: Venus's OnAbort
+(CleanUp, `Clear96HeadAndArm`) waits for the operator's Abort, so PLR's `C0ZA` and 96-head moves
+from CleanUp have no Venus side.
+
+**Plate 1:** every count matches (37 `C0AS`/`C0DS`, 3 `C0TP/TR`, 7 `C0ZP/ZR`, 3 `C0ZS/ZT`) and every
+pipetting field but `il/in` and one `av/dv` ±0.1 (the carry). The bacteria tubes
+(`cup_17x100.ctr`: a 156.1555 mm² cylinder over a 6.95 mm spherical cap, `cLLD` 4) gave three rules,
+**fixed** (`plr_import._with_heights`, `steps.venus_heights`, `faithful.one_move`; test
+`test_a_tube_as_venus_measures_it`):
+
+| Field | Venus | Rule |
+|---|---|---|
+| `ll` | 4 | the container's `cLLD` (every container with one, both methods; none seen without) |
+| `fp`, `mh` | 0.2 for 34.7 µL; 5.1 for an 800 µL mix | volume over the **top** segment's area, when it is `h * A` |
+| `zu`, `zr` | 6.9, 618.0 | a spherical-cap bottom (shape 4) is the second section: its height cut to 0.1 mm, the ratio 618.0 (PLR's default) |
+
+**Plates 2-5:** every count matches, and every `C0AS`/`C0DS` field but `il/in`, `av/dv` ±0.1 on 14
+(the carry) and one `fp` (Venus 0.1, PLR 0.3: the last dispense, the dilution series into the empty
+liquid waste, the same open case as Marionette's). `add_ind_k` dispenses 8 channels over two columns
+(1-4 at X 622.0, 5-8 at X 640.0, crossing in Y): **one `C0DS` in Venus with a different `xp` per
+channel**; PLR's driver builds a command at one X and sent two. **Fixed** under
+`PLR_VENUS_FAITHFUL_CFG` (`faithful._one_pipetting_command`, the driver unchanged; test
+`test_one_move_puts_each_channel_at_its_own_column`): one batch per call, each channel's position in
+the command, the move before it placing the first column's channels. Tip, tool and gripper commands
+as on Marionette (§4: `td/tt`, `te`, `zj`, `pa/pb`).
 
 ## 5. The position sweep: checking the spatial layer against Venus
 

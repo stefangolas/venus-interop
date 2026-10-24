@@ -1,28 +1,29 @@
-"""Field-by-field comparison of the action commands Venus and PLR sent for the same run: <work>/phase3/
-marionette_venus.fw (the ComTrace's sent lines from the run's start line) against marionette_plr.fw.
+"""Field-by-field comparison of the action commands Venus and PLR sent for the same run of a method
+(`methods.py`): <work>/phase3/<name>_venus.fw (the ComTrace's sent lines from the run's start line,
+which `run_method.py` notes) against <name>_plr.fw (`plr_firmware.py`).
 Commands of one code are paired in order; each field (two lowercase letters + value) is compared,
 after Venus's shortened lists are expanded and channels off in tm are dropped.
 
-  python compare_firmware.py [CODE ...]       (C0AS C0DS C0TP C0TR C0Z* when none given)
-  python compare_firmware.py --extract        (writes marionette_venus.fw from the ComTrace first)"""
+  python compare_firmware.py NAME [CODE ...]       (C0AS C0DS C0TP C0TR C0Z* when none given)
+  python compare_firmware.py NAME --extract        (writes <name>_venus.fw from the ComTrace first)"""
 import collections
 import re
 import sys
 
-from paths import LOGS, WORK
+import methods
+from paths import LOGS
 
-HERE = WORK / "phase3"
 FIELD = re.compile(r"([a-z]{2})([^a-z]*)")
 CHANNELS = 8
 
 
-def extract() -> None:
-  """The commands Venus sent since <work>/marionette_comtrace_start.txt's line, newest ComTrace."""
+def extract(m: methods.Method) -> None:
+  """The commands Venus sent since <work>/<name>_comtrace_start.txt's line, newest ComTrace."""
   trace = max(LOGS.glob("ComTrace_Simulator*.trc"), key=lambda p: p.stat().st_mtime)
-  start = int((WORK / "marionette_comtrace_start.txt").read_text().strip())
+  start = int(m.comtrace_start.read_text().strip())
   lines = trace.read_text(encoding="latin-1").splitlines()[start - 1:]
   sent = [re.sub(r"^< [0-9:.]* COM1: ", "", line) for line in lines if line.startswith("< ")]
-  (HERE / "marionette_venus.fw").write_text("\n".join(sent) + "\n", encoding="latin-1")
+  m.fw("venus").write_text("\n".join(sent) + "\n", encoding="latin-1")
   print(len(sent), "commands from", trace.name)
 
 
@@ -45,16 +46,16 @@ def norm(fields):
   return out
 
 
-def load(name, codes):
+def load(path, codes):
   out = collections.defaultdict(list)
-  for line in (HERE / name).read_text(encoding="latin-1").splitlines():
+  for line in path.read_text(encoding="latin-1").splitlines():
     if line[:4] in codes:
       out[line[:4]].append(norm(dict(FIELD.findall(line[4:]))))
   return out
 
 
-def main(codes) -> None:
-  v, p = load("marionette_venus.fw", codes), load("marionette_plr.fw", codes)
+def main(m: methods.Method, codes) -> None:
+  v, p = load(m.fw("venus"), codes), load(m.fw("plr"), codes)
   for code in codes:
     pairs = list(zip(v[code], p[code]))
     diff = collections.Counter()
@@ -72,8 +73,10 @@ def main(codes) -> None:
 
 
 if __name__ == "__main__":
-  args = sys.argv[1:]
+  if len(sys.argv) < 2:
+    raise SystemExit(__doc__)
+  m, args = methods.get(sys.argv[1]), sys.argv[2:]
   if "--extract" in args:
-    extract()
+    extract(m)
     args.remove("--extract")
-  main(args or ["C0AS", "C0DS", "C0TP", "C0TR", "C0ZP", "C0ZR", "C0ZS", "C0ZT", "C0ZA"])
+  main(m, args or ["C0AS", "C0DS", "C0TP", "C0TR", "C0ZP", "C0ZR", "C0ZS", "C0ZT", "C0ZA"])

@@ -140,10 +140,14 @@ def venus_heights(pipettes, wells, step: Pipetting, extra: dict) -> dict[str, An
   if all(s is not None for s in searches):
     out["lld_search_heights"] = [round(f + s, 2) for f, s in zip(floors, searches)]
   # no second section (zu, zr 0) in a one-segment container, as Venus sends it (Marionette's three
-  # plates); PLR's default is a 3.2 mm cone. A container of several segments keeps PLR's: unmeasured
-  if all(w.metadata.get("venus", {}).get("segments") == 1 for w in wells):
-    out["second_section_heights"] = [0.0] * len(wells)
-    out["second_section_ratios"] = [0.0] * len(wells)
+  # plates); PLR's default is a 3.2 mm cone. A spherical-cap bottom is the second section, its
+  # height cut to 0.1 mm, PLR's ratio 618.0 as Venus's (GROQ-Seq's 17x100 tubes: 6.95 -> zu 6.9).
+  # Other containers of several segments keep PLR's: unmeasured
+  meta = [w.metadata.get("venus", {}) for w in wells]
+  if all(m.get("segments") == 1 or m.get("cap_height") is not None for m in meta):
+    out["second_section_heights"] = [0.0 if m.get("segments") == 1 else math.floor(m["cap_height"] * 10 + 1e-6) / 10
+                                     for m in meta]
+    out["second_section_ratios"] = [0.0 if m.get("segments") == 1 else 618.0 for m in meta]
   if step.pull_out is not None:
     out["pull_out_distances_transport_air"] = [step.pull_out] * len(wells)
   return {k: v for k, v in out.items() if extra.get(k) is None}
@@ -152,7 +156,7 @@ def venus_heights(pipettes, wells, step: Pipetting, extra: dict) -> dict[str, An
 def _venus_extras(pipettes, n: int, step: Pipetting, aspirate: bool, liquid_class, extra: dict) -> dict:
   """What Venus sends beside the heights, under a Venus profile: with no mix the class's mix flow
   rate (Venus's ms 500.0 where PLR sends 100.0 / 1.0). The step's touch-off position goes through
-  `faithful.touch_off`: PLR's aspirate and dispense take none."""
+  `faithful.one_move`: PLR's aspirate and dispense take none."""
   if getattr(pipettes, "venus_profile", None) is None:
     return {}
   out: dict[str, Any] = {}
@@ -162,6 +166,15 @@ def _venus_extras(pipettes, n: int, step: Pipetting, aspirate: bool, liquid_clas
     from pylabrobot.lib.liquid_handling.mix import Mix
     out[mixes] = [Mix(volume=0.0, repetitions=0, flow_rate=flow)] * n
   return {k: v for k, v in out.items() if extra.get(k) is None}
+
+
+def _one_move(pipettes, wells, step: Pipetting) -> dict:
+  """Under a Venus profile, the step's touch-off position and its containers' cLLD sensitivity
+  (one for all, or PLR's), for `faithful.one_move`: PLR's aspirate and dispense take neither."""
+  if getattr(pipettes, "venus_profile", None) is None:
+    return {}
+  clld = {w.metadata.get("venus", {}).get("clld") for w in wells}
+  return {"touch_off": step.touch_off, "clld": clld.pop() if len(clld) == 1 else None}
 
 
 def _cut(x: float) -> float:
@@ -218,7 +231,7 @@ async def aspirate(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   kw.update(venus_heights(pipettes, wells, step, extra))
   kw.update(_venus_extras(pipettes, len(channels), step, True, liquid_class, extra))
   _apply_following(pipettes, kw, wells, volumes, step, liquid_class, True, extra)
-  with faithful.touch_off(pipettes, step.touch_off if getattr(pipettes, "venus_profile", None) else None):
+  with faithful.one_move(pipettes, **_one_move(pipettes, wells, step)):
     await pipettes.aspirate(wells, volumes, use_channels=channels, **kw, **extra)
 
 
@@ -233,7 +246,7 @@ async def dispense(pipettes, wells, volumes, channels, step: Pipetting, liquid_c
   kw.update(venus_heights(pipettes, wells, step, extra))
   kw.update(_venus_extras(pipettes, len(channels), step, False, liquid_class, extra))
   _apply_following(pipettes, kw, wells, volumes, step, liquid_class, False, extra)
-  with faithful.touch_off(pipettes, step.touch_off if getattr(pipettes, "venus_profile", None) else None):
+  with faithful.one_move(pipettes, **_one_move(pipettes, wells, step)):
     await pipettes.dispense(wells, volumes, use_channels=channels, **kw, **extra)
 
 

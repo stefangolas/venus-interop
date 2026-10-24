@@ -25,7 +25,7 @@ none gets a flag of its own.
   - the step record's pull-out distance and touch-off position, and the class's mix flow rate
     with no mix.
 - **When to set it:** for any 1:1 comparison with Venus (`tools/venus_sim/README.md`, "Running the
-  1:1 tests"); `marionette_plr_firmware.py` sets it itself. To keep it on for a machine:
+  1:1 tests"); `tools/venus_sim/plr_firmware.py` sets it itself. To keep it on for a machine:
   `setx PLR_VENUS_FAITHFUL_CFG "C:\Program Files (x86)\HAMILTON\Config\ML_Starlet.cfg"` (new shells
   only).
 

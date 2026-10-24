@@ -1,9 +1,10 @@
-// Operator tip reload for Marionette, as production does it before a run: full racks on every tip
+// Operator tip reload for the NIST methods, as production does it before a run: full racks on every tip
 // sequence the method counts, written to its counters through Hamilton's TipCounting library
-// (TipCount::Write2, the same call the method makes at its end). Run headless before each run.
+// (TipCount::Write2, the same call the method makes at its end). Run headless before each run;
+// stage_method.py puts the method's layout name for LAYOUT.
 #include "HSLTipCountingLib.hsl"
 #include "HSLTrcLib.hsl"
-global device ML_STAR ("Fitness Selection.Marionette protease.v5.lay", "ML_STAR", hslTrue);
+global device ML_STAR ("LAYOUT", "ML_STAR", hslTrue);
 function reload(sequence & tips, variable counter) void
 {
    sequence full;

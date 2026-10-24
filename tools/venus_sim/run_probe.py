@@ -19,24 +19,30 @@ sys.path.append(str(STAR_OEM))
 clr.AddReference(os.path.join(str(STAR_OEM), "RunHSLExecutor"))
 from RunHSLExecutor import Class1  # noqa: E402
 
-path, timeout = sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 120
-stem = os.path.splitext(os.path.basename(path))[0]
-before = set(glob.glob(os.path.join(str(LOGS), f"{stem}_*_Trace.trc")))
-c = Class1()
-t0 = time.time()
-c.StartMethod(path).Wait(int(timeout * 1000))
-trace, text = None, ""
-while time.time() - t0 < timeout:
-  new = set(glob.glob(os.path.join(str(LOGS), f"{stem}_*_Trace.trc"))) - before
-  if new:
-    trace = max(new, key=os.path.getmtime)
-    with open(trace, encoding="latin-1") as f:
-      text = f.read()
-    if any(e in text for e in ENDS):
-      break
-  time.sleep(0.5)
-else:
-  print("TIMED OUT: aborting")
-  c.AbortMethod(path)
-print(f"{time.time() - t0:.1f}s", trace)
-print(text)
+
+def run(path: str, timeout: float = 120) -> str:
+  """Runs the method, waits for its trace to end (or aborts it at the timeout); its trace's text."""
+  stem = os.path.splitext(os.path.basename(path))[0]
+  before = set(glob.glob(os.path.join(str(LOGS), f"{stem}_*_Trace.trc")))
+  c = Class1()
+  t0 = time.time()
+  c.StartMethod(path).Wait(int(timeout * 1000))
+  trace, text = None, ""
+  while time.time() - t0 < timeout:
+    new = set(glob.glob(os.path.join(str(LOGS), f"{stem}_*_Trace.trc"))) - before
+    if new:
+      trace = max(new, key=os.path.getmtime)
+      with open(trace, encoding="latin-1") as f:
+        text = f.read()
+      if any(e in text for e in ENDS):
+        break
+    time.sleep(0.5)
+  else:
+    print("TIMED OUT: aborting")
+    c.AbortMethod(path)
+  print(f"{time.time() - t0:.1f}s", trace)
+  return text
+
+
+if __name__ == "__main__":
+  print(run(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 120))

@@ -191,19 +191,67 @@ def test_venus_lid_heights():
 
 
 def test_one_move_rounds_halves_up_and_takes_the_touch_off():
-  # Venus sends 11.25 uL as 11.3 (round() gives 11.2) and the step record's touch-off position
-  # (0.5 mm in Marionette); the driver is left as PLR has it
+  # Venus sends 11.25 uL as 11.3 (round() gives 11.2), the step record's touch-off position (0.5 mm
+  # in Marionette) and the container's cLLD sensitivity (GROQ-Seq's tubes: 4); the driver is left
+  # as PLR has it
   sent = []
 
   class OneMove:
     async def _aspirate_in_one_move(self, use_channels, locations, searches, floors, piston_volumes,
-                                    aspirate_positions_above_z_touch_off=None):
-      sent.append((piston_volumes, aspirate_positions_above_z_touch_off))
+                                    aspirate_positions_above_z_touch_off=None, clld_sensitivities=None):
+      sent.append((piston_volumes, aspirate_positions_above_z_touch_off, clld_sensitivities))
 
   pip = OneMove()
   wrapped = faithful._venus_one_move(pip, pip._aspirate_in_one_move, "aspirate_positions_above_z_touch_off")
   asyncio.run(wrapped([0, 1], [None] * 2, [0] * 2, [0] * 2, [11.25, 456.84]))
-  with faithful.touch_off(pip, 0.5):
+  with faithful.one_move(pip, touch_off=0.5, clld=4):
     asyncio.run(wrapped([0, 1], [None] * 2, [0] * 2, [0] * 2, [11.25, 456.84]))
-  assert sent == [([11.3, 456.8], None), ([11.3, 456.8], [0.5, 0.5])]
+  assert sent == [([11.3, 456.8], None, None), ([11.3, 456.8], [0.5, 0.5], [4, 4])]
   assert getattr(pip, "_venus_touch_off", None) is None  # the context is over
+  assert getattr(pip, "_venus_clld", None) is None
+
+
+def test_a_tube_as_venus_measures_it():
+  # GROQ-Seq plate 1's 17x100 tubes (cup_17x100.ctr): a cylinder of 156.1555 mm2 over a 6.95 mm
+  # spherical cap, cLLD 4. Venus sends fp 0.2 for 34.7 uL, mh 5.1 for an 800 uL mix (the top
+  # segment's area), zu 6.9 (the cap, cut), zr 618.0, ll 4
+  from pylabrobot.lib.liquid_handling.mix import Mix
+  from pylabrobot.resources import Coordinate, Plate, Resource, Well
+  from venus_interop.files.definitions import Definition
+  from venus_interop.plr import plr_import, steps
+
+  ctr = Definition("cup_17x100.ctr", "CONTAINER", {
+    "Segments": "2", "1.Min": "6.95", "1.Max": "98.8", "1.Shape": "3", "1.EqnOfVol": "h*156.1555",
+    "2.Min": "0", "2.Max": "6.95", "2.Shape": "4", "2.EqnOfVol": "h*h*(21.8341 - 1.0472*h)",
+    "MaxDepth": "1", "LSHt": "105", "cLLD": "4"})
+  tube = Well("t", 14.3, 14.3, 98.8, material_z_thickness=1.1)
+  tube.location = Coordinate(0, 0, 0)
+  rack = plr_import._with_heights(Plate("r", 20, 20, 100, ordered_items={"A1": tube}), ctr)
+  Resource("deck", 1000, 1000, 100).assign_child_resource(rack, location=Coordinate(0, 0, 100))
+  meta = tube.metadata["venus"]
+  assert (meta["area"], meta["cap_height"], meta["clld"]) == (156.1555, 6.95, 4)
+  pip = types.SimpleNamespace(venus_profile=faithful.VenusProfile.stock())
+  step = steps.Pipetting(5, 2.0, liquid_following=True, touch_off=0.5)
+  out = steps.venus_heights(pip, [tube], step, {})
+  assert (out["second_section_heights"], out["second_section_ratios"]) == ([6.9], [618.0])
+  follow = steps.venus_following([tube], [34.7], step, None, [Mix(800.0, 2, 250.0)])
+  assert follow["surface_following_distances"] == [0.2] and follow["mixes"][0].surface_following_distance == 5.1
+  assert steps._one_move(pip, [tube], step) == {"touch_off": 0.5, "clld": 4}
+
+
+def test_one_move_puts_each_channel_at_its_own_column():
+  # GROQ-Seq plates 2-5's add_ind_k: one C0DS in Venus, channels 1-4 at X 622.0 and 5-8 at X 640.0;
+  # the driver builds the command at one X, `_one_pipetting_command` queues each channel's position
+  from pylabrobot.resources import Coordinate
+  sent = []
+
+  class OneMove:
+    async def _dispense_in_one_move(self, use_channels, locations, searches, floors, piston_volumes):
+      sent.append([(p.x, p.y, p.z) for p in locations])
+
+  pip = OneMove()
+  pip._venus_at = [{0: Coordinate(622.0, 338.0, 0), 1: Coordinate(640.0, 347.0, 0)}]
+  wrapped = faithful._venus_one_move(pip, pip._dispense_in_one_move, "dispense_positions_above_z_touch_off")
+  asyncio.run(wrapped([0, 1], [Coordinate(622.0, 338.0, 181.0), Coordinate(622.0, 347.0, 181.0)], [0] * 2, [0] * 2,
+                      [10.0, 10.0]))
+  assert sent == [[(622.0, 338.0, 181.0), (640.0, 347.0, 181.0)]] and pip._venus_at == []

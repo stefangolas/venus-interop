@@ -283,14 +283,24 @@ def _with_heights(plate: Plate, ctr, rack: Optional[Rack] = None) -> Plate:
   """The container's MaxDepth and LSHt on each well (metadata["venus"]): the heights Venus measures
   its minimum height and LLD search start from, over the floor (docs/FIRMWARE_EQUIVALENCE.md
   section 2.4). PLR has no field for them; `steps` uses them when PLR_VENUS_FAITHFUL_CFG is set.
-  Also what Venus's liquid following divides by: the cross-section of a one-segment container
-  (its EqnOfVol, h * area), and whether the rack's positions share one cavity (ConnectedCtr)."""
+  Also what Venus's liquid following divides by: the cross-section of the container's top segment
+  when it is constant (its EqnOfVol, h * area), and whether the rack's positions share one cavity
+  (ConnectedCtr); the height of a spherical-cap bottom (second section, zu); the container's cLLD
+  sensitivity (ll). GROQ-Seq plate 1's 17x100 tubes (two segments: a cylinder of 156.1555 mm²
+  over a 6.95 mm cap, cLLD 4): Venus sends fp 0.2 for 34.7 uL, mh 5.1 for an 800 uL mix, zu 6.9,
+  ll 4."""
   if ctr is not None:
-    m = _AREA.match(ctr.fields.get("1.EqnOfVol", "")) if ctr.int("Segments") == 1 else None
+    segments = ctr.int("Segments")
+    top = max(range(1, segments + 1), key=lambda n: ctr.num(f"{n}.Max"), default=1)
+    m = _AREA.match(ctr.fields.get(f"{top}.EqnOfVol", ""))
+    bottom = next((n for n in range(1, segments + 1) if ctr.num(f"{n}.Min") == 0 and n != top), None)
+    cap = bottom is not None and ctr.int(f"{bottom}.Shape") == 4
     for w in plate.get_all_items():
       w.metadata[VENUS] = {"max_depth": ctr.num("MaxDepth"), "lld_search_height": ctr.num("LSHt"),
-                           "segments": ctr.int("Segments"), "area": float(m.group(1)) if m else None,
-                           "connected": rack is not None and rack.fields.get("ConnectedCtr") == "1"}
+                           "segments": segments, "area": float(m.group(1)) if m else None,
+                           "connected": rack is not None and rack.fields.get("ConnectedCtr") == "1",
+                           "cap_height": ctr.num(f"{bottom}.Max") if cap else None,
+                           "clld": ctr.int("cLLD") if ctr.fields.get("cLLD") else None}
   return plate
 
 

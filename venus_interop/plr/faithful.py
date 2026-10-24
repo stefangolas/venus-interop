@@ -10,7 +10,8 @@ One switch, the environment variable PLR_VENUS_FAITHFUL_CFG:
 `apply(star)` after `star.setup()` puts the profile on the device. A height a port passes is
 always kept; only what it leaves as None is filled. Covered so far:
   - traverse heights: channels, tip pick-up and eject, the CO-RE gripper, the 96-head;
-  - one C0TP per tip pick-up call, as a Venus step sends it (`_one_command`);
+  - one C0TP per tip pick-up call, as a Venus step sends it (`_one_command`), and one C0AS/C0DS
+    per aspirate or dispense call, each channel at its own X (`_one_pipetting_command`);
   - aspirate and dispense volumes rounded half up, and the step's touch-off position (`_venus_one_move`);
   - pipetting heights (`steps.venus_heights`): the minimum height, the liquid height and the LLD
     search start, from the containers' MaxDepth and LSHt; no second section in a one-segment
@@ -112,6 +113,51 @@ def _one_command(method):
   return wrapper
 
 
+def _one_pipetting_command(pip, method):
+  """`aspirate` or `dispense` sending one C0AS/C0DS per call, each channel at its own X and Y, as a
+  Venus step does: the firmware works through the columns itself (GROQ-Seq plates 2-5's add_ind_k:
+  channels 1-4 at X 622.0, 5-8 at X 640.0, crossing in Y; one C0DS in Venus, two in PLR, whose
+  driver builds a command at one X). Three patches while the call runs, the driver unchanged:
+  the planner gives one batch per cycle and queues each channel's position (`pip._venus_at`); the
+  move before the command places only the first column's channels (the others may cross them in
+  Y; the move makes room); `_venus_one_move` puts each channel's position in the command."""
+  from pylabrobot.hamilton.star.driver.features import pipettes as module
+  from pylabrobot.lib.liquid_handling.pipette_batch_scheduling import ChannelBatch
+  from pylabrobot.resources import Coordinate
+
+  def one_batch(use_channels, containers, wrt_resource, resource_offsets=None, **_):
+    if not containers:
+      return []
+    offsets = resource_offsets or [None] * len(containers)
+    at = {ch: c.get_location_wrt(wrt_resource, "c", "c") + (o or Coordinate(0, 0, 0))
+          for ch, c, o in zip(use_channels, containers, offsets)}
+    x = min(p.x for p in at.values())
+    pip._venus_at.append(at)
+    return [ChannelBatch(x_position=x, indices=list(range(len(containers))), channels=list(use_channels),
+                         y_positions={ch: p.y for ch, p in at.items()})]
+
+  move = pip.move_to_xy_positions
+
+  async def first_column(x, ys, **kwargs):
+    at = next((a for a in pip._venus_at if set(a) == set(ys)), None)
+    if at is not None:
+      ys = {ch: y for ch, y in ys.items() if abs(at[ch].x - x) < 0.1}
+    return await move(x, ys, **kwargs)
+
+  @functools.wraps(method)
+  async def wrapper(*args, **kwargs):
+    planner, module.plan_batches = module.plan_batches, one_batch
+    pip._venus_at, pip.move_to_xy_positions = [], first_column
+    try:
+      return await method(*args, **kwargs)
+    finally:
+      module.plan_batches = planner
+      pip._venus_at = []
+      del pip.move_to_xy_positions  # the class's again
+  wrapper.venus_faithful = True
+  return wrapper
+
+
 def _at_height(owner, method, height: float):
   """`method` run with `owner.default_minimum_traverse_height` at `height` (for commands whose
   height comes only from that default)."""
@@ -130,7 +176,8 @@ def _at_height(owner, method, height: float):
 def _venus_one_move(pip, method, touch_off_name: str):
   """The driver's one-command aspirate or dispense as Venus sends it, without changing the driver:
   - a volume's half rounds up (`round` takes 11.25 uL to 11.2, Venus sends 11.3);
-  - the step's touch-off position (zo, `touch_off`) where the call gives none."""
+  - the step's touch-off position (zo) and its containers' cLLD sensitivity (ll), from `one_move`,
+    where the call gives none."""
   @functools.wraps(method)
   async def wrapper(*args, **kwargs):
     args = list(args)
@@ -138,24 +185,36 @@ def _venus_one_move(pip, method, touch_off_name: str):
       args[4] = [math.floor(v * 10 + 0.5 + 1e-6) / 10 for v in args[4]]
     elif "piston_volumes" in kwargs:
       kwargs["piston_volumes"] = [math.floor(v * 10 + 0.5 + 1e-6) / 10 for v in kwargs["piston_volumes"]]
-    zo = getattr(pip, "_venus_touch_off", None)
-    if zo is not None and kwargs.get(touch_off_name) is None:
-      channels = args[0] if args else kwargs["use_channels"]
-      kwargs[touch_off_name] = [zo] * len(channels)
+    channels = args[0] if args else kwargs["use_channels"]
+    # each channel at its own X and Y (`_one_pipetting_command`), the height as the driver has it
+    at = next((a for a in getattr(pip, "_venus_at", []) if set(a) == set(channels)), None)
+    if at is not None:
+      locations = args[1] if len(args) > 1 else kwargs["locations"]
+      moved = [type(loc)(at[ch].x, at[ch].y, loc.z) for ch, loc in zip(channels, locations)]
+      if len(args) > 1:
+        args[1] = moved
+      else:
+        kwargs["locations"] = moved
+      pip._venus_at.remove(at)
+    for name, value in ((touch_off_name, getattr(pip, "_venus_touch_off", None)),
+                        ("clld_sensitivities", getattr(pip, "_venus_clld", None))):
+      if value is not None and kwargs.get(name) is None:
+        kwargs[name] = [value] * len(channels)
     return await method(*args, **kwargs)
   wrapper.venus_faithful = True
   return wrapper
 
 
 @contextlib.contextmanager
-def touch_off(pipettes, value: Optional[float]):
-  """The step's touch-off position for the commands sent while it lasts (`_venus_one_move`)."""
-  before = getattr(pipettes, "_venus_touch_off", None)
-  pipettes._venus_touch_off = value
+def one_move(pipettes, touch_off: Optional[float] = None, clld: Optional[int] = None):
+  """The step's touch-off position and cLLD sensitivity for the commands sent while it lasts
+  (`_venus_one_move`)."""
+  before = getattr(pipettes, "_venus_touch_off", None), getattr(pipettes, "_venus_clld", None)
+  pipettes._venus_touch_off, pipettes._venus_clld = touch_off, clld
   try:
     yield
   finally:
-    pipettes._venus_touch_off = before
+    pipettes._venus_touch_off, pipettes._venus_clld = before
 
 
 def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
@@ -176,6 +235,9 @@ def apply(star, p: Optional[VenusProfile] = None) -> Optional[VenusProfile]:
     if hasattr(pip, "_aspirate_in_one_move") and not getattr(pip._aspirate_in_one_move, "venus_faithful", False):
       pip._aspirate_in_one_move = _venus_one_move(pip, pip._aspirate_in_one_move, "aspirate_positions_above_z_touch_off")
       pip._dispense_in_one_move = _venus_one_move(pip, pip._dispense_in_one_move, "dispense_positions_above_z_touch_off")
+    if hasattr(pip, "aspirate") and not getattr(pip.aspirate, "venus_faithful", False):
+      pip.aspirate = _one_pipetting_command(pip, pip.aspirate)
+      pip.dispense = _one_pipetting_command(pip, pip.dispense)
     if not getattr(pip.pick_up_tips, "venus_faithful", False):
       pip.pick_up_tips = _fill(_one_command(pip.pick_up_tips), minimum_traverse_height_start=p.traverse_height)
       pip.drop_tips = _fill(pip.drop_tips, minimum_traverse_height_start=p.traverse_height,

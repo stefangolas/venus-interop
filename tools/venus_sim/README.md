@@ -34,11 +34,13 @@ Run the PLR-side scripts with the repo's Python, and `run_probe.py` with `paths.
 | `run_probe.py METHOD.hsl [TIMEOUT]` | runs one method headless, waits for its trace, prints it |
 | `sign.py FILE.hsl` | gives an HSL file a valid Venus checksum footer |
 | `stage_probe.py PROBE.hsl` | copies a probe into `<work>/oem` with the pyhamilton files its includes reach |
-| `stage_marionette.py` | stages NIST's Marionette, its parameters CSV and the tip-reload probe |
+| `methods.py` | the methods the firmware test runs (Marionette, GROQ-Seq plate 1 and plates 2-5): files, layout, parameters, PLR run |
+| `stage_method.py NAME` | stages one of them, its parameters CSV and the tip-reload probe in `<work>/<name>` |
+| `run_method.py NAME` | (32-bit) the tip reload, the ComTrace's start line, then the method, headless |
 | `labware_closure.py LAYOUT.lay [--copy]` | the layout's labware missing from Venus, from the corpus |
 | `labware_siblings.py` | containers and lids that added labware names without a folder |
-| `marionette_plr_firmware.py` | the PLR translation's firmware for the same run |
-| `compare_firmware.py [--extract] [CODES]` | Venus's against PLR's firmware, field by field |
+| `plr_firmware.py NAME` | the PLR translation's firmware for the same run |
+| `compare_firmware.py NAME [--extract] [CODES]` | Venus's against PLR's firmware, field by field |
 | `where.py X Y [NAME]` | what PLR has at a deck point of Marionette's deck |
 | `sweep.py HASH ...` | Venus's position of every labware and position, for corpus layouts |
 | `compare_sweep.py [HASH ...]` | those positions against the importer's; writes `deltas.tsv` |
@@ -46,7 +48,8 @@ Run the PLR-side scripts with the repo's Python, and `run_probe.py` with `paths.
 | `trim_sweep.py HASH TAG PATTERN ...` | sweeps a layout with labware taken out (file substrings, or `id:<Id>`): to find what makes it fail |
 
 Probes in `probes/` (our own; `sign.py` adds the footer when staged):
-- `marionette_reload_tips.hsl`: the operator's tip reload before each Marionette run;
+- `reload_tips.hsl`: the operator's tip reload before each run of a NIST method (`LAYOUT` is
+  replaced with the method's layout name when staged);
 - `eject_patterns.hsl`: tip eject per channel pattern;
 - `marionette_volume_repeat.hsl`: one 440 µL then 431 µL aspirate/dispense repeated, on Marionette's
   staged method folder (copy it there, `sign.py` it, run `reload_tips.hsl` first): what Venus sends
@@ -80,7 +83,7 @@ code against our reading of the files, and those readings have been wrong about 
    $env:PLR_VENUS_FAITHFUL_CFG = "<HAMILTON>\Config\ML_Starlet.cfg"  # firmware test: Venus's defaults
    ```
    `PLR_VENUS_FAITHFUL_CFG` (AGENTS.md) makes PLR use the Venus run's defaults where a port gives
-   none: the instrument `.cfg` that run used, or `stock`. `marionette_plr_firmware.py` sets it to
+   none: the instrument `.cfg` that run used, or `stock`. `plr_firmware.py` sets it to
    `ML_Starlet.cfg` when it isn't set.
    Run from the repo root.
 3. **Venus in simulation:** the Setup section above. The STAR2-deck layouts in the corpus ran with
@@ -123,25 +126,23 @@ python tools/venus_sim/compare_sweep.py                                # all of 
   gripper widths) need the firmware test or a probe. Decks built in PLR and exported
   (`deck_export`) aren't swept yet: `sweep.py` takes corpus layouts only.
 
-### Firmware test (Marionette)
+### Firmware test
 
+`NAME` is one of `methods.py`'s: `marionette`, `groq_plate_1`, `groq_plates_2-5`.
 ```
-python tools/venus_sim/stage_marionette.py
-# the ComTrace's line count now -> <work>/marionette_comtrace_start.txt:
-(Get-Content "<HAMILTON>\LogFiles\ComTrace_Simulator<yyyymmdd>.trc").Count
-<python32> tools/venus_sim/run_probe.py <work>/marionette/reload_tips.hsl 120     # tip counters persist: every run
-<python32> tools/venus_sim/run_probe.py "<work>/marionette/Marionette protease.gradient plate prep.v5.hsl" 1500
-python tools/venus_sim/marionette_plr_firmware.py      # PLR's run -> <work>/phase3/marionette_plr.fw
-python tools/venus_sim/compare_firmware.py --extract   # Venus's commands from the ComTrace, then the comparison
+python tools/venus_sim/stage_method.py NAME
+<python32> tools/venus_sim/run_method.py NAME          # tip reload (counters persist), ComTrace start line, the method
+python tools/venus_sim/plr_firmware.py NAME            # PLR's run -> <work>/phase3/<name>_plr.fw
+python tools/venus_sim/compare_firmware.py NAME --extract   # Venus's commands from the ComTrace, then the comparison
 ```
-- **Same inputs on both sides:** the parameters CSV (`stage_marionette.py` writes it from the
-  demo's `Parameters`), NIST's liquid classes in `Config\ML_STARLiquids.mdb`, and full tip racks.
+- **Same inputs on both sides:** the parameters CSV (`stage_method.py` writes it from the demo's
+  `Parameters`), NIST's liquid classes in `Config\ML_STARLiquids.mdb`, and full tip racks.
 - **Reading the result:** per command code, the counts, then each field that differs, paired in
   order. Classify each difference against FIRMWARE_EQUIVALENCE §4's table. A difference with no
   row there is a configuration item to add to §2, or a translation bug.
-- **Another method:** copy `stage_marionette.py` and `marionette_plr_firmware.py` for it.
-  `compare_firmware.py` reads the fixed file names `marionette_venus.fw` and `marionette_plr.fw`
-  in `<work>/phase3`; generalize it when the second method arrives.
+- **Another method:** add it to `methods.py` (its folder, stem, corpus layout and the name the
+  method opens it under, its parameters CSV from its demo, its demo's run). Read its GetParams for
+  the keys and the text it compares them with.
 
 ### After
 
