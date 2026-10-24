@@ -1,4 +1,4 @@
-# venus-interop
+# Venus Interoperability Tools
 
 Read, write and convert Hamilton Venus files in Python, without Venus installed, and move decks and labware between Venus and [PyLabRobot](https://github.com/PyLabRobot/pylabrobot) (PLR) with every difference accounted for.
 
