@@ -2,7 +2,7 @@
 <html lang="en">
 <head><script id="replay-defaults">
 const replayQuery = new URLSearchParams(location.search);
-for (const [key,value] of Object.entries({"overlays": "0", "hover": "0", "look": "real", "light": "0.8", "pauses": "0.5", "ui": "0"})) {
+for (const [key,value] of Object.entries({"overlays": "0", "hover": "0", "look": "real", "light": "0.8", "pauses": "0.5", "glass": "1", "ui": "0"})) {
   if (!replayQuery.has(key)) replayQuery.set(key,value);
 }
 history.replaceState(null,'',location.pathname+'?'+replayQuery);

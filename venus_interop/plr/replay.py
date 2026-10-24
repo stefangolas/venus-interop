@@ -16,7 +16,9 @@ from pylabrobot.visualizer3D.server import STATIC_DIR, Viewer3D, _encode
 
 # The viewer options a bundle opens with; a link's own query still wins. `ui='0'` takes away the
 # viewer's navbar, rails, tree and panels as well, leaving the scene and the replay controls.
-VIEW_DEFAULTS = dict(overlays='0', hover='0', look='real', light='0.8', pauses='0.5')
+# `glass='1'` keeps the STAR chassis, drawn see-through (tools/build_groq_star_base.py), from being
+# taken for enclosure glazing and hidden.
+VIEW_DEFAULTS = dict(overlays='0', hover='0', look='real', light='0.8', pauses='0.5', glass='1')
 _DEFAULTS_START, _DEFAULTS_END = '<script id="replay-defaults">', '</script><!-- replay-defaults -->'
 # The viewer's own `body.no-ui` rules (main.css), applied before it has run.
 _NO_UI_CSS = ('nav.navbar,#toolbar-left,#toolbar,#sidepanel,#zoom-controls,#home-button,'

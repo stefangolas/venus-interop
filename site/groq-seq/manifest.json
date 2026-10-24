@@ -1,7 +1,7 @@
 {
   "format": 1,
   "title": "groq_seq_demo.py",
-  "started": "2026-10-24T01:46:32.099359+00:00",
+  "started": "2026-10-24T01:53:31.028856+00:00",
   "status": "aborted",
   "metadata": {
     "method": "plates_2-5",
@@ -11,7 +11,7 @@
   },
   "events": "events.jsonl",
   "error": "CalculateOutputs: tmp_conc_arr.ElementAt(inducer_number - 1), inducer_number not set",
-  "finished": "2026-10-24T01:46:59.997025+00:00",
+  "finished": "2026-10-24T01:53:42.265002+00:00",
   "event_count": 630,
   "commands": [
     {
@@ -1675,7 +1675,6 @@
     "assets/71f02e90d018d2333dad2e50e42c4889913b54810e2dba2cf8ebebc14ae34bdb.glb",
     "assets/7497772ba087545ee8d23acf64765dc1fc48bf8f67375e77360e0e68dbd6190a.glb",
     "assets/78de18acbbaceccb4121e849f86d1b07c1834bccc156d0ed0471ba17ce6219d4.glb",
-    "assets/7fe1e3262e1446d274590434427e771310ae4d81ac33bc5a92fd7dc145163810.glb",
     "assets/8255681e4e2edfb3b2738ee1e4e3c00e905e431d8dd8c5a742fde199a626cb7a.glb",
     "assets/827707e7dc7e9d300730df7dcaeb77cb326b065317ed89725c18ebac4fcfe494.glb",
     "assets/87bff0f8c2fc1d88597857fff4a155f1810613f8f202a2350c36c89a95c54d12.glb",
@@ -1690,6 +1689,7 @@
     "assets/b19f859810fb1f487ff37259000e712235820fd1c666627260cb589b3004d81c.glb",
     "assets/b793e3283dfd5f7393b39731bcf14bee6c514c5a2e957a4cdcf20427bcc444d7.glb",
     "assets/c1577a27783888f3c691fe1938b6e75585e9473f7749c29bc72f57a6aa1335f8.glb",
+    "assets/c31c853304695f3a545378dfcf69bea860ebe303611a7b7ec6eb8e193719849e.glb",
     "assets/c719818380fa99acb7b05a9c8f9eef6500d1dfb2443f84baddd42e76f028a5da.glb",
     "assets/d9837200b503726eee0e65f9b41ff4eb555171be4d900bf8b42650417857a1f7.glb",
     "assets/e4b32a1337b1702a2630dcb0958df3486f8219d362c00dcd616e1a91eb7d6c98.glb",

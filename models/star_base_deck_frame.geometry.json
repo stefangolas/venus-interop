@@ -59,6 +59,15 @@
       ],
       "decision": "Show lower platform and chassis only; retain imported waste hardware and an unobstructed deck view.",
       "detail": "The source combines lower chassis, waste hardware, door and upper enclosure."
+    },
+    {
+      "resource": "STAR chassis",
+      "kind": "interpretation",
+      "quantity": "material opacity",
+      "plr": 0.3,
+      "venus": 1.0,
+      "decision": "Draw the retained chassis see-through so it does not hide the deck.",
+      "detail": "The source chassis materials are opaque."
     }
   ]
 }

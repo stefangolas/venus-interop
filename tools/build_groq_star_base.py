@@ -10,6 +10,8 @@ sys.path.insert(0, str(ROOT))
 from pylabrobot.hamilton.star import device
 from venus_interop.rules.deltas import Delta
 
+CHASSIS_OPACITY = 0.3
+
 
 def build():
   source = Path(device.__file__).parent / 'resource_model/star_base.glb'
@@ -23,6 +25,14 @@ def build():
   primitives = gltf['meshes'][0]['primitives']
   assert [gltf['materials'][primitives[i]['material']]['name'] for i in selected] == expected, 'STAR asset changed; review chassis selection'
   gltf['meshes'][0]['primitives'] = [primitives[i] for i in selected]
+  # See-through, so the chassis frames the deck without hiding what stands in it. At this opacity
+  # the realistic look takes a STAR model's materials for enclosure glass and hides them unless the
+  # page asks for `glass=1`, which the replay bundles do (replay.VIEW_DEFAULTS).
+  for i in selected:
+    material = gltf['materials'][primitives[i]['material']]
+    material['alphaMode'] = 'BLEND'
+    pbr = material.setdefault('pbrMetallicRoughness', {})
+    pbr['baseColorFactor'] = [*pbr.get('baseColorFactor', [1, 1, 1, 1])[:3], CHASSIS_OPACITY]
   origin = device.STAR_DECK_LOCATION
   shift = [-origin.x / 1000, -origin.y / 1000, -origin.z / 1000]
   for scene in gltf['scenes']:
@@ -45,7 +55,11 @@ def build():
     deltas=[ledger.as_dict(), Delta(resource='STAR chassis', kind='interpretation',
       quantity='visible source components', venus=list(range(len(primitives))), plr=selected,
       detail='The source combines lower chassis, waste hardware, door and upper enclosure.',
-      decision='Show lower platform and chassis only; retain imported waste hardware and an unobstructed deck view.').as_dict()]), indent=2), encoding='utf-8')
+      decision='Show lower platform and chassis only; retain imported waste hardware and an unobstructed deck view.').as_dict(),
+      Delta(resource='STAR chassis', kind='interpretation', quantity='material opacity',
+            venus=1.0, plr=CHASSIS_OPACITY, detail='The source chassis materials are opaque.',
+            decision='Draw the retained chassis see-through so it does not hide the deck.').as_dict()]),
+      indent=2), encoding='utf-8')
   print(target)
 
 
