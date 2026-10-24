@@ -36,6 +36,16 @@ replay controls only). `--option ui=1` keeps the viewer's UI; a link's own query
 changes it. Bundles are committed as recorded: CI has neither the NIST corpus nor the PLR fork.
 `site/groq-seq/` is GROQ-Seq plates 2-5, recorded with `PLR_VENUS_FAITHFUL_CFG=stock`.
 
+The published bundle's extension cabinet was corrected on 2026-10-24 in all ten scene snapshots.
+The previous code fix had only reached newly recorded bundles, leaving the published cabinet
+487.8 mm too low and 116.215 mm too far right. The correction is recorded in the manifest's
+`visual_corrections` ledger; other resource transforms and protocol events are unchanged.
+Browser inspection against a [photo of a STAR with the extension installed](https://bimedis.com/a-item/liquid-handling-hamilton-medical-microlab-star-2540100)
+and [Hamilton's housing brochure](https://info.hamiltoncompany.com/view/449349329/14-15/)
+checks the overall alignment: roof level with the instrument, lower frame above the bench.
+The photo is qualitative evidence, not a source of millimetre measurements. A regression test
+checks every published snapshot so a seek cannot restore the old position.
+
 Serve the generated directory using any static HTTP server, or deploy its contents to GitHub
 Pages. Opening `index.html` directly as a `file://` URL is not supported by browser module/fetch
 security rules. No simulation or WebSocket service is needed:

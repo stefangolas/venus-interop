@@ -1,4 +1,5 @@
 """Viewer assets must not move protocol labware or duplicate MultiFlex assemblies."""
+import base64
 import json
 import pathlib
 import struct
@@ -32,6 +33,26 @@ def test_extension_housing_matches_stock_star_in_deck_frame():
     delta['venus'])
   viewer_models.attach_star_base(star)
   assert star.left_extension_housing.location == expected
+
+
+def test_published_replay_cabinet_matches_deck_frame_in_every_snapshot():
+  from pylabrobot.hamilton.star.device import STAR
+
+  reference = STAR(simulation=True)
+  corner = reference.left_extension_housing.location - reference.deck.location
+  scenes = 0
+  path = ROOT / 'site/groq-seq/events.jsonl'
+  with path.open(encoding='utf-8') as stream:
+    for line in stream:
+      event = json.loads(line)
+      if event['event'] != 'scene':
+        continue
+      instances = event['data']['instances']
+      index = instances['names'].index('STAR_left_extension_housing')
+      position = struct.unpack_from('<3f', base64.b64decode(instances['transforms']), index * 24)
+      assert position == pytest.approx((corner.x, corner.y, corner.z), abs=1e-4)
+      scenes += 1
+  assert scenes > 1  # initial, final and intermediate snapshots used when seeking
 
 
 def test_star_base_translation_preserves_compressed_geometry():

@@ -1697,5 +1697,30 @@
     "assets/fb25f05cf08d0aa476250295bab168ce370002875e1c8c30b4d553abc926cd6a.glb",
     "assets/feff762c723f729af7d9aff881fa6870e855d63e182a912d8c92684e80f58402.glb",
     "assets/fffe796a1a4eb5ddd1682e66824d04eef9b35abf0d1e32dd6da165e2e11862a8.glb"
+  ],
+  "visual_corrections": [
+    {
+      "date": "2026-10-24",
+      "scenes": 10,
+      "delta": {
+        "resource": "STAR_left_extension_housing",
+        "kind": "convention",
+        "quantity": "recorded cabinet position (mm)",
+        "plr": [
+          -381.215,
+          -91.0,
+          -32.5
+        ],
+        "venus": [
+          -265,
+          -125.5,
+          -520.3
+        ],
+        "size": 487.8,
+        "decision": "Apply the chassis-to-deck cabinet placement to every recorded scene.",
+        "detail": "Before/after replay coordinates; protocol events and all other transforms unchanged."
+      },
+      "reference": "https://bimedis.com/a-item/liquid-handling-hamilton-medical-microlab-star-2540100"
+    }
   ]
 }
