@@ -3,6 +3,16 @@ import { playMotion, replayControl } from './motion.js';
 import { setGlideSeconds } from './live.js';
 
 export async function startReplay(handlers) {
+  // A recording has no server to wait for: said at once, or the viewer's own check reports the
+  // server unreachable while a large log is still downloading.
+  window.dispatchEvent(new CustomEvent('plr:status', {detail: {connected: true}}));
+  document.getElementById('status-label').textContent = 'Loading recorded run…';
+  const stylesheet = document.createElement('link');
+  stylesheet.rel = 'stylesheet'; stylesheet.href = './replay.css'; document.head.append(stylesheet);
+  const loading = document.createElement('div');
+  loading.className = 'replay-controls replay-loading';
+  loading.textContent = 'Loading recorded run…';
+  document.body.append(loading);
   const [manifestResponse, logResponse] = await Promise.all([
     fetch('./manifest.json'), fetch('./events.jsonl'),
   ]);
@@ -10,6 +20,7 @@ export async function startReplay(handlers) {
   const manifest = await manifestResponse.json();
   if (manifest.format !== 1) throw new Error('Unsupported replay format');
   const events = (await logResponse.text()).trim().split('\n').filter(Boolean).map(JSON.parse);
+  loading.remove();
   if (!events.length || events[0].event !== 'scene') throw new Error('Recording has no initial scene');
   const boundaries = manifest.commands.length ? [...manifest.commands.map(c => c.event), events.length] : [0, events.length];
   let cursor = 0, playing = false, speed = 1, active = null, seeking = false;
@@ -21,8 +32,6 @@ export async function startReplay(handlers) {
   window.dispatchEvent(new CustomEvent('plr:status', {detail: {connected: true}}));
   const bar = document.createElement('div');
   bar.className = 'replay-controls';
-  const stylesheet = document.createElement('link');
-  stylesheet.rel = 'stylesheet'; stylesheet.href = './replay.css'; document.head.append(stylesheet);
   const playIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13L19 12Z" fill="currentColor"/></svg>';
   const pauseIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z" fill="currentColor"/></svg>';
   bar.innerHTML = `<button data-play class="replay-play" aria-label="Play" title="Play">${playIcon}</button><button data-restart aria-label="Restart" title="Restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8a8 8 0 1 1-1 8M5 3v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="replay-timeline"><div class="replay-caption"><span class="replay-heading">RECORDED RUN</span><span data-label></span></div><input data-seek type="range" min="0" value="0" aria-label="Command position"></div><div class="replay-speed"><select data-speed aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></div>`;

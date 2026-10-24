@@ -33,3 +33,4 @@
 .replay-speed select { appearance: none; border: 1px solid #ffffff18; background: #ffffff08; color: #edf3f7; border-radius: 9px; padding: 7px 24px 7px 11px; font: inherit; cursor: pointer; }
 .replay-speed option { background: #17212e; color: #edf3f7; }
 @media(max-width: 600px) { .replay-controls { width: calc(100% - 32px); bottom: 12px; padding: 10px; gap: 8px; } .replay-heading { display: none; } }
+.replay-loading { width: auto; justify-content: center; color: #c5d1dc; }

@@ -6,6 +6,10 @@ for (const [key,value] of Object.entries({"overlays": "0", "hover": "0", "look":
   if (!replayQuery.has(key)) replayQuery.set(key,value);
 }
 history.replaceState(null,'',location.pathname+'?'+replayQuery);
+// The viewer marks the page `no-ui` only once its renderer has started; until then (seconds, on a
+// slow GPU) its navbar, rails and tree would show. Hidden from the first paint instead.
+if (replayQuery.get('ui') === '0') document.currentScript.insertAdjacentHTML('afterend',
+  '<style>nav.navbar,#toolbar-left,#toolbar,#sidepanel,#zoom-controls,#home-button,#hover-readout,#scale-bar,#stats-panel,.tool-panel,.dt-panel,.uml-panel{display:none!important}.content{height:100%}</style>');
 </script><!-- replay-defaults -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />

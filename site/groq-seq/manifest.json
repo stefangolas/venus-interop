@@ -1,7 +1,7 @@
 {
   "format": 1,
   "title": "groq_seq_demo.py",
-  "started": "2026-10-24T01:20:59.196998+00:00",
+  "started": "2026-10-24T01:46:32.099359+00:00",
   "status": "aborted",
   "metadata": {
     "method": "plates_2-5",
@@ -11,7 +11,7 @@
   },
   "events": "events.jsonl",
   "error": "CalculateOutputs: tmp_conc_arr.ElementAt(inducer_number - 1), inducer_number not set",
-  "finished": "2026-10-24T01:21:11.329455+00:00",
+  "finished": "2026-10-24T01:46:59.997025+00:00",
   "event_count": 630,
   "commands": [
     {

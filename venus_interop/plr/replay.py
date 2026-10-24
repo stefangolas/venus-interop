@@ -18,6 +18,10 @@ from pylabrobot.visualizer3D.server import STATIC_DIR, Viewer3D, _encode
 # viewer's navbar, rails, tree and panels as well, leaving the scene and the replay controls.
 VIEW_DEFAULTS = dict(overlays='0', hover='0', look='real', light='0.8', pauses='0.5')
 _DEFAULTS_START, _DEFAULTS_END = '<script id="replay-defaults">', '</script><!-- replay-defaults -->'
+# The viewer's own `body.no-ui` rules (main.css), applied before it has run.
+_NO_UI_CSS = ('nav.navbar,#toolbar-left,#toolbar,#sidepanel,#zoom-controls,#home-button,'
+              '#hover-readout,#scale-bar,#stats-panel,.tool-panel,.dt-panel,.uml-panel'
+              '{display:none!important}.content{height:100%}')
 
 
 def _defaults_script(defaults: dict[str, str]) -> str:
@@ -27,6 +31,10 @@ for (const [key,value] of Object.entries({json.dumps(defaults)})) {{
   if (!replayQuery.has(key)) replayQuery.set(key,value);
 }}
 history.replaceState(null,'',location.pathname+'?'+replayQuery);
+// The viewer marks the page `no-ui` only once its renderer has started; until then (seconds, on a
+// slow GPU) its navbar, rails and tree would show. Hidden from the first paint instead.
+if (replayQuery.get('ui') === '0') document.currentScript.insertAdjacentHTML('afterend',
+  '<style>{_NO_UI_CSS}</style>');
 {_DEFAULTS_END}"""
 
 
